@@ -11,7 +11,7 @@ public class Team
     [Required]
     public ICollection<User>? Admins { get; set; }
 
-    public ICollection<User>? Members { get; set; } = new List<User>();
+    public ICollection<User>? Members { get; set; }
 
     [Required]
     [MaxLength(100)]
@@ -38,9 +38,9 @@ public class TeamDTOPrivate
 public class TeamDTO
 {
     [Required]
-    public ICollection<UserDTOAddTeam>? Admins { get; set; }
+    public ICollection<UserDTOAdd>? Admins { get; set; }
 
-    public ICollection<UserDTOAddTeam>? Members { get; set; }
+    public ICollection<UserDTOAdd>? Members { get; set; }
 
     [Required]
     [MaxLength(100)]

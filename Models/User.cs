@@ -28,6 +28,9 @@ public class User
 
     public ICollection<Team> TeamsAsAdmin { get; set; } = new List<Team>();
     public ICollection<Team> TeamsAsMember { get; set; } = new List<Team>();
+
+    [Required]
+    public string? Secret { get; set; }
 }
 
 public class UserDTOPrivate
@@ -64,8 +67,18 @@ public class UserDTO
     public string? Password { get; set; }
 }
 
-public class UserDTOAddTeam
+public class UserDTOAdd
 {
     [Required]
     public string? Email { get; set; }
 }
+
+public class UserDTOSecret
+{
+    [Required]
+    public string? Email { get; set; }
+
+    [Required]
+    public string? Secret { get; set; }
+}
+
