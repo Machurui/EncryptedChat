@@ -24,27 +24,24 @@ public class MessageService
         // Return a user by id
     }
 
-    public MessageDTOPrivate? Create(MessageDTO message)
+    public MessageDTOPublic? Create(MessageDTO message)
     {
         // Create a new user
-        // var sender = _context.Users.Find(message?.Sender?.Id);
+        var sender = _context.Users.Find(message?.Sender);
+        if (sender == null)
+            return null;
 
-        // if (sender == null)
-        //     return null;
+        var team = _context.Teams.Find(message?.Team);
+        if (team == null)
+            return null;
 
-        // var team = _context.Teams.Find(message?.Team?.Id);
-        // if (team == null)
-        //     return null;
-
-        
-
-        // var newMessage = new Message
-        // {
-        //     Text = message?.Text,
-        //     Sender = sender,
-        //     Team = team,
-        //     Date = message.Date
-        // };
+        var newMessage = new Message
+        {
+            Text = message?.Text,
+            Sender = sender,
+            Team = team,
+            Date = DateTime.UtcNow
+        };
 
         // _context.Messages.Add(newMessage);
         // _context.SaveChanges();

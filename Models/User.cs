@@ -69,12 +69,6 @@ public class UserDTO
     public string? Password { get; set; }
 }
 
-public class UserDTOAdd
-{
-    [Required]
-    public string? Email { get; set; }
-}
-
 public class UserDTOSecret
 {
     [Required]

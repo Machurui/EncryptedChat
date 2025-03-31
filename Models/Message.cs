@@ -21,7 +21,7 @@ public class Message
     public DateTime Date { get; set; }
 }
 
-public class MessageDTOPrivate
+public class MessageDTOPublic
 {
     public int Id { get; set; }
 
@@ -44,11 +44,9 @@ public class MessageDTO
     public string? Text { get; set; }
 
     [Required]
-    public UserDTOAdd? Sender { get; set; }
+    public int? Sender { get; set; }
 
     [Required]
-    public TeamDTOPublic? Team { get; set; }
+    public int? Team { get; set; }
 
-    [Required]
-    public DateTime Date { get; set; }
 }

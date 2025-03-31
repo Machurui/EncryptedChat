@@ -65,7 +65,10 @@ namespace EncryptedChat.Controllers
 
             if (teamToUpdate is not null)
             {
-                await _service.UpdateAsync(id, team);
+                var teamUpdated = await _service.UpdateAsync(id, team);
+                if (teamUpdated is null)
+                    return BadRequest("Team invalid data.");
+
                 return NoContent();
             }
             else
