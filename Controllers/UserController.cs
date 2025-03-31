@@ -18,14 +18,14 @@ namespace EncryptedChat.Controllers
 
         // GET: api/User
         [HttpGet]
-        public IEnumerable<UserDTOPrivate> GetUsers()
+        public IEnumerable<UserDTOPublic> GetUsers()
         {
             return _service.GetAll();
         }
 
         // GET: api/User/5
         [HttpGet("{id}")]
-        public ActionResult<UserDTOPrivate> GetUser(int id)
+        public ActionResult<UserDTOPublic> GetUser(int id)
         {
             var user = _service.GetById(id);
 

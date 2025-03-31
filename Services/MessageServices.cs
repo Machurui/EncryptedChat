@@ -27,13 +27,16 @@ public class MessageService
     public MessageDTOPrivate? Create(MessageDTO message)
     {
         // Create a new user
+        // var sender = _context.Users.Find(message?.Sender?.Id);
+
+        // if (sender == null)
+        //     return null;
+
         // var team = _context.Teams.Find(message?.Team?.Id);
         // if (team == null)
         //     return null;
 
-        // var sender = _context.Users.Find(message?.Sender?.Id);
-        // if (sender == null)
-        //     return null;
+        
 
         // var newMessage = new Message
         // {

@@ -12,7 +12,7 @@ public class TeamService
         _context = context;
     }
 
-    public IEnumerable<TeamDTOPrivate> GetAll()
+    public IEnumerable<TeamDTOPublic> GetAll()
     {
         // Return a list of teams
         return _context.Teams
@@ -22,7 +22,7 @@ public class TeamService
         .ToList();
     }
 
-    public TeamDTOPrivate? GetById(int id)
+    public TeamDTOPublic? GetById(int id)
     {
         // Return a team by id
         return _context.Teams
@@ -34,65 +34,98 @@ public class TeamService
         .SingleOrDefault();
     }
 
-    public TeamDTOPrivate? Create(TeamDTO newTeam)
+    public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam)
     {
-        // Create a new team
-        if (newTeam.Admins == null || !newTeam.Admins.Any())
+        // Create a team
+        if (newTeam.AdminIds == null || newTeam.AdminIds.Count == 0)
             return null;
 
-        var (members, admins) = GetEmails(newTeam);
+        var admins = await _context.Users
+            .Where(u => newTeam.AdminIds.Contains(u.Id))
+            .ToListAsync();
 
-        if (admins.Count == 0 || admins is null)
+        var members = newTeam.MemberIds != null && newTeam.MemberIds.Count != 0
+        ? await _context.Users.Where(u => newTeam.MemberIds.Contains(u.Id)).ToListAsync()
+        : [];
+
+        if (admins == null || admins.Count == 0)
             return null;
 
         var team = new Team
         {
             Name = newTeam.Name,
             Password = newTeam.Password,
-            Members = members,
-            Admins = admins
+            Admins = admins,
+            Members = members
         };
 
         _context.Teams.Add(team);
-        _context.SaveChanges();
+        await _context.SaveChangesAsync();
 
         return ItemToDTO(team);
     }
 
-    public TeamDTOPrivate? Update(int id, TeamDTO team)
+
+    // 
+    // TO DO :
+    // 
+    // 
+    public async Task<TeamDTOPublic?> UpdateAsync(int id, TeamDTO team)
     {
         // Update a team
-        var teamToUpdate = _context.Teams.Find(id);
+        if (team.AdminIds == null || team.AdminIds.Count == 0)
+            return null;
+
+        var teamToUpdate = await _context.Teams
+            .Include(t => t.Admins)
+            .Include(t => t.Members)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
         if (teamToUpdate == null)
             return null;
 
-        var (members, admins) = GetEmails(team);
+        var admins = await _context.Users
+            .Where(u => team.AdminIds.Contains(u.Id))
+            .ToListAsync();
 
-        teamToUpdate.Admins = admins;
-        teamToUpdate.Members = members;
+        var members = (team.MemberIds != null && team.MemberIds.Count != 0)
+            ? await _context.Users.Where(u => team.MemberIds.Contains(u.Id)).ToListAsync()
+            : [];
+
+        teamToUpdate.Admins ??= [];
+        teamToUpdate.Admins.Clear();
+        foreach (var admin in admins)
+        {
+            if (!teamToUpdate.Admins.Any(a => a.Id == admin.Id))
+                teamToUpdate.Admins.Add(admin);
+        }
+
+        teamToUpdate.Members ??= [];
+        teamToUpdate.Members.Clear();
+        foreach (var member in members)
+        {
+            if (!teamToUpdate.Members.Any(m => m.Id == member.Id))
+                teamToUpdate.Members.Add(member);
+        }
+
         teamToUpdate.Name = team.Name;
         teamToUpdate.Password = team.Password;
 
         try
         {
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
         catch (DbUpdateConcurrencyException)
         {
             if (!TeamExists(id))
-            {
                 return null;
-            }
-            else
-            {
-                throw;
-            }
+            throw;
         }
 
         return ItemToDTO(teamToUpdate);
     }
 
-    public TeamDTOPrivate? Delete(int id)
+    public TeamDTOPublic? Delete(int id)
     {
         // Delete a team
         var teamToDelete = _context.Teams.Find(id);
@@ -105,33 +138,14 @@ public class TeamService
         return ItemToDTO(teamToDelete);
     }
 
-    private (List<User> Members, List<User> Admins) GetEmails(TeamDTO team)
-    {
-        var emails = (team.Members ?? [])
-            .Concat(team.Admins ?? [])
-            .Select(u => u.Email)
-            .Where(email => !string.IsNullOrWhiteSpace(email))
-            .Distinct()
-            .ToArray();
-
-        var users = _context.Users
-                    .Where(u => emails.Contains(u.Email))
-                    .ToList();
-
-        var members = users.Where(u => team.Members?.Any(m => m.Email == u.Email) ?? false).ToList();
-        var admins = users.Where(u => team.Admins?.Any(a => a.Email == u.Email) ?? false).ToList();
-
-        return (members, admins);
-    }
-
     private bool TeamExists(int id)
     {
         return _context.Teams.Any(e => e.Id == id);
     }
 
-    private static TeamDTOPrivate ItemToDTO(Team team)
+    private static TeamDTOPublic ItemToDTO(Team team)
     {
-        static UserDTOPrivate MapUser(User user) => new UserDTOPrivate
+        static UserDTOPublic MapUser(User user) => new UserDTOPublic
         {
             Id = user.Id,
             FirstName = user.FirstName,
@@ -140,7 +154,7 @@ public class TeamService
             Level = user.Level
         };
 
-        return new TeamDTOPrivate
+        return new TeamDTOPublic
         {
             Id = team.Id,
             Name = team.Name,

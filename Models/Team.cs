@@ -21,26 +21,28 @@ public class Team
     public string? Password { get; set; }
 }
 
-public class TeamDTOPrivate
+// Affichage vers le client
+public class TeamDTOPublic
 {
     public int Id { get; set; }
 
     [Required]
-    public ICollection<UserDTOPrivate>? Admins { get; set; }
+    public ICollection<UserDTOPublic>? Admins { get; set; }
 
-    public ICollection<UserDTOPrivate>? Members { get; set; }
+    public ICollection<UserDTOPublic>? Members { get; set; }
 
     [Required]
     [MaxLength(100)]
     public string? Name { get; set; }
 }
 
+// Utilisé lors de création et MAJ
 public class TeamDTO
 {
-    [Required]
-    public ICollection<UserDTOAdd>? Admins { get; set; }
+    [Required] 
+    public ICollection<int>? AdminIds { get; set; }
 
-    public ICollection<UserDTOAdd>? Members { get; set; }
+    public ICollection<int>? MemberIds { get; set; }
 
     [Required]
     [MaxLength(100)]

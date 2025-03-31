@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.CodeAnalysis.FlowAnalysis.DataFlow;
+using System.Threading.Tasks;
 
 namespace EncryptedChat.Controllers
 {
@@ -19,14 +20,14 @@ namespace EncryptedChat.Controllers
 
         // GET: api/Team
         [HttpGet]
-        public IEnumerable<TeamDTOPrivate> GetTeams()
+        public IEnumerable<TeamDTOPublic> GetTeams()
         {
             return _service.GetAll();
         }
 
         // GET: api/Team/5
         [HttpGet("{id}")]
-        public ActionResult<TeamDTOPrivate> GetTeam(int id)
+        public ActionResult<TeamDTOPublic> GetTeam(int id)
         {
             var team = _service.GetById(id);
 
@@ -45,7 +46,7 @@ namespace EncryptedChat.Controllers
         [HttpPost]
         public IActionResult PostTeam(TeamDTO newTeam)
         {
-            var team = _service.Create(newTeam);
+            var team = _service.CreateAsync(newTeam);
 
             if (team is null)
             {
@@ -58,13 +59,13 @@ namespace EncryptedChat.Controllers
         // PUT: api/Team/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public IActionResult PutTeam(int id, TeamDTO team)
+        public async Task<IActionResult> PutTeam(int id, TeamDTO team)
         {
             var teamToUpdate = _service.GetById(id);
 
             if (teamToUpdate is not null)
             {
-                _service.Update(id, team);
+                await _service.UpdateAsync(id, team);
                 return NoContent();
             }
             else

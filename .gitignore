@@ -488,3 +488,4 @@ $RECYCLE.BIN/
 
 # Ignorer tous les fichiers avec l'extension .db, à n'importe quel niveau
 *.db
+*.db*

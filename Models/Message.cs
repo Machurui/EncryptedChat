@@ -1,9 +1,11 @@
 namespace EncryptedChat.Models;
 using System.ComponentModel.DataAnnotations;
-
+using System.ComponentModel.DataAnnotations.Schema;
 
 public class Message
 {
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
 
     [Required]
@@ -27,10 +29,10 @@ public class MessageDTOPrivate
     public string? Text { get; set; }
 
     [Required]
-    public UserDTOPrivate? Sender { get; set; }
+    public UserDTOPublic? Sender { get; set; }
 
     [Required]
-    public TeamDTOPrivate? Team { get; set; }
+    public TeamDTOPublic? Team { get; set; }
 
     [Required]
     public DateTime Date { get; set; }
@@ -45,7 +47,7 @@ public class MessageDTO
     public UserDTOAdd? Sender { get; set; }
 
     [Required]
-    public TeamDTOPrivate? Team { get; set; }
+    public TeamDTOPublic? Team { get; set; }
 
     [Required]
     public DateTime Date { get; set; }

@@ -12,14 +12,14 @@ public class UserService
         _context = context;
     }
 
-    public IEnumerable<UserDTOPrivate> GetAll()
+    public IEnumerable<UserDTOPublic> GetAll()
     {
         // Return a list of users
         return _context.Users
         .Select(user => ItemToDTO(user))
         .ToList();
     }
-    public UserDTOPrivate? GetById(int id)
+    public UserDTOPublic? GetById(int id)
     {
         // Return a user by id
         return _context.Users
@@ -29,7 +29,7 @@ public class UserService
         .SingleOrDefault();
     }
 
-    public UserDTOPrivate? Create(UserDTO newUser)
+    public UserDTOPublic? Create(UserDTO newUser)
     {
         // Check if the user already exists
         var existingUser = _context.Users.FirstOrDefault(user => user.Email == newUser.Email);
@@ -52,7 +52,7 @@ public class UserService
         return ItemToDTO(user);
     }
 
-    public UserDTOPrivate? Update(int id, UserDTO user)
+    public UserDTOPublic? Update(int id, UserDTO user)
     {
         // Update a user
         var existingUser = _context.Users.Find(id);
@@ -102,8 +102,8 @@ public class UserService
         return _context.Users.Any(e => e.Id == id);
     }
 
-    private static UserDTOPrivate ItemToDTO(User user) =>
-       new UserDTOPrivate
+    private static UserDTOPublic ItemToDTO(User user) =>
+       new UserDTOPublic
        {
            Id = user.Id,
            FirstName = user.FirstName,

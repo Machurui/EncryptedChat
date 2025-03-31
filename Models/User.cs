@@ -33,7 +33,8 @@ public class User
     public string? Secret { get; set; }
 }
 
-public class UserDTOPrivate
+// Affichage vers le client
+public class UserDTOPublic
 {
     public int Id { get; set; }
     public string? FirstName { get; set; }
@@ -49,6 +50,7 @@ public class UserDTOPrivate
     public int Level { get; set; }
 }
 
+// Utilisé lors de création et MAJ
 public class UserDTO
 {
     [Required]
