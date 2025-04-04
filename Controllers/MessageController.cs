@@ -4,9 +4,6 @@ using EncryptedChat.Models;
 using EncryptedChat.Services;
 using System.Threading.Tasks;
 
-// ToDo
-// Refactor the CreateAsync and UpdateAsync in MessageServices
-
 namespace EncryptedChat.Controllers
 {
     [Route("api/[controller]")]
