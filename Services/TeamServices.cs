@@ -65,11 +65,6 @@ public class TeamService
         return ItemToDTO(team);
     }
 
-
-    // 
-    // TO DO :
-    // 
-    // 
     public async Task<TeamDTOPublic?> UpdateAsync(int id, TeamDTO team)
     {
         // Update a team
@@ -158,8 +153,8 @@ public class TeamService
         {
             Id = team.Id,
             Name = team.Name,
-            Admins = (team.Admins ?? Enumerable.Empty<User>()).Select(MapUser).ToList(),
-            Members = (team.Members ?? Enumerable.Empty<User>()).Select(MapUser).ToList()
+            Admins = [.. (team.Admins ?? Enumerable.Empty<User>()).Select(MapUser)],
+            Members = [.. (team.Members ?? Enumerable.Empty<User>()).Select(MapUser)]
         };
     }
 }
