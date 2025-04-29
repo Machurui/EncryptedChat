@@ -19,7 +19,7 @@ public class UserService
         .Select(user => ItemToDTO(user))
         .ToList();
     }
-    public UserDTOPublic? GetById(int id)
+    public UserDTOPublic? GetById(string id)
     {
         // Return a user by id
         return _context.Users
@@ -29,30 +29,7 @@ public class UserService
         .SingleOrDefault();
     }
 
-    public UserDTOPublic? Create(UserDTO newUser)
-    {
-        // Check if the user already exists
-        var existingUser = _context.Users.FirstOrDefault(user => user.Email == newUser.Email);
-        if (existingUser != null)
-            return null;
-
-        // Create a new user
-        var user = new User
-        {
-            FirstName = newUser.FirstName,
-            LastName = newUser.LastName,
-            Email = newUser.Email,
-            Password = newUser.Password,
-            Level = 0
-        };
-
-        _context.Users.Add(user);
-        _context.SaveChanges();
-
-        return ItemToDTO(user);
-    }
-
-    public UserDTOPublic? Update(int id, UserDTO user)
+    public UserDTOPublic? Update(string id, UserDTO user)
     {
         // Update a user
         var existingUser = _context.Users.Find(id);
@@ -62,7 +39,6 @@ public class UserService
         existingUser.FirstName = user.FirstName;
         existingUser.LastName = user.LastName;
         existingUser.Email = user.Email;
-        existingUser.Password = user.Password;
 
         try
         {
@@ -83,7 +59,7 @@ public class UserService
         return ItemToDTO(existingUser);
     }
 
-    public User? Delete(int id)
+    public User? Delete(string id)
     {
         // Delete a user
         var userToDelete = _context.Users.Find(id);
@@ -97,7 +73,7 @@ public class UserService
         return userToDelete;
     }
 
-    private bool UserExists(int id)
+    private bool UserExists(string id)
     {
         return _context.Users.Any(e => e.Id == id);
     }

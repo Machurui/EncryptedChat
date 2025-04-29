@@ -40,9 +40,9 @@ public class TeamDTOPublic
 public class TeamDTO
 {
     [Required] 
-    public ICollection<int>? AdminIds { get; set; }
+    public ICollection<string>? AdminIds { get; set; }
 
-    public ICollection<int>? MemberIds { get; set; }
+    public ICollection<string>? MemberIds { get; set; }
 
     [Required]
     [MaxLength(100)]

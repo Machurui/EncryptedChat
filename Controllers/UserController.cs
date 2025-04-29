@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EncryptedChat.Controllers
 {
@@ -18,6 +19,7 @@ namespace EncryptedChat.Controllers
 
         // GET: api/User
         [HttpGet]
+        [Authorize]
         public IEnumerable<UserDTOPublic> GetUsers()
         {
             return _service.GetAll();
@@ -25,7 +27,7 @@ namespace EncryptedChat.Controllers
 
         // GET: api/User/5
         [HttpGet("{id}")]
-        public ActionResult<UserDTOPublic> GetUser(int id)
+        public ActionResult<UserDTOPublic> GetUser(string id)
         {
             var user = _service.GetById(id);
 
@@ -39,25 +41,10 @@ namespace EncryptedChat.Controllers
             }
         }
 
-        // POST: api/User
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public IActionResult PostUser(UserDTO newUser)
-        {
-            var user = _service.Create(newUser);
-
-            if (user is null)
-            {
-                return BadRequest("User already exists or invalid data.");
-            }
-
-            return CreatedAtAction(nameof(GetUser), new { id = user!.Id }, user);
-        }
-
         // PUT: api/User/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public IActionResult PutUser(int id, UserDTO user)
+        public IActionResult PutUser(string id, UserDTO user)
         {
             var userToUpdate = _service.GetById(id);
 
@@ -74,7 +61,7 @@ namespace EncryptedChat.Controllers
 
         // DELETE: api/User/5
         [HttpDelete("{id}")]
-        public IActionResult DeleteUser(int id)
+        public IActionResult DeleteUser(string id)
         {
             var userToDelete = _service.GetById(id);
 
