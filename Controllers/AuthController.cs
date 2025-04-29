@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EncryptedChat.Controllers
 {
@@ -26,6 +27,39 @@ namespace EncryptedChat.Controllers
             }
 
             return BadRequest(result.Errors);
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login(LoginDTO model)
+        {
+            var result = await _authService.LoginAsync(model);
+
+            if (result.Succeeded)
+            {
+                return Ok(new { Message = "Login successful" });
+            }
+
+            return Unauthorized(new { Message = "Invalid login attempt" });
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            await _authService.LogoutAsync();
+            return Ok(new { Message = "Logout successful" });
+        }
+
+        
+        [HttpPost("refresh")]
+        [Authorize]
+        public async Task<IActionResult> Refresh()
+        {
+            var result = await _authService.RefreshAsync(User);
+
+            if (result.Succeeded)
+                return Ok(new { message = "Session refreshed" });
+            else
+                return Unauthorized();
         }
     }
 }

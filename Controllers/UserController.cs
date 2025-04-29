@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -19,7 +18,7 @@ namespace EncryptedChat.Controllers
 
         // GET: api/User
         [HttpGet]
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         public IEnumerable<UserDTOPublic> GetUsers()
         {
             return _service.GetAll();

@@ -18,7 +18,4 @@ public class RegisterDTO
     [Required]
     [MaxLength(100)]
     public string LastName { get; set; } = string.Empty;
-
-    [Required]
-    public string Role { get; set; } = "User";
 }

@@ -5,10 +5,6 @@ using Microsoft.AspNetCore.Identity;
 
 public class User : IdentityUser
 {
-    // [Key]
-    // [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    // public int Id { get; set; }
-
     [Required]
     [MaxLength(100)]
     public string? FirstName { get; set; }
@@ -16,13 +12,6 @@ public class User : IdentityUser
     [Required]
     [MaxLength(100)]
     public string? LastName { get; set; }
-
-    // [Required]
-    // public string? Email { get; set; }
-
-    // [Required]
-    // [MaxLength(100)]
-    // public string? Password { get; set; }
 
     [Required]
     public int Level { get; set; }
