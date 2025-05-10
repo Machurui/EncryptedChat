@@ -9,9 +9,9 @@ namespace EncryptedChat.Controllers
     [ApiController]
     public class AuthController : ControllerBase
     {
-        private readonly AuthService _authService;
+        private readonly IAuthService _authService;
 
-        public AuthController(AuthService authService)
+        public AuthController(IAuthService authService)
         {
             _authService = authService;
         }
@@ -22,9 +22,7 @@ namespace EncryptedChat.Controllers
             var result = await _authService.RegisterAsync(model);
 
             if (result.Succeeded)
-            {
                 return Ok(new { Message = "User created successfully" });
-            }
 
             return BadRequest(result.Errors);
         }
@@ -35,11 +33,9 @@ namespace EncryptedChat.Controllers
             var result = await _authService.LoginAsync(model);
 
             if (result.Succeeded)
-            {
                 return Ok(new { Message = "Login successful" });
-            }
 
-            return Unauthorized(new { Message = "Invalid login attempt" });
+            return BadRequest(new { Message = "Invalid login attempt" });
         }
 
         [HttpPost("logout")]
@@ -49,7 +45,7 @@ namespace EncryptedChat.Controllers
             return Ok(new { Message = "Logout successful" });
         }
 
-        
+
         [HttpPost("refresh")]
         [Authorize]
         public async Task<IActionResult> Refresh()
@@ -60,6 +56,41 @@ namespace EncryptedChat.Controllers
                 return Ok(new { message = "Session refreshed" });
             else
                 return Unauthorized();
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO model)
+        {
+            var result = await _authService.ForgotPasswordAsync(model);
+
+            if (result.Succeeded)
+                return Ok(new { Message = "Password reset link sent" });
+
+            return BadRequest(result.Errors);
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(ResetPasswordDTO model)
+        {
+            var result = await _authService.ResetPasswordAsync(model);
+
+            if (result.Succeeded)
+                return Ok(new { Message = "Password reset successful" });
+
+            return BadRequest(result.Errors);
+        }
+
+        [HttpPost("resend-confirmation-email")]
+        public async Task<NotImplementedException> ResendConfirmationEmail(ResendConfirmationEmailDTO model)
+        {
+            // var result = await _authService.ResendConfirmationEmailAsync(model);
+
+            // if (result.Succeeded)
+            //     return Ok(new { Message = "Confirmation email resent" });
+
+            // return BadRequest(result.Errors);
+
+            return new NotImplementedException();
         }
     }
 }

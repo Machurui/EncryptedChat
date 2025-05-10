@@ -35,7 +35,7 @@ builder.Services.AddSqlite<EncryptedChatContext>("Data source=encryptedchat.db")
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<MessageService>();
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
@@ -70,19 +70,6 @@ using (var scope = app.Services.CreateScope())
     app.UseHttpsRedirection();
 
 app.UseAuthorization();
-
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.Equals("/register", StringComparison.OrdinalIgnoreCase)
-        && context.Request.Method.Equals("POST", StringComparison.OrdinalIgnoreCase))
-    {
-        context.Response.StatusCode = 404;
-        await context.Response.WriteAsync("This endpoint is disabled. Use /api/Auth/register instead.");
-        return;
-    }
-
-    await next();
-});
 
 app.MapIdentityApi<User>();
 

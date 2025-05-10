@@ -484,7 +484,7 @@ $RECYCLE.BIN/
 *.swp
 
 # Ignorer le dossier "Migrations" à la racine
-/Migrations/
+*/Migrations/
 
 # Ignorer tous les fichiers avec l'extension .db, à n'importe quel niveau
 *.db
