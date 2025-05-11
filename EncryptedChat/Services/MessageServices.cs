@@ -39,22 +39,7 @@ public class MessageService
         .ToListAsync();
     }
 
-    public async Task<IEnumerable<MessageDTOPublic?>?> GetAllBySenderAsync(int id)
-    {
-        // Return a list of messages by sender id
-        var sender = await _context.Users.FindAsync(id);
-        if (sender == null)
-            return null;
-
-        return await _context.Messages
-        .Include(m => m.Sender)
-        .Include(m => m.Team)
-        // .Include(m => m.Team!.Admins) To maintain readability
-        // .Include(m => m.Team!.Members)
-        .Where(m => m.Sender != null && m.Sender.Id == sender.Id)
-        .Select(message => ItemToDTO(message))
-        .ToListAsync();
-    }
+    
 
     public async Task<MessageDTOPublic?> GetByIdAsync(int id)
     {

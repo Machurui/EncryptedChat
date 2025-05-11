@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-public class TeamService
+public class TeamService : ITeamService
 {
     private readonly EncryptedChatContext _context;
 
@@ -12,26 +12,26 @@ public class TeamService
         _context = context;
     }
 
-    public IEnumerable<TeamDTOPublic> GetAll()
+    public async Task<IEnumerable<TeamDTOPublic?>?> GetAllAsync()
     {
         // Return a list of teams
-        return _context.Teams
+        return await _context.Teams
         .Include(t => t.Admins)
         .Include(t => t.Members)
         .Select(team => ItemToDTO(team))
-        .ToList();
+        .ToListAsync();
     }
 
-    public TeamDTOPublic? GetById(int id)
+    public async Task<TeamDTOPublic?> GetByIdAsync(int id)
     {
         // Return a team by id
-        return _context.Teams
+        return await _context.Teams
         .Include(t => t.Admins)
         .Include(t => t.Members)
         .AsNoTracking()
         .Where(t => t.Id == id)
         .Select(team => ItemToDTO(team))
-        .SingleOrDefault();
+        .SingleOrDefaultAsync();
     }
 
     public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam)
@@ -108,6 +108,9 @@ public class TeamService
 
         try
         {
+            if (teamToUpdate.Admins == null || teamToUpdate.Admins.Count == 0)
+                return null;
+
             await _context.SaveChangesAsync();
         }
         catch (DbUpdateConcurrencyException)
@@ -120,7 +123,7 @@ public class TeamService
         return ItemToDTO(teamToUpdate);
     }
 
-    public TeamDTOPublic? Delete(int id)
+    public async Task<TeamDTOPublic?> DeleteAsync(int id)
     {
         // Delete a team
         var teamToDelete = _context.Teams.Find(id);
@@ -128,9 +131,29 @@ public class TeamService
             return null;
 
         _context.Teams.Remove(teamToDelete);
-        _context.SaveChanges();
+        await _context.SaveChangesAsync();
 
         return ItemToDTO(teamToDelete);
+    }
+
+    public async Task<bool> IsAdminAsync(string userId, int teamId)
+    {
+        // Check if a user is an admin is in a team
+        var team = await _context.Teams
+            .Include(t => t.Admins)
+            .Include(t => t.Members)
+            .FirstOrDefaultAsync(t => t.Id == teamId);
+
+        if (team == null)
+            return false;
+        
+        if (team.Admins == null || team.Members == null)
+            return false;
+
+        if (team.Admins.Any(a => a.Id == userId))
+            return true;
+        
+        return false;
     }
 
     private bool TeamExists(int id)

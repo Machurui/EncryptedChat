@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
-using Microsoft.CodeAnalysis.FlowAnalysis.DataFlow;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EncryptedChat.Controllers
 {
@@ -11,88 +9,83 @@ namespace EncryptedChat.Controllers
     [ApiController]
     public class TeamController : ControllerBase
     {
-        TeamService _service;
+        private readonly ITeamService _teamService;
 
-        public TeamController(TeamService service)
+        public TeamController(ITeamService teamService)
         {
-            _service = service;
+            _teamService = teamService;
         }
 
         // GET: api/Team
         [HttpGet]
-        public IEnumerable<TeamDTOPublic> GetTeams()
+        [Authorize(Roles = "Manager")]
+        public async Task<IEnumerable<TeamDTOPublic?>?> GetTeams()
         {
-            return _service.GetAll();
+            return await _teamService.GetAllAsync();
         }
 
         // GET: api/Team/5
         [HttpGet("{id}")]
-        public ActionResult<TeamDTOPublic> GetTeam(int id)
+        [Authorize(Roles = "Manager")]
+        public async Task<ActionResult<TeamDTOPublic?>?> GetTeam(int id)
         {
-            var team = _service.GetById(id);
+            var team = await _teamService.GetByIdAsync(id);
 
-            if (team is not null)
-            {
-                return team;
-            }
-            else
-            {
+            if (team is null)
                 return NotFound();
-            }
+
+            return team;
         }
 
         // POST: api/Team
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public IActionResult PostTeam(TeamDTO newTeam)
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult?> PostTeam(TeamDTO newTeam)
         {
-            var team = _service.CreateAsync(newTeam);
+            var team = await _teamService.CreateAsync(newTeam);
 
             if (team is null)
-            {
                 return BadRequest("Team invalid data.");
-            }
 
             return CreatedAtAction(nameof(GetTeam), new { id = team!.Id }, team);
         }
 
         // PUT: api/Team/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutTeam(int id, TeamDTO team)
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult?> PutTeam(int id, string userId, TeamDTO team)
         {
-            var teamToUpdate = _service.GetById(id);
+            var isAdmin = await _teamService.IsAdminAsync(userId, id);
+            if (!isAdmin)
+                return Unauthorized();
 
-            if (teamToUpdate is not null)
-            {
-                var teamUpdated = await _service.UpdateAsync(id, team);
-                if (teamUpdated is null)
-                    return BadRequest("Team invalid data.");
-
-                return NoContent();
-            }
-            else
-            {
-
+            var teamToUpdate = await _teamService.GetByIdAsync(id);
+            if (teamToUpdate is null)
                 return NotFound();
-            }
+
+            var teamUpdated = await _teamService.UpdateAsync(id, team);
+            if (teamUpdated is null)
+                return BadRequest("Team invalid data.");
+
+            return NoContent();
         }
 
         // DELETE: api/Team/5
         [HttpDelete("{id}")]
-        public IActionResult DeleteTeam(int id)
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult?> DeleteTeam(int id, string userId)
         {
-            var teamToDelete = _service.GetById(id);
+            var isAdmin = await _teamService.IsAdminAsync(userId, id);
+            if (!isAdmin)
+                return Unauthorized();
 
-            if (teamToDelete is not null)
-            {
-                _service.Delete(id);
-                return NoContent();
-            }
-            else
-            {
+            var teamToDelete = await _teamService.GetByIdAsync(id);
+
+            if (teamToDelete is null)
                 return NotFound();
-            }
+
+            await _teamService.DeleteAsync(id);
+            return NoContent();
         }
     }
 }

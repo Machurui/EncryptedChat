@@ -29,6 +29,39 @@ public class UserService
         .SingleOrDefault();
     }
 
+    public UserDTOPublic? Search(string? id, string? email)
+    {
+        if (!string.IsNullOrWhiteSpace(id))
+            return _context.Users
+                .Where(u => u.Id == id)
+                .Select(ItemToDTO)
+                .SingleOrDefault();
+
+        if (!string.IsNullOrWhiteSpace(email))
+            return _context.Users
+                .Where(u => u.Email == email)
+                .Select(ItemToDTO)
+                .SingleOrDefault();
+
+        return null;
+    }
+
+    public async Task<IEnumerable<MessageDTOPublic?>?> GetUserMessages(string id)
+    {
+        var sender = await _context.Users.FindAsync(id);
+        if (sender == null)
+            return null;
+
+        return await _context.Messages
+        .Include(m => m.Sender)
+        .Include(m => m.Team)
+        // .Include(m => m.Team!.Admins) To maintain readability
+        // .Include(m => m.Team!.Members)
+        .Where(m => m.Sender != null && m.Sender.Id == sender.Id)
+        .Select(message => ItemToDTO(message))
+        .ToListAsync();
+    }
+
     public UserDTOPublic? Update(string id, UserDTO user)
     {
         // Update a user
@@ -87,4 +120,33 @@ public class UserService
            Email = user.Email,
            Level = user.Level
        };
+
+    private static MessageDTOPublic ItemToDTO(Message message)
+    {
+        static UserDTOPublic MapUser(User user) => new()
+        {
+            Id = user.Id,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email,
+            Level = user.Level
+        };
+
+        static TeamDTOPublic MapTeam(Team team) => new()
+        {
+            Id = team.Id,
+            Name = team.Name,
+            Admins = [.. (team.Admins ?? Enumerable.Empty<User>()).Select(MapUser)],
+            Members = [.. (team.Members ?? Enumerable.Empty<User>()).Select(MapUser)]
+        };
+
+        return new MessageDTOPublic
+        {
+            Id = message.Id,
+            Text = message.Text,
+            Sender = MapUser(message?.Sender ?? new User()),
+            Team = MapTeam(message?.Team ?? new Team()),
+            Date = message?.Date ?? DateTime.MinValue
+        };
+    }
 }

@@ -39,6 +39,7 @@ namespace EncryptedChat.Controllers
         }
 
         [HttpPost("logout")]
+        [Authorize]
         public async Task<IActionResult> Logout()
         {
             await _authService.LogoutAsync();
@@ -81,6 +82,7 @@ namespace EncryptedChat.Controllers
         }
 
         [HttpPost("resend-confirmation-email")]
+        [Authorize]
         public async Task<NotImplementedException> ResendConfirmationEmail(ResendConfirmationEmailDTO model)
         {
             // var result = await _authService.ResendConfirmationEmailAsync(model);

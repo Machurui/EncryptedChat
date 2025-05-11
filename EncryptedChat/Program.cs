@@ -33,7 +33,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddSqlite<EncryptedChatContext>("Data source=encryptedchat.db");
 
 builder.Services.AddScoped<UserService>();
-builder.Services.AddScoped<TeamService>();
+builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
@@ -67,11 +67,9 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-    app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 
 app.UseAuthorization();
-
-app.MapIdentityApi<User>();
 
 app.MapControllers();
 

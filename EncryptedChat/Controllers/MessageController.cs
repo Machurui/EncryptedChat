@@ -24,22 +24,6 @@ namespace EncryptedChat.Controllers
             return await _service.GetAllAsync() ?? [];
         }
 
-        // GET: api/Message/user/6
-        [HttpGet("user/{userId}")]
-        public async Task<ActionResult<IEnumerable<MessageDTOPublic>>> GetMessageBySender(int userId)
-        {
-            var messages = await _service.GetAllBySenderAsync(userId);
-
-            if (messages is not null)
-            {
-                return Ok(messages);
-            }
-            else
-            {
-                return NotFound();
-            }
-        }
-
         // GET: api/Message/team/7
         [HttpGet("team/{teamId}")]
         public async Task<ActionResult<IEnumerable<MessageDTOPublic>>> GetMessageByTeam(int teamId)
