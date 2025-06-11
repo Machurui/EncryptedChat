@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-public class MessageService
+public class MessageService : IMessageService
 {
     private readonly EncryptedChatContext _context;
 
@@ -39,7 +39,7 @@ public class MessageService
         .ToListAsync();
     }
 
-    
+
 
     public async Task<MessageDTOPublic?> GetByIdAsync(int id)
     {
@@ -82,6 +82,9 @@ public class MessageService
         if (!isMember && !isAdmin)
             return null;
 
+        if (string.IsNullOrWhiteSpace(message?.Text) || message.Text.Length == 0)
+            return null;
+
         var newMessage = new Message
         {
             Text = message?.Text,
@@ -104,7 +107,7 @@ public class MessageService
             .Include(m => m.Sender)
             .FirstOrDefaultAsync(m => m.Id == id);
 
-        if(messageToUpdate == null)
+        if (messageToUpdate == null)
             return null;
 
         var sender = await _context.Users.FindAsync(message?.Sender);

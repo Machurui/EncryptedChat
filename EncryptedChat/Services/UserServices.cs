@@ -98,13 +98,35 @@ public class UserService
         var userToDelete = _context.Users.Find(id);
         if (userToDelete == null)
             return null;
-        
+
 
         _context.Users.Remove(userToDelete);
         _context.SaveChanges();
 
         return userToDelete;
     }
+
+    public IEnumerable<TeamDTOPublic> GetTeamsForUser(string userId)
+    {
+        var user = _context.Users
+            .Include(u => u.TeamsAsAdmin)
+            .Include(u => u.TeamsAsMember)
+            .FirstOrDefault(u => u.Id == userId);
+
+        if (user == null)
+            return Enumerable.Empty<TeamDTOPublic>();
+
+        var teams = user.TeamsAsAdmin.Concat(user.TeamsAsMember)
+            .Distinct()
+            .Select(t => new TeamDTOPublic
+            {
+                Id = t.Id,
+                Name = t.Name
+            });
+
+        return teams;
+    }
+
 
     private bool UserExists(string id)
     {

@@ -3,6 +3,8 @@ using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
+using System.Security.Claims;
+
 
 namespace EncryptedChat.Controllers
 {
@@ -22,7 +24,7 @@ namespace EncryptedChat.Controllers
         [Authorize(Roles = "Manager")]
         public ActionResult<IEnumerable<UserDTOPublic>> GetUsers([FromQuery] string? id, [FromQuery] string? email)
         {
-            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email) && User.IsInRole("Admin") )
+            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email) && User.IsInRole("Admin"))
                 return Ok(_service.GetAll());
             else if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email) && !User.IsInRole("Admin"))
                 return Unauthorized();
@@ -49,6 +51,22 @@ namespace EncryptedChat.Controllers
 
             return Ok(messages);
         }
+
+        //GET: api/user/team
+        [HttpGet("team")]
+        [Authorize(Roles = "User")]
+        public ActionResult<IEnumerable<TeamDTOPublic>> GetUserTeams()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+
+            if (userId == null)
+                return Unauthorized();
+
+            var teams = _service.GetTeamsForUser(userId);
+            return Ok(teams);
+        }
+
 
         // PUT: api/User/5
         [HttpPut("{id}")]
