@@ -1,8 +1,7 @@
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
+using EncryptedChat.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +14,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddIdentity<User, IdentityRole>()
     .AddEntityFrameworkStores<EncryptedChatContext>()
     .AddDefaultTokenProviders();
+builder.Services.AddSignalR();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -33,9 +33,9 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddSqlite<EncryptedChatContext>("Data source=encryptedchat.db");
 
 builder.Services.AddScoped<UserService>();
-builder.Services.AddScoped<TeamService>();
-builder.Services.AddScoped<MessageService>();
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ITeamService, TeamService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
@@ -67,26 +67,15 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-    app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.Equals("/register", StringComparison.OrdinalIgnoreCase)
-        && context.Request.Method.Equals("POST", StringComparison.OrdinalIgnoreCase))
-    {
-        context.Response.StatusCode = 404;
-        await context.Response.WriteAsync("This endpoint is disabled. Use /api/Auth/register instead.");
-        return;
-    }
-
-    await next();
-});
-
-app.MapIdentityApi<User>();
-
 app.MapControllers();
+
+app.MapHub<ChatHub>("/chat");
+// test hub static files
+app.UseStaticFiles();
 
 app.MapGet("/", () => @"Encrypted Chat API. Navigate to /swagger to open the Swagger test UI.");
 
