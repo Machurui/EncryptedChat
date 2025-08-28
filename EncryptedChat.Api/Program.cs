@@ -1,7 +1,6 @@
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Identity;
-using EncryptedChat.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,16 +47,11 @@ builder.Services.ConfigureApplicationCookie(o =>
     o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
 });
 
-
 builder.Services.AddSqlite<EncryptedChatContext>("Data source=encryptedchat.db");
 
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
-<<<<<<<< HEAD:EncryptedChat.Api/Program.cs
-builder.Services.AddScoped<MessageService>();
-========
 builder.Services.AddScoped<IMessageService, MessageService>();
->>>>>>>> origin/Auth_v1.0:EncryptedChat/Program.cs
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
@@ -96,13 +90,12 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-<<<<<<<< HEAD:EncryptedChat.Api/Program.cs
 app.UseCors("Client");
-========
-app.MapHub<ChatHub>("/chat");
+
+// app.MapHub<ChatHub>("/chat");
+
 // test hub static files
 app.UseStaticFiles();
->>>>>>>> origin/Auth_v1.0:EncryptedChat/Program.cs
 
 app.MapGet("/", () => @"Encrypted Chat API. Navigate to /swagger to open the Swagger test UI.");
 

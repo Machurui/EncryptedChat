@@ -39,12 +39,6 @@ public class MessageService : IMessageService
         .ToListAsync();
     }
 
-<<<<<<<< HEAD:EncryptedChat.Api/Services/MessageServices.cs
-    
-========
-
->>>>>>>> origin/Auth_v1.0:EncryptedChat/Services/Message/MessageServices.cs
-
     public async Task<MessageDTOPublic?> GetByIdAsync(int id)
     {
         // Return a message by id
