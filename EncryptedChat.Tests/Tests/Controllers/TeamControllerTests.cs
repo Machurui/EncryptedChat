@@ -6,18 +6,26 @@ using EncryptedChat.Models;
 using Microsoft.AspNetCore.Identity;
 using EncryptedChat.Services;
 using System.Security.Claims;
+<<<<<<< HEAD
 using Microsoft.CodeAnalysis.Elfie.Diagnostics;
+=======
+>>>>>>> origin/Auth_v1.0
 
 namespace EncryptedChat.Tests;
 
 public class TeamControllerTests
 {
     [Fact]
+<<<<<<< HEAD
     public async Task PostTeam_ReturnsCreated_WhenValidAdminExists()
+=======
+    public async Task CreateAsync_ReturnsCreatedAtAction_WhenTeamIsCreatedSuccessfully()
+>>>>>>> origin/Auth_v1.0
     {
         // Arrange
         var mockTeamService = new Mock<ITeamService>();
 
+<<<<<<< HEAD
         var validAdminId = Guid.NewGuid().ToString();
         var teamDto = new TeamDTO
         {
@@ -39,6 +47,31 @@ public class TeamControllerTests
             .Setup(s => s.CreateAsync(It.Is<TeamDTO>(dto =>
                 dto.AdminIds != null && dto.AdminIds.Contains(validAdminId) && dto.Name == "Alpha Team")))
             .ReturnsAsync(expectedTeam);
+=======
+        var fakeAdminId = Guid.NewGuid().ToString();
+        var fakeMember1 = Guid.NewGuid().ToString();
+        var fakeMember2 = Guid.NewGuid().ToString();
+
+        var teamDto = new TeamDTO
+        {
+            Name = "Test Team",
+            Password = "secret-password",
+            AdminIds = [fakeAdminId],
+            MemberIds = [fakeMember1, fakeMember2]
+        };
+
+        var expectedResult = new TeamDTOPublic
+        {
+            Id = 42,
+            Name = teamDto.Name,
+            Admins = teamDto.AdminIds.Select(id => new UserDTOPublic { Id = id }).ToList(),
+            Members = teamDto.MemberIds.Select(id => new UserDTOPublic { Id = id }).ToList()
+        };
+
+        mockTeamService
+            .Setup(s => s.CreateAsync(It.IsAny<TeamDTO>()))
+            .ReturnsAsync(expectedResult);
+>>>>>>> origin/Auth_v1.0
 
         var controller = new TeamController(mockTeamService.Object);
 
@@ -47,6 +80,7 @@ public class TeamControllerTests
 
         // Assert
         result.Should().BeOfType<CreatedAtActionResult>();
+<<<<<<< HEAD
     }
 
     [Fact]
@@ -152,3 +186,12 @@ public class TeamControllerTests
     //     result.Should().BeOfType<CreatedAtActionResult>();
     // }
 }
+=======
+
+        var createdResult = result as CreatedAtActionResult;
+        createdResult!.ActionName.Should().Be(nameof(TeamController.GetTeam)); // optional
+        createdResult.Value.Should().BeEquivalentTo(expectedResult);
+        createdResult.StatusCode.Should().Be(201);
+    }
+}
+>>>>>>> origin/Auth_v1.0

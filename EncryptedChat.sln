@@ -5,8 +5,11 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedChat", "EncryptedChat\EncryptedChat.csproj", "{A6773088-76EB-BE9E-674F-7A29814B7974}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedChat.Tests", "EncryptedChat.Tests\EncryptedChat.Tests.csproj", "{C3D70C46-1762-495E-B746-6275D38EC827}"
+<<<<<<< HEAD
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedChat.Client", "EncryptedChat.Client\EncryptedChat.Client.csproj", "{659AA152-8A5F-4273-8A1C-3C414A5B440A}"
+=======
+>>>>>>> origin/Auth_v1.0
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -22,10 +25,13 @@ Global
 		{C3D70C46-1762-495E-B746-6275D38EC827}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3D70C46-1762-495E-B746-6275D38EC827}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3D70C46-1762-495E-B746-6275D38EC827}.Release|Any CPU.Build.0 = Release|Any CPU
+<<<<<<< HEAD
 		{659AA152-8A5F-4273-8A1C-3C414A5B440A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{659AA152-8A5F-4273-8A1C-3C414A5B440A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{659AA152-8A5F-4273-8A1C-3C414A5B440A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{659AA152-8A5F-4273-8A1C-3C414A5B440A}.Release|Any CPU.Build.0 = Release|Any CPU
+=======
+>>>>>>> origin/Auth_v1.0
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
