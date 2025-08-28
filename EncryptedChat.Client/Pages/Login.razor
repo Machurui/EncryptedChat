@@ -1,0 +1,25 @@
+@page "/login"
+@inject EncryptedChat.Client.Services.AuthClient Auth
+@inject NavigationManager Nav
+
+<h3>Login</h3>
+
+<input @bind="email" placeholder="Email" />
+<input @bind="password" type="password" placeholder="Password" />
+<button @onclick="DoLogin">Login</button>
+@if (!string.IsNullOrEmpty(error))
+{
+    <p style="color:red">@error</p>
+}
+
+@code {
+    string email = "", password = "", error = "";
+
+    async Task DoLogin()
+    {
+        error = "";
+        var ok = await Auth.LoginAsync(email, password);
+        if (ok) Nav.NavigateTo("/");
+        else error = "Invalid login attempt.";
+    }
+}

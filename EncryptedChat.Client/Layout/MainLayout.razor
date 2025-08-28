@@ -1,0 +1,29 @@
+﻿<!-- EncryptedChat.Client/Shared/MainLayout.razor -->
+@inherits LayoutComponentBase
+@inject EncryptedChat.Client.Services.AuthClient Auth
+@inject NavigationManager Nav
+
+<header style="display:flex; gap:1rem; align-items:center">
+    <a href="/">Home</a>
+    <AuthorizeView>
+        <Authorized>
+            <button @onclick="Logout">Logout</button>
+        </Authorized>
+        <NotAuthorized>
+            <a href="/login">Login</a>
+            <a href="/register">Register</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</header>
+
+<main>
+    @Body
+</main>
+
+@code {
+    private async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/");
+    }
+}

@@ -1,0 +1,26 @@
+@page "/register"
+@using EncryptedChat.Client.Services
+@inject AuthClient Auth
+@inject NavigationManager Nav
+
+<h3>Create account</h3>
+
+<input @bind="firstName" placeholder="First name" />
+<input @bind="lastName" placeholder="Last name" />
+<input @bind="email" placeholder="Email" />
+<input @bind="password" type="password" placeholder="Password" />
+<button @onclick="DoRegister">Register</button>
+@if (!string.IsNullOrEmpty(msg))
+{
+    <p>@msg</p>
+}
+
+@code {
+    string firstName = "", lastName = "", email = "", password = "", msg = "";
+    async Task DoRegister()
+    {
+        var ok = await Auth.RegisterAsync(new AuthClient.RegisterDTO(firstName, lastName, email, password));
+        msg = ok ? "Registered. You can log in now." : "Registration failed.";
+        if (ok) Nav.NavigateTo("/login");
+    }
+}
