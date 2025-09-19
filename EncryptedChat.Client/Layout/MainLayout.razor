@@ -1,0 +1,49 @@
+﻿@inherits LayoutComponentBase
+@inject EncryptedChat.Client.Services.AuthClient Auth
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Authorization
+
+<CascadingAuthenticationState>
+    <div class="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 dynamic-background"
+        style="--bg-url: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80&fit=crop&crop=center');">
+
+        @* Glass Distortion *@
+        <svg style="display: none;">
+            <filter id="glass-distortion" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+                <feTurbulence type="fractalNoise" baseFrequency="0.01 0.01" numOctaves="1" seed="5" result="turbulence">
+                </feTurbulence>
+                <feComponentTransfer in="turbulence" result="mapped">
+                    <feFuncR type="gamma" amplitude="1" exponent="10" offset="0.5"></feFuncR>
+                    <feFuncG type="gamma" amplitude="0" exponent="1" offset="0"></feFuncG>
+                    <feFuncB type="gamma" amplitude="0" exponent="1" offset="0.5"></feFuncB>
+                </feComponentTransfer>
+                <feGaussianBlur in="turbulence" stdDeviation="3" result="softMap"></feGaussianBlur>
+                <feSpecularLighting in="softMap" surfaceScale="5" specularConstant="1" specularExponent="100"
+                    lighting-color="white" result="specLight">
+                    <fePointLight x="-200" y="-200" z="300"></fePointLight>
+                </feSpecularLighting>
+                <feComposite in="specLight" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="litImage">
+                </feComposite>
+                <feDisplacementMap in="SourceGraphic" in2="softMap" scale="150" xChannelSelector="R"
+                    yChannelSelector="G">
+                </feDisplacementMap>
+            </filter>
+        </svg>
+
+        <header style="display:flex; gap:1rem; align-items:center">
+            <Header />
+        </header>
+
+        <main>
+            @Body
+        </main>
+    </div>
+</CascadingAuthenticationState>
+
+@code {
+    private async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/");
+    }
+}

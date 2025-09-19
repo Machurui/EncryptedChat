@@ -1,0 +1,71 @@
+
+
+<header class="antialiased w-full">
+    <nav class="relative w-full bg-cover bg-center bg-no-repeat border-gray-200 px-4 lg:px-6 py-2.5">
+        <!-- Glass layers -->
+        <div class="liquid-glass-effect-no-blur" style="border-radius: 20px;"></div>
+        <div class="liquid-glass-tint-no-bg" style="border-radius: 20px;"></div>
+        <div class="liquid-glass-shine-no-bs" style="border-radius: 20px;"></div>
+
+        <!-- Content -->
+        <div class="liquid-glass-content">
+            <div class="max-w-7xl mx-auto px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <!-- Logo -->
+                    <div class="flex items-center space-x-3">
+                        <a href="/" class="flex mr-4">
+                            <img src="https://logodix.com/logo/1305364.png" class="mr-3 h-8" alt="FlowBite Logo" />
+                            <span
+                                class="self-center text-2xl font-semibold whitespace-nowrap text-white">EntraChat</span>
+                        </a>
+                    </div>
+
+                    <!-- Links -->
+                    <div class="hidden md:flex items-center space-x-8">
+                        <a href="/" class="flex text-white/80 hover:text-white transition-colors">Home</a>
+                        <a href="/about" class="flex text-white/80 hover:text-white transition-colors">Chat</a>
+                        <a href="/contact" class="flex text-white/80 hover:text-white transition-colors">Friends</a>
+                    </div>
+
+                    <!-- Auth -->
+                    <div class="flex items-center space-x-4">
+                        <AuthorizeView>
+                            <Authorized>
+                                <button type="button" class="glass-button hover:bg-white/20">Profile</button>
+                                <button type="button" onclick="Logout()" class="glass-button hover:bg-white/20">Logout</button>
+                            </Authorized>
+
+                            <NotAuthorized>
+                                <!-- Sign In -->
+                                <NavLink class="glass-button hover:bg-white/20 items-center gap-2" href="/login"
+                                    Match="NavLinkMatch.All">
+                                    <svg class="w-5 h-5 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+                                        stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M4 5v14" />
+                                        <path d="M17 12H8" />
+                                        <path d="M11 7l6 5-6 5" />
+                                    </svg>
+                                    <span class="leading-none whitespace-nowrap">Sign In</span>
+                                </NavLink>
+
+                                <!-- Sign Up -->
+                                <NavLink class="glass-button hover:bg-white/20 items-center gap-2" href="/register">
+                                    <svg class="w-5 h-5 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+                                        stroke-linejoin="round" aria-hidden="true">
+                                        <circle cx="9" cy="8" r="3" />
+                                        <path d="M2 20a7 7 0 0 1 14 0" />
+                                        <path d="M19 6v4" />
+                                        <path d="M17 8h4" />
+                                    </svg>
+                                    <span class="leading-none whitespace-nowrap">Sign Up</span>
+                                </NavLink>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+</header>
