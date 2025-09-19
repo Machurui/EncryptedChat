@@ -84,16 +84,6 @@ namespace EncryptedChat.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("Level")
                         .HasColumnType("INTEGER");
 
@@ -101,6 +91,11 @@ namespace EncryptedChat.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("NormalizedEmail")
@@ -137,6 +132,9 @@ namespace EncryptedChat.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Name")
                         .IsUnique();
 
                     b.HasIndex("NormalizedEmail")

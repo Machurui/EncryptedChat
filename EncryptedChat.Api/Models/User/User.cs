@@ -6,11 +6,7 @@ public class User : IdentityUser
 {
     [Required]
     [MaxLength(100)]
-    public string? FirstName { get; set; } = string.Empty;
-
-    [Required]
-    [MaxLength(100)]
-    public string? LastName { get; set; } = string.Empty;
+    public string? Name { get; set; } = string.Empty;
 
     [Required]
     public int Level { get; set; } = 0;

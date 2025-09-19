@@ -1,26 +1,128 @@
 @page "/register"
-@using EncryptedChat.Client.Services
-@inject AuthClient Auth
+@inject EncryptedChat.Client.Services.AuthClient Auth
 @inject NavigationManager Nav
 
-<h3>Create account</h3>
+@using System.ComponentModel.DataAnnotations
 
-<input @bind="firstName" placeholder="First name" />
-<input @bind="lastName" placeholder="Last name" />
-<input @bind="email" placeholder="Email" />
-<input @bind="password" type="password" placeholder="Password" />
-<button @onclick="DoRegister">Register</button>
-@if (!string.IsNullOrEmpty(msg))
-{
-    <p>@msg</p>
-}
+<section>
+    <div class="relative grid place-items-center px-6 py-10 mx-auto min-h-[60svh] md:min-h-[65svh] lg:min-h-[70svh]">
+        <div class="flex flex-col items-center w-full sm:max-w-md md:mt-0">
+            <div class="liquid-glass-wrapper rounded-3xl shadow-2xl w-full"
+                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05); box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;">
+
+                <!-- Glass layers -->
+                <div class="liquid-glass-effect" aria-hidden="true"></div>
+                <div class="liquid-glass-tint" aria-hidden="true"></div>
+                <div class="liquid-glass-shine" aria-hidden="true"></div>
+
+                <!-- Content -->
+                <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
+                    <h1
+                        class="flex justify-center text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
+                        Create a new account
+                    </h1>
+
+                    <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister" class="space-y-4 md:space-y-6">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-red-300" />
+
+                        @if (!string.IsNullOrWhiteSpace(errorMessage))
+                        {
+                            <div class="text-red-300 whitespace-pre-line">
+                                @errorMessage
+                            </div>
+                        }
+
+                        <div>
+                            <label for="email" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Your email
+                            </label>
+                            <InputText id="email" @bind-Value="registerModel.Email" type="email"
+                                placeholder="name@company.com"
+                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
+                        </div>
+
+                        <div>
+                            <label for="password" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Password
+                            </label>
+                            <InputText id="password" @bind-Value="registerModel.Password" type="password"
+                                placeholder="••••••••"
+                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
+                        </div>
+
+                        <div>
+                            <label for="confirm-password" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Confirm Password
+                            </label>
+                            <InputText id="confirm-password" @bind-Value="registerModel.ConfirmPassword" type="password"
+                                placeholder="••••••••"
+                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
+                        </div>
+
+                        <div>
+                            <label for="name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Full Name
+                            </label>
+                            <InputText id="name" @bind-Value="registerModel.Name" type="text"
+                                placeholder="Your name"
+                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
+                        </div>
+
+                        <button type="submit" class="glass-button-primary w-full justify-center">
+                            Sign up
+                        </button>
+
+                        <p class="text-sm font-light text-gray-600 dark:text-gray-400">
+                            Already have an account?
+                            <NavLink href="/login"
+                                class="font-medium text-primary-600 hover:underline dark:text-primary-400">
+                                Sign in
+                            </NavLink>
+                        </p>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 @code {
-    string firstName = "", lastName = "", email = "", password = "", msg = "";
-    async Task DoRegister()
+    private RegisterModel registerModel = new();
+    private string? errorMessage;
+
+    private async Task HandleRegister()
     {
-        var ok = await Auth.RegisterAsync(new AuthClient.RegisterDTO(firstName, lastName, email, password));
-        msg = ok ? "Registered. You can log in now." : "Registration failed.";
-        if (ok) Nav.NavigateTo("/login");
+        if (registerModel.Password != registerModel.ConfirmPassword)
+        {
+            errorMessage = "Passwords do not match.";
+            return;
+        }
+
+        var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Name);
+
+        if (result.Success)
+        {
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
+        }
+    }
+
+    public class RegisterModel
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required, MinLength(6)]
+        public string Password { get; set; } = string.Empty;
+
+        [Required, MinLength(6)]
+        public string ConfirmPassword { get; set; } = string.Empty;
+
+        [Required, MinLength(2), MaxLength(100)]
+        public string Name { get; set; } = string.Empty;
     }
 }

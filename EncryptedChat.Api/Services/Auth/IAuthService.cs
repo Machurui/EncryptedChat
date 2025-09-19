@@ -8,16 +8,15 @@ namespace EncryptedChat.Services
     public interface IAuthService
     {
         Task<IdentityResult> RegisterAsync(RegisterDTO model);
-        Task<Microsoft.AspNetCore.Identity.SignInResult> LoginAsync(LoginDTO model);
+        Task<LoginResult> LoginAsync(LoginDTO model);
+        Task<LoginResult> RefreshAsync(string refreshToken);
 
-        Task<SignOutResult> LogoutAsync();
-
-        Task<Microsoft.AspNetCore.Identity.SignInResult> RefreshAsync(ClaimsPrincipal userPrincipal);
+        Task LogoutAsync();
 
         Task<IdentityResult> ForgotPasswordAsync(ForgotPasswordDTO model);
-
         Task<IdentityResult> ResetPasswordAsync(ResetPasswordDTO model);
-
         Task<NotImplementedException> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model);
     }
+
+
 }

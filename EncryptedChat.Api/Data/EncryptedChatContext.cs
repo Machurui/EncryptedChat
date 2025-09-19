@@ -17,15 +17,19 @@ public class EncryptedChatContext : IdentityDbContext<User>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
+
         modelBuilder.Entity<User>()
-            .HasIndex(u => u.Email)
+         .HasIndex(u => u.Email)
+         .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Name)
             .IsUnique();
 
         modelBuilder.Entity<Team>()
-        .HasMany(t => t.Admins)
-        .WithMany(u => u.TeamsAsAdmin)
-        .UsingEntity(j => j.ToTable("TeamAdmins"));
+            .HasMany(t => t.Admins)
+            .WithMany(u => u.TeamsAsAdmin)
+            .UsingEntity(j => j.ToTable("TeamAdmins"));
 
         modelBuilder.Entity<Team>()
             .HasMany(t => t.Members)

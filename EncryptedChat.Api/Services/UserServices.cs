@@ -69,8 +69,7 @@ public class UserService
         if (existingUser == null)
             return null;
 
-        existingUser.FirstName = user.FirstName;
-        existingUser.LastName = user.LastName;
+        existingUser.Name = user.Name;
         existingUser.Email = user.Email;
 
         try
@@ -115,8 +114,7 @@ public class UserService
        new UserDTOPublic
        {
            Id = user.Id,
-           FirstName = user.FirstName,
-           LastName = user.LastName,
+           Name = user.Name,
            Email = user.Email,
            Level = user.Level
        };
@@ -126,8 +124,7 @@ public class UserService
         static UserDTOPublic MapUser(User user) => new()
         {
             Id = user.Id,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
+            Name = user.Name,
             Email = user.Email,
             Level = user.Level
         };

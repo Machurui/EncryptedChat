@@ -166,8 +166,7 @@ public class TeamService : ITeamService
         static UserDTOPublic MapUser(User user) => new UserDTOPublic
         {
             Id = user.Id,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
+            Name = user.Name,
             Email = user.Email,
             Level = user.Level
         };
