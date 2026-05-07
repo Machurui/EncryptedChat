@@ -13,7 +13,7 @@ public class AuthControllerTests
 {
     private static AuthController CreateControllerWithHttpContext(Mock<IAuthService> mockAuthService)
     {
-        var controller = new AuthController(mockAuthService.Object);
+        AuthController controller = new(mockAuthService.Object);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()
@@ -24,8 +24,8 @@ public class AuthControllerTests
     [Fact]
     public async Task Register_ReturnsOk_WhenSuccessful()
     {
-        var mockAuthService = new Mock<IAuthService>();
-        var registerDto = new RegisterDTO
+        Mock<IAuthService> mockAuthService = new();
+        RegisterDTO registerDto = new()
         {
             Email = "test@example.com",
             Password = "P@ssw0rd",
@@ -36,9 +36,9 @@ public class AuthControllerTests
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
             .ReturnsAsync(IdentityResult.Success);
 
-        var controller = new AuthController(mockAuthService.Object);
+        AuthController controller = new(mockAuthService.Object);
 
-        var result = await controller.Register(registerDto);
+        IActionResult result = await controller.Register(registerDto);
 
         result.Should().BeOfType<OkObjectResult>();
     }
@@ -46,11 +46,11 @@ public class AuthControllerTests
     [Fact]
     public async Task Register_ReturnsBadRequest_WhenFailed()
     {
-        var mockAuthService = new Mock<IAuthService>();
-        var registerDto = new RegisterDTO
+        Mock<IAuthService> mockAuthService = new();
+        RegisterDTO registerDto = new()
         {
-            Email = "invalid",
-            Password = "short",
+            Email = "invalid@x.com",
+            Password = "short1",
             Name = "Bad Input"
         };
 
@@ -58,9 +58,9 @@ public class AuthControllerTests
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
             .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Invalid data" }));
 
-        var controller = new AuthController(mockAuthService.Object);
+        AuthController controller = new(mockAuthService.Object);
 
-        var result = await controller.Register(registerDto);
+        IActionResult result = await controller.Register(registerDto);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -68,21 +68,21 @@ public class AuthControllerTests
     [Fact]
     public async Task Login_ReturnsOk_WhenSuccessful()
     {
-        var mockAuthService = new Mock<IAuthService>();
-        var loginDto = new LoginDTO
+        Mock<IAuthService> mockAuthService = new();
+        LoginDTO loginDto = new()
         {
             Email = "test@example.com",
             Password = "P@ssw0rd",
         };
-        var loginResult = LoginResult.Success("access-token", DateTime.UtcNow.AddMinutes(15));
+        LoginResult loginResult = LoginResult.Success("access-token", DateTime.UtcNow.AddMinutes(15), "refresh-token");
 
         mockAuthService
             .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
             .ReturnsAsync(loginResult);
 
-        var controller = CreateControllerWithHttpContext(mockAuthService);
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
 
-        var result = await controller.Login(loginDto);
+        IActionResult result = await controller.Login(loginDto);
 
         result.Should().BeOfType<OkObjectResult>();
     }
@@ -90,8 +90,8 @@ public class AuthControllerTests
     [Fact]
     public async Task Login_ReturnsBadRequest_WhenFailed()
     {
-        var mockAuthService = new Mock<IAuthService>();
-        var loginDto = new LoginDTO
+        Mock<IAuthService> mockAuthService = new();
+        LoginDTO loginDto = new()
         {
             Email = "test@example.com",
             Password = "BadPassword",
@@ -99,22 +99,44 @@ public class AuthControllerTests
 
         mockAuthService
             .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
-            .ReturnsAsync(LoginResult.Fail("Invalid password"));
+            .ReturnsAsync(LoginResult.Fail("Invalid credentials"));
 
-        var controller = CreateControllerWithHttpContext(mockAuthService);
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
 
-        var result = await controller.Login(loginDto);
+        IActionResult result = await controller.Login(loginDto);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
-    public void Logout_ReturnsOk()
+    public async Task Logout_ReturnsOk()
     {
-        var mockAuthService = new Mock<IAuthService>();
-        var controller = CreateControllerWithHttpContext(mockAuthService);
+        Mock<IAuthService> mockAuthService = new();
+        mockAuthService
+            .Setup(s => s.LogoutAsync(It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
 
-        var result = controller.Logout();
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
+
+        IActionResult result = await controller.Logout();
+
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task Refresh_ReturnsOk_WhenRefreshTokenIsValid()
+    {
+        Mock<IAuthService> mockAuthService = new();
+        AuthController.RefreshRequest request = new("valid-refresh-token");
+        LoginResult loginResult = LoginResult.Success("new-access-token", DateTime.UtcNow.AddMinutes(15), "new-refresh-token");
+
+        mockAuthService
+            .Setup(s => s.RefreshAsync("valid-refresh-token"))
+            .ReturnsAsync(loginResult);
+
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
+
+        IActionResult result = await controller.Refresh(request);
 
         result.Should().BeOfType<OkObjectResult>();
     }
@@ -122,17 +144,30 @@ public class AuthControllerTests
     [Fact]
     public async Task Refresh_ReturnsUnauthorized_WhenRefreshTokenIsInvalid()
     {
-        var mockAuthService = new Mock<IAuthService>();
-        var request = new AuthController.RefreshRequest("invalid-refresh-token");
+        Mock<IAuthService> mockAuthService = new();
+        AuthController.RefreshRequest request = new("invalid-refresh-token");
 
         mockAuthService
-            .Setup(s => s.RefreshAsync(request.refreshToken))
-            .ReturnsAsync(LoginResult.Fail("Refresh not implemented"));
+            .Setup(s => s.RefreshAsync("invalid-refresh-token"))
+            .ReturnsAsync(LoginResult.Fail("Invalid refresh token"));
 
-        var controller = CreateControllerWithHttpContext(mockAuthService);
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
 
-        var result = await controller.Refresh(request);
+        IActionResult result = await controller.Refresh(request);
 
-        result.Should().BeOfType<UnauthorizedResult>();
+        result.Should().BeOfType<UnauthorizedObjectResult>();
+    }
+
+    [Fact]
+    public async Task Refresh_ReturnsUnauthorized_WhenNoRefreshToken()
+    {
+        Mock<IAuthService> mockAuthService = new();
+        AuthController.RefreshRequest? request = null;
+
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
+
+        IActionResult result = await controller.Refresh(request);
+
+        result.Should().BeOfType<UnauthorizedObjectResult>();
     }
 }

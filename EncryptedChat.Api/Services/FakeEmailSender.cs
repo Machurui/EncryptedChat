@@ -3,29 +3,35 @@ using EncryptedChat.Models;
 
 namespace EncryptedChat.Services;
 
-public class FakeEmailSender : IEmailSender<User>
+public class FakeEmailSender(IWebHostEnvironment env) : IEmailSender<User>
 {
+    private readonly IWebHostEnvironment _env = env;
+
     public Task SendConfirmationLinkAsync(User user, string email, string confirmationLink)
     {
-        Console.WriteLine($"[FakeEmailSender] Confirmation email sent to {email}: {confirmationLink}");
+        if (_env.IsDevelopment())
+            Console.WriteLine($"[FakeEmailSender] Confirmation email to {email}");
         return Task.CompletedTask;
     }
 
     public Task SendPasswordResetLinkAsync(User user, string email, string resetLink)
     {
-        Console.WriteLine($"[FakeEmailSender] Password reset link sent to {email}: {resetLink}");
+        if (_env.IsDevelopment())
+            Console.WriteLine($"[FakeEmailSender] Password reset link to {email}");
         return Task.CompletedTask;
     }
 
     public Task SendPasswordChangedConfirmationAsync(User user, string email)
     {
-        Console.WriteLine($"[FakeEmailSender] Password changed confirmation sent to {email}");
+        if (_env.IsDevelopment())
+            Console.WriteLine($"[FakeEmailSender] Password changed confirmation to {email}");
         return Task.CompletedTask;
     }
 
     public Task SendPasswordResetCodeAsync(User user, string email, string resetCode)
     {
-        Console.WriteLine($"[FakeEmailSender] Password reset code sent to {email}: {resetCode}");
+        if (_env.IsDevelopment())
+            Console.WriteLine($"[FakeEmailSender] Password reset code to {email}");
         return Task.CompletedTask;
     }
 }
