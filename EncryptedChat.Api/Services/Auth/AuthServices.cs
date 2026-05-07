@@ -7,16 +7,21 @@ namespace EncryptedChat.Services;
 
 public class AuthService : IAuthService
 {
+    private const string DefaultUserRole = "User";
+
     private readonly UserManager<User> _userManager;
     private readonly SignInManager<User> _signInManager; // still used for password checks/lockout
+    private readonly RoleManager<IdentityRole> _roleManager;
     private readonly JwtTokenService _tokens;
 
     public AuthService(UserManager<User> userManager,
                        SignInManager<User> signInManager,
+                       RoleManager<IdentityRole> roleManager,
                        JwtTokenService tokens)
     {
         _userManager = userManager;
         _signInManager = signInManager;
+        _roleManager = roleManager;
         _tokens = tokens;
     }
 
@@ -54,7 +59,24 @@ public class AuthService : IAuthService
 
         var result = await _userManager.CreateAsync(user, model.Password);
         if (result.Succeeded)
-            await _userManager.AddToRoleAsync(user, "User");
+        {
+            if (!await _roleManager.RoleExistsAsync(DefaultUserRole))
+            {
+                await _userManager.DeleteAsync(user);
+                return IdentityResult.Failed(new IdentityError
+                {
+                    Code = "RoleMissing",
+                    Description = $"Required role '{DefaultUserRole}' is not configured."
+                });
+            }
+
+            var roleResult = await _userManager.AddToRoleAsync(user, DefaultUserRole);
+            if (!roleResult.Succeeded)
+            {
+                await _userManager.DeleteAsync(user);
+                return roleResult;
+            }
+        }
 
         return result;
     }

@@ -1,17 +1,25 @@
-using Moq;
-using FluentAssertions;
-using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Controllers;
 using EncryptedChat.Models;
-using Microsoft.AspNetCore.Identity;
 using EncryptedChat.Services;
-using System.Security.Claims;
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
 
 namespace EncryptedChat.Tests;
 
 public class AuthControllerTests
 {
-    // Test for Register method
+    private static AuthController CreateControllerWithHttpContext(Mock<IAuthService> mockAuthService)
+    {
+        var controller = new AuthController(mockAuthService.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        return controller;
+    }
 
     [Fact]
     public async Task Register_ReturnsOk_WhenSuccessful()
@@ -21,15 +29,12 @@ public class AuthControllerTests
         {
             Email = "test@example.com",
             Password = "P@ssw0rd",
-            FirstName = "Test",
-            LastName = "User"
+            Name = "Test User"
         };
-
-        var identityResult = IdentityResult.Success;
 
         mockAuthService
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync(identityResult);
+            .ReturnsAsync(IdentityResult.Success);
 
         var controller = new AuthController(mockAuthService.Object);
 
@@ -46,15 +51,12 @@ public class AuthControllerTests
         {
             Email = "invalid",
             Password = "short",
-            FirstName = "Bad",
-            LastName = "Input"
+            Name = "Bad Input"
         };
-
-        var identityResult = IdentityResult.Failed(new IdentityError { Description = "Invalid data" });
 
         mockAuthService
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync(identityResult);
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Invalid data" }));
 
         var controller = new AuthController(mockAuthService.Object);
 
@@ -62,51 +64,23 @@ public class AuthControllerTests
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
-
-    [Fact]
-    public async Task Register_ReturnsBadRequest_WhenEmailIsAlreadyUsed()
-    {
-        var mockAuthService = new Mock<IAuthService>();
-        var registerDto = new RegisterDTO
-        {
-            Email = "test@example.com",
-            Password = "P@ssw0rd",
-            FirstName = "Test",
-            LastName = "User"
-        };
-
-        var identityResult = IdentityResult.Failed(new IdentityError { Description = "Invalid data" });
-
-        mockAuthService
-            .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync(identityResult);
-
-        var controller = new AuthController(mockAuthService.Object);
-
-        var result = await controller.Register(registerDto);
-
-        result.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-
-    // Test for Login method
 
     [Fact]
     public async Task Login_ReturnsOk_WhenSuccessful()
     {
         var mockAuthService = new Mock<IAuthService>();
-
         var loginDto = new LoginDTO
         {
             Email = "test@example.com",
             Password = "P@ssw0rd",
         };
+        var loginResult = LoginResult.Success("access-token", DateTime.UtcNow.AddMinutes(15));
 
         mockAuthService
             .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
-            .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
+            .ReturnsAsync(loginResult);
 
-        var controller = new AuthController(mockAuthService.Object);
+        var controller = CreateControllerWithHttpContext(mockAuthService);
 
         var result = await controller.Login(loginDto);
 
@@ -114,10 +88,9 @@ public class AuthControllerTests
     }
 
     [Fact]
-    public async Task Login_ReturnsBadRequest_WhenWrongPassword()
+    public async Task Login_ReturnsBadRequest_WhenFailed()
     {
         var mockAuthService = new Mock<IAuthService>();
-
         var loginDto = new LoginDTO
         {
             Email = "test@example.com",
@@ -126,88 +99,40 @@ public class AuthControllerTests
 
         mockAuthService
             .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
-            .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Failed);
+            .ReturnsAsync(LoginResult.Fail("Invalid password"));
 
-        var controller = new AuthController(mockAuthService.Object);
-
-        var result = await controller.Login(loginDto);
-
-        result.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    [Fact]
-    public async Task Login_ReturnsBadRequest_WhenNotExisting()
-    {
-        var mockAuthService = new Mock<IAuthService>();
-
-        var loginDto = new LoginDTO
-        {
-            Email = "bad@example.com",
-            Password = "BadPassword",
-        };
-
-        mockAuthService
-            .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
-            .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Failed);
-
-        var controller = new AuthController(mockAuthService.Object);
+        var controller = CreateControllerWithHttpContext(mockAuthService);
 
         var result = await controller.Login(loginDto);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
-
-    // Test for Logout method
-
     [Fact]
-    public async Task Logout_ReturnsOk_WhenSuccessful()
+    public void Logout_ReturnsOk()
     {
         var mockAuthService = new Mock<IAuthService>();
+        var controller = CreateControllerWithHttpContext(mockAuthService);
 
-        mockAuthService
-            .Setup(s => s.LogoutAsync())
-            .ReturnsAsync(new SignOutResult());
-
-        var controller = new AuthController(mockAuthService.Object);
-
-        var result = await controller.Logout();
-
-        result.Should().BeOfType<OkObjectResult>();
-    }
-
-
-    // Test for Refresh method
-    [Fact]
-    public async Task Refresh_ReturnsOk_WhenSuccessful()
-    {
-        var mockAuthService = new Mock<IAuthService>();
-
-        mockAuthService
-            .Setup(s => s.RefreshAsync(It.IsAny<ClaimsPrincipal>()))
-            .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Success);
-
-        var controller = new AuthController(mockAuthService.Object);
-
-        var result = await controller.Refresh();
+        var result = controller.Logout();
 
         result.Should().BeOfType<OkObjectResult>();
     }
 
     [Fact]
-    public async Task Refresh_ReturnsUnauthorized_WhenFailed()
+    public async Task Refresh_ReturnsUnauthorized_WhenRefreshTokenIsInvalid()
     {
         var mockAuthService = new Mock<IAuthService>();
+        var request = new AuthController.RefreshRequest("invalid-refresh-token");
 
         mockAuthService
-            .Setup(s => s.RefreshAsync(It.IsAny<ClaimsPrincipal>()))
-            .ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.Failed);
+            .Setup(s => s.RefreshAsync(request.refreshToken))
+            .ReturnsAsync(LoginResult.Fail("Refresh not implemented"));
 
-        var controller = new AuthController(mockAuthService.Object);
+        var controller = CreateControllerWithHttpContext(mockAuthService);
 
-        var result = await controller.Refresh();
+        var result = await controller.Refresh(request);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
-
 }

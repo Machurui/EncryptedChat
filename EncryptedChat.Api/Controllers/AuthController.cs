@@ -28,7 +28,7 @@ namespace EncryptedChat.Controllers
             return BadRequest(new { Message = errors });
         }
 
-        // Returns a JWT access token
+        // Returns a JWT access token in HTTP-only cookie
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDTO model)
         {
@@ -37,20 +37,69 @@ namespace EncryptedChat.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { Message = "Invalid login attempt" });
 
-            // return token payload
+            // Set HTTP-only cookie
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Expires = result.ExpiresUtc,
+                Path = "/"
+            };
+            Response.Cookies.Append("ec.accessToken", result.AccessToken!, cookieOptions);
+
             return Ok(new
             {
-                accessToken = result.AccessToken!,
                 expiresUtc = result.ExpiresUtc,
-                refreshToken = result.RefreshToken // null unless you wire refresh
+                message = "Login successful"
             });
         }
 
-        // With JWT there is nothing to "server-logout" (client deletes token).
+        // Clear the HTTP-only cookie
         [HttpPost("logout")]
         public IActionResult Logout()
         {
-            return Ok(new { Message = "Logged out (client should discard token)." });
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Expires = DateTimeOffset.UtcNow.AddDays(-1),
+                Path = "/"
+            };
+            Response.Cookies.Append("ec.accessToken", "", cookieOptions);
+
+            return Ok(new { Message = "Logged out" });
+        }
+
+        // Returns current user info if authenticated
+        [HttpGet("me")]
+        [Authorize]
+        public IActionResult Me()
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var name = User.FindFirst("name")?.Value ?? User.Identity?.Name;
+            var roles = User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+
+            return Ok(new
+            {
+                userId,
+                name,
+                roles,
+                isAuthenticated = true
+            });
+        }
+
+        // Returns the access token for SignalR connections (protected by cookie auth)
+        [HttpGet("signalr-token")]
+        [Authorize]
+        public IActionResult GetSignalRToken()
+        {
+            if (Request.Cookies.TryGetValue("ec.accessToken", out var token))
+            {
+                return Ok(new { token });
+            }
+            return Unauthorized(new { Message = "No valid session" });
         }
 
         // Optional: refresh flow (left as placeholder)
@@ -63,10 +112,21 @@ namespace EncryptedChat.Controllers
             if (!result.Succeeded)
                 return Unauthorized();
 
+            // Set HTTP-only cookie
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Expires = result.ExpiresUtc,
+                Path = "/"
+            };
+            Response.Cookies.Append("ec.accessToken", result.AccessToken!, cookieOptions);
+
             return Ok(new
             {
-                accessToken = result.AccessToken!,
-                expiresUtc = result.ExpiresUtc
+                expiresUtc = result.ExpiresUtc,
+                message = "Token refreshed"
             });
         }
 

@@ -11,6 +11,6 @@ public class MessageDTO
     public string? Sender { get; set; }
 
     [Required]
-    public int? Team { get; set; }
+    public Guid? Team { get; set; }
 
 }

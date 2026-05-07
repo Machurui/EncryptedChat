@@ -102,13 +102,10 @@
         var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Name);
 
         if (result.Success)
-        {
             Nav.NavigateTo("/login");
-        }
+
         else
-        {
             errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
-        }
     }
 
     public class RegisterModel

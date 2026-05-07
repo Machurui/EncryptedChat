@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
-using System.Threading.Tasks;
 
 namespace EncryptedChat.Controllers
 {
@@ -10,9 +8,9 @@ namespace EncryptedChat.Controllers
     [ApiController]
     public class MessageController : ControllerBase
     {
-        MessageService _service;
+        private readonly IMessageService _service;
 
-        public MessageController(MessageService service)
+        public MessageController(IMessageService service)
         {
             _service = service;
         }
@@ -26,18 +24,14 @@ namespace EncryptedChat.Controllers
 
         // GET: api/Message/team/7
         [HttpGet("team/{teamId}")]
-        public async Task<ActionResult<IEnumerable<MessageDTOPublic>>> GetMessageByTeam(int teamId)
+        public async Task<ActionResult<IEnumerable<MessageDTOPublic>>> GetMessageByTeam(Guid teamId)
         {
             var messages = await _service.GetAllByTeamAsync(teamId);
 
             if (messages is not null)
-            {
                 return Ok(messages);
-            }
-            else
-            {
-                return NotFound();
-            }
+
+            return NotFound();
         }
 
         // GET: api/Message/5
@@ -47,50 +41,37 @@ namespace EncryptedChat.Controllers
             var message = await _service.GetByIdAsync(id);
 
             if (message is not null)
-            {
                 return message;
-            }
-            else
-            {
-                return NotFound();
-            }
+
+            return NotFound();
         }
 
         // POST: api/Message
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
         public async Task<IActionResult> PostMessage(MessageDTO newMessage)
         {
             var message = await _service.CreateAsync(newMessage);
 
             if (message is null)
-            {
                 return BadRequest("Message invalid data or the user is not in the team.");
-            }
 
-            return CreatedAtAction(nameof(GetMessage), new { id = message!.Id }, message);
+            return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
         }
 
         // PUT: api/Message/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
         public async Task<IActionResult> PutMessage(int id, MessageDTO message)
         {
             var messageToUpdate = await _service.GetByIdAsync(id);
 
-            if (messageToUpdate is not null)
-            {
-                var messageUpdated = await _service.UpdateAsync(id, message);
-                if (messageUpdated is null)
-                    return BadRequest("Message invalid data.");
-
-                return NoContent();
-            }
-            else
-            {
-
+            if (messageToUpdate is null)
                 return NotFound();
-            }
+
+            var messageUpdated = await _service.UpdateAsync(id, message);
+            if (messageUpdated is null)
+                return BadRequest("Message invalid data.");
+
+            return NoContent();
         }
 
         // DELETE: api/Message/5
@@ -99,15 +80,11 @@ namespace EncryptedChat.Controllers
         {
             var messageToDelete = await _service.GetByIdAsync(id);
 
-            if (messageToDelete is not null)
-            {
-                await _service.DeleteAsync(id);
-                return NoContent();
-            }
-            else
-            {
+            if (messageToDelete is null)
                 return NotFound();
-            }
+
+            await _service.DeleteAsync(id);
+            return NoContent();
         }
     }
 }

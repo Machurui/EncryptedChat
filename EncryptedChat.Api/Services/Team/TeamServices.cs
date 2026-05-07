@@ -1,5 +1,6 @@
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace EncryptedChat.Services;
 
@@ -16,18 +17,19 @@ public class TeamService : ITeamService
     {
         // Return a list of teams
         return await _context.Teams
-        .Include(t => t.Admins)
         .Include(t => t.Members)
+            .ThenInclude(m => m.User)
+        .AsNoTracking()
         .Select(team => ItemToDTO(team))
         .ToListAsync();
     }
 
-    public async Task<TeamDTOPublic?> GetByIdAsync(int id)
+    public async Task<TeamDTOPublic?> GetByIdAsync(Guid id)
     {
         // Return a team by id
         return await _context.Teams
-        .Include(t => t.Admins)
         .Include(t => t.Members)
+            .ThenInclude(m => m.User)
         .AsNoTracking()
         .Where(t => t.Id == id)
         .Select(team => ItemToDTO(team))
@@ -36,28 +38,52 @@ public class TeamService : ITeamService
 
     public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam)
     {
-        // Create a team
-        if (newTeam.AdminIds == null || newTeam.AdminIds.Count == 0)
+        if (newTeam.Admins == null || newTeam.Admins.Count == 0)
             return null;
 
         var admins = await _context.Users
-            .Where(u => newTeam.AdminIds.Contains(u.Id))
+            .Where(u => newTeam.Admins.Contains(u.Id))
             .ToListAsync();
 
-        var members = newTeam.MemberIds != null && newTeam.MemberIds.Count != 0
-        ? await _context.Users.Where(u => newTeam.MemberIds.Contains(u.Id)).ToListAsync()
+        var members = newTeam.Members != null && newTeam.Members.Count != 0
+        ? await _context.Users.Where(u => newTeam.Members.Contains(u.Id)).ToListAsync()
         : [];
 
-        if (admins == null || admins.Count == 0)
+        if (admins.Count == 0)
             return null;
+
+        var slug = await CreateUniqueSlugAsync(newTeam.Name);
 
         var team = new Team
         {
-            Name = newTeam.Name,
-            Password = newTeam.Password,
-            Admins = admins,
-            Members = members
+            Name = newTeam.Name ?? string.Empty,
+            Slug = slug,
+            Secret = Guid.NewGuid().ToString("N"),
+            CreatedAt = DateTime.UtcNow,
+            ModifiedAt = DateTime.UtcNow,
         };
+
+        foreach (var admin in admins)
+        {
+            team.Members.Add(new Member
+            {
+                Team = team,
+                User = admin,
+                UserId = admin.Id,
+                Role = Member.AdminRole
+            });
+        }
+
+        foreach (var member in members.Where(member => admins.All(admin => admin.Id != member.Id)))
+        {
+            team.Members.Add(new Member
+            {
+                Team = team,
+                User = member,
+                UserId = member.Id,
+                Role = Member.MemberRole
+            });
+        }
 
         _context.Teams.Add(team);
         await _context.SaveChangesAsync();
@@ -65,50 +91,64 @@ public class TeamService : ITeamService
         return ItemToDTO(team);
     }
 
-    public async Task<TeamDTOPublic?> UpdateAsync(int id, TeamDTO team)
+    public async Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team)
     {
         // Update a team
-        if (team.AdminIds == null || team.AdminIds.Count == 0)
+        if (team.Admins == null || team.Admins.Count == 0)
             return null;
 
         var teamToUpdate = await _context.Teams
-            .Include(t => t.Admins)
             .Include(t => t.Members)
+                .ThenInclude(m => m.User)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (teamToUpdate == null)
             return null;
 
         var admins = await _context.Users
-            .Where(u => team.AdminIds.Contains(u.Id))
+            .Where(u => team.Admins.Contains(u.Id))
             .ToListAsync();
 
-        var members = (team.MemberIds != null && team.MemberIds.Count != 0)
-            ? await _context.Users.Where(u => team.MemberIds.Contains(u.Id)).ToListAsync()
+        var members = (team.Members != null && team.Members.Count != 0)
+            ? await _context.Users.Where(u => team.Members.Contains(u.Id)).ToListAsync()
             : [];
 
-        teamToUpdate.Admins ??= [];
-        teamToUpdate.Admins.Clear();
+        _context.Members.RemoveRange(teamToUpdate.Members);
+        teamToUpdate.Members.Clear();
+
         foreach (var admin in admins)
         {
-            if (!teamToUpdate.Admins.Any(a => a.Id == admin.Id))
-                teamToUpdate.Admins.Add(admin);
+            teamToUpdate.Members.Add(new Member
+            {
+                Team = teamToUpdate,
+                User = admin,
+                UserId = admin.Id,
+                Role = Member.AdminRole,
+                CreatedAt = DateTime.UtcNow,
+                ModifiedAt = DateTime.UtcNow
+            });
         }
 
-        teamToUpdate.Members ??= [];
-        teamToUpdate.Members.Clear();
-        foreach (var member in members)
+        foreach (var member in members.Where(member => admins.All(admin => admin.Id != member.Id)))
         {
-            if (!teamToUpdate.Members.Any(m => m.Id == member.Id))
-                teamToUpdate.Members.Add(member);
+            teamToUpdate.Members.Add(new Member
+            {
+                Team = teamToUpdate,
+                User = member,
+                UserId = member.Id,
+                Role = Member.MemberRole,
+                CreatedAt = DateTime.UtcNow,
+                ModifiedAt = DateTime.UtcNow
+            });
         }
 
-        teamToUpdate.Name = team.Name;
-        teamToUpdate.Password = team.Password;
+        teamToUpdate.Name = team.Name ?? string.Empty;
+        teamToUpdate.Slug = await CreateUniqueSlugAsync(team.Name, teamToUpdate.Id);
+        teamToUpdate.ModifiedAt = DateTime.UtcNow;
 
         try
         {
-            if (teamToUpdate.Admins == null || teamToUpdate.Admins.Count == 0)
+            if (!teamToUpdate.Members.Any(m => m.Role == Member.AdminRole))
                 return null;
 
             await _context.SaveChangesAsync();
@@ -123,10 +163,31 @@ public class TeamService : ITeamService
         return ItemToDTO(teamToUpdate);
     }
 
-    public async Task<TeamDTOPublic?> DeleteAsync(int id)
+    public async Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name)
     {
-        // Delete a team
-        var teamToDelete = _context.Teams.Find(id);
+        Team? team = await _context.Teams
+            .Include(t => t.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (team is null)
+            return null;
+
+        team.Name = name;
+        team.Slug = await CreateUniqueSlugAsync(name, id);
+        team.ModifiedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return ItemToDTO(team);
+    }
+
+    public async Task<TeamDTOPublic?> DeleteAsync(Guid id)
+    {
+        Team? teamToDelete = await _context.Teams
+            .Include(t => t.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
         if (teamToDelete == null)
             return null;
 
@@ -136,27 +197,132 @@ public class TeamService : ITeamService
         return ItemToDTO(teamToDelete);
     }
 
-    public async Task<bool> IsAdminAsync(string userId, int teamId)
+    public async Task<bool> IsAdminAsync(string userId, Guid teamId)
     {
-        // Check if a user is an admin is in a team
-        var team = await _context.Teams
-            .Include(t => t.Admins)
-            .Include(t => t.Members)
-            .FirstOrDefaultAsync(t => t.Id == teamId);
-
-        if (team == null)
-            return false;
-        
-        if (team.Admins == null || team.Members == null)
+        if (string.IsNullOrWhiteSpace(userId))
             return false;
 
-        if (team.Admins.Any(a => a.Id == userId))
-            return true;
-        
-        return false;
+        return await _context.Members
+            .AsNoTracking()
+            .AnyAsync(m => m.TeamId == teamId
+                           && m.UserId == userId
+                           && m.Role == Member.AdminRole);
     }
 
-    private bool TeamExists(int id)
+    public async Task<bool> IsMemberAsync(string userId, Guid teamId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        return await _context.Members
+            .AsNoTracking()
+            .AnyAsync(m => m.TeamId == teamId && m.UserId == userId);
+    }
+
+    public async Task<bool> AddMemberAsync(Guid teamId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        var team = await _context.Teams.FindAsync(teamId);
+        if (team is null)
+            return false;
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user is null)
+            return false;
+
+        // Check if already a member
+        var existingMember = await _context.Members
+            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
+        if (existingMember is not null)
+            return false;
+
+        _context.Members.Add(new Member
+        {
+            TeamId = teamId,
+            UserId = userId,
+            Role = Member.MemberRole,
+            CreatedAt = DateTime.UtcNow,
+            ModifiedAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RemoveMemberAsync(Guid teamId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        var member = await _context.Members
+            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
+
+        if (member is null)
+            return false;
+
+        // Cannot remove if this is the last admin
+        if (member.Role == Member.AdminRole)
+        {
+            var adminCount = await _context.Members
+                .CountAsync(m => m.TeamId == teamId && m.Role == Member.AdminRole);
+            if (adminCount <= 1)
+                return false;
+        }
+
+        _context.Members.Remove(member);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> PromoteToAdminAsync(Guid teamId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        var member = await _context.Members
+            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
+
+        if (member is null)
+            return false;
+
+        if (member.Role == Member.AdminRole)
+            return false; // Already admin
+
+        member.Role = Member.AdminRole;
+        member.ModifiedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DemoteFromAdminAsync(Guid teamId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        var member = await _context.Members
+            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
+
+        if (member is null)
+            return false;
+
+        if (member.Role != Member.AdminRole)
+            return false; // Not an admin
+
+        // Cannot demote if this is the last admin
+        var adminCount = await _context.Members
+            .CountAsync(m => m.TeamId == teamId && m.Role == Member.AdminRole);
+        if (adminCount <= 1)
+            return false;
+
+        member.Role = Member.MemberRole;
+        member.ModifiedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    private bool TeamExists(Guid id)
     {
         return _context.Teams.Any(e => e.Id == id);
     }
@@ -171,12 +337,44 @@ public class TeamService : ITeamService
             Level = user.Level
         };
 
+        static MemberDTOPublic MapMember(Member member) => new()
+        {
+            Id = member.Id,
+            User = member.User is null ? null : MapUser(member.User),
+            Role = member.Role
+        };
+
         return new TeamDTOPublic
         {
             Id = team.Id,
             Name = team.Name,
-            Admins = [.. (team.Admins ?? Enumerable.Empty<User>()).Select(MapUser)],
-            Members = [.. (team.Members ?? Enumerable.Empty<User>()).Select(MapUser)]
+            Slug = team.Slug,
+            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)],
+            CreatedAt = team.CreatedAt,
+            ModifiedAt = team.ModifiedAt
         };
+    }
+
+    private async Task<string> CreateUniqueSlugAsync(string? name, Guid? excludeTeamId = null)
+    {
+        var baseSlug = CreateSlug(name);
+
+        var existsQuery = _context.Teams.AsNoTracking().Where(t => t.Slug == baseSlug);
+        if (excludeTeamId.HasValue)
+            existsQuery = existsQuery.Where(t => t.Id != excludeTeamId.Value);
+
+        if (!await existsQuery.AnyAsync())
+            return baseSlug;
+
+        // Slug exists, append a random suffix
+        var suffix = Guid.NewGuid().ToString("N")[..6];
+        return $"{baseSlug}-{suffix}";
+    }
+
+    private static string CreateSlug(string? name)
+    {
+        var source = string.IsNullOrWhiteSpace(name) ? Guid.NewGuid().ToString("N") : name.Trim().ToLowerInvariant();
+        var slug = Regex.Replace(source, "[^a-z0-9]+", "-").Trim('-');
+        return string.IsNullOrWhiteSpace(slug) ? Guid.NewGuid().ToString("N") : slug;
     }
 }

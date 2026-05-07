@@ -11,38 +11,30 @@ builder.RootComponents.Add<EncryptedChat.Client.App>("#app");
 // API Endpoint
 const string ApiBase = "https://localhost:7294/";
 
-// Delegating handler that adds Authorization: Bearer <token>
-builder.Services.AddTransient<BearerHandler>();
-
-// HttpClient with BearerHandler
+// HttpClient with cookie credentials for cross-origin requests
+builder.Services.AddTransient<CookieHandler>();
 builder.Services.AddScoped(sp =>
 {
-    var bearer = sp.GetRequiredService<BearerHandler>();
-    bearer.InnerHandler = new HttpClientHandler(); // safe in WASM in .NET 8
-
-    return new HttpClient(bearer)
+    var handler = sp.GetRequiredService<CookieHandler>();
+    return new HttpClient(handler)
     {
         BaseAddress = new Uri(ApiBase)
     };
-});
-// TEMP: quick sanity log
-builder.Services.AddScoped(sp =>
-{
-    var store = sp.GetRequiredService<TokenStore>();
-    Console.WriteLine($"[TokenStore] initial token present: {(!string.IsNullOrWhiteSpace(store.AccessToken))}");
-    return store;
 });
 
 // Program.cs (client)
 builder.Services.AddAuthorizationCore();
 
-builder.Services.AddScoped<TokenStore>();
-builder.Services.AddScoped<TokenStorageService>();
-
-builder.Services.AddScoped<JwtAuthStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthStateProvider>());
+builder.Services.AddScoped<CookieAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CookieAuthStateProvider>());
 
 builder.Services.AddScoped<AuthClient>();
+
+builder.Services.AddScoped<UserClient>();
+
+builder.Services.AddScoped<TeamClient>();
+
+builder.Services.AddScoped<ChatClient>();
 
 // Flowbite Import
 builder.Services.AddScoped<IFlowbiteService, FlowbiteService>();

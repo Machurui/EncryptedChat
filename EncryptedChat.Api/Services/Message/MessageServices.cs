@@ -18,11 +18,14 @@ public class MessageService : IMessageService
         return await _context.Messages
         .Include(m => m.Sender)
         .Include(m => m.Team)
+            .ThenInclude(t => t!.Members)
+                .ThenInclude(m => m.User)
+        .AsNoTracking()
         .Select(team => ItemToDTO(team))
         .ToListAsync();
     }
 
-    public async Task<IEnumerable<MessageDTOPublic?>?> GetAllByTeamAsync(int id)
+    public async Task<IEnumerable<MessageDTOPublic?>?> GetAllByTeamAsync(Guid id)
     {
         // Return a list of messages by team id
         var team = await _context.Teams.FindAsync(id);
@@ -32,8 +35,9 @@ public class MessageService : IMessageService
         return await _context.Messages
         .Include(m => m.Sender)
         .Include(m => m.Team)
-        // .Include(m => m.Team!.Admins) To maintain readability
-        // .Include(m => m.Team!.Members)
+            .ThenInclude(t => t!.Members)
+                .ThenInclude(m => m.User)
+        .AsNoTracking()
         .Where(m => m.Team != null && m.Team.Id == team.Id)
         .Select(message => ItemToDTO(message))
         .ToListAsync();
@@ -45,6 +49,8 @@ public class MessageService : IMessageService
         return await _context.Messages
         .Include(m => m.Sender)
         .Include(m => m.Team)
+            .ThenInclude(t => t!.Members)
+                .ThenInclude(m => m.User)
         .AsNoTracking()
         .Where(m => m.Id == id)
         .Select(message => ItemToDTO(message))
@@ -63,21 +69,19 @@ public class MessageService : IMessageService
             return null;
 
         var team = await _context.Teams
-        .Include(t => t.Admins)
         .Include(t => t.Members)
+            .ThenInclude(m => m.User)
         .FirstOrDefaultAsync(t => t.Id == teamId);
 
         if (team == null)
             return null;
 
         // Check if the sender is a member of the team
-        if (team.Members == null || team.Admins == null)
+        if (team.Members == null)
             return null;
 
-        bool isMember = team.Members.Any(u => u.Id == sender.Id);
-        bool isAdmin = team.Admins.Any(u => u.Id == sender.Id);
-
-        if (!isMember && !isAdmin)
+        bool isMember = team.Members.Any(m => m.UserId == sender.Id);
+        if (!isMember)
             return null;
 
         if (string.IsNullOrWhiteSpace(message?.Text) || message.Text.Length == 0)
@@ -102,7 +106,9 @@ public class MessageService : IMessageService
         // Update a message
         var messageToUpdate = await _context.Messages
             .Include(m => m.Sender)
-            .Include(m => m.Sender)
+            .Include(m => m.Team)
+                .ThenInclude(t => t!.Members)
+                    .ThenInclude(m => m.User)
             .FirstOrDefaultAsync(m => m.Id == id);
 
         if (messageToUpdate == null)
@@ -112,7 +118,14 @@ public class MessageService : IMessageService
         if (sender == null)
             return null;
 
-        var team = await _context.Teams.FindAsync(message?.Team);
+        if (message?.Team is null)
+            return null;
+
+        var team = await _context.Teams
+            .Include(t => t.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == message.Team.Value);
+
         if (team == null)
             return null;
 
@@ -164,8 +177,17 @@ public class MessageService : IMessageService
         {
             Id = team.Id,
             Name = team.Name,
-            Admins = [.. (team.Admins ?? Enumerable.Empty<User>()).Select(MapUser)],
-            Members = [.. (team.Members ?? Enumerable.Empty<User>()).Select(MapUser)]
+            Slug = team.Slug,
+            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)],
+            CreatedAt = team.CreatedAt,
+            ModifiedAt = team.ModifiedAt
+        };
+
+        static MemberDTOPublic MapMember(Member member) => new()
+        {
+            Id = member.Id,
+            User = member.User is null ? null : MapUser(member.User),
+            Role = member.Role
         };
 
         return new MessageDTOPublic

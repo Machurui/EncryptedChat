@@ -8,17 +8,13 @@ namespace EncryptedChat.Client.Services;
 public class AuthClient
 {
     private readonly HttpClient _http;
-    private readonly TokenStore _store;
-    private readonly JwtAuthStateProvider _authState;
-    private readonly TokenStorageService _storage;
+    private readonly CookieAuthStateProvider _authState;
 
-    public AuthClient(HttpClient http, TokenStore store, AuthenticationStateProvider authState, TokenStorageService storage)
+    public AuthClient(HttpClient http, AuthenticationStateProvider authState)
     {
         _http = http;
-        _store = store;
-        _storage = storage;
-        _authState = authState as JwtAuthStateProvider
-            ?? throw new InvalidOperationException("JwtAuthStateProvider is not registered correctly.");
+        _authState = authState as CookieAuthStateProvider
+            ?? throw new InvalidOperationException("CookieAuthStateProvider is not registered correctly.");
     }
 
     // DTO match API
@@ -27,8 +23,6 @@ public class AuthClient
     public record ForgotPasswordDTO(string Email);
     public record ResetPasswordDTO(string Email, string Token, string NewPassword);
 
-    public record LoginResponse(string accessToken, DateTime expiresUtc, string? refreshToken);
-
     public class Result
     {
         public bool Success { get; init; }
@@ -36,23 +30,6 @@ public class AuthClient
         public static Result Ok() => new() { Success = true };
         public static Result Fail(string msg) => new() { Success = false, ErrorMessage = msg };
     }
-
-    // ---------- Optional bootstrapping ----------
-    // If you want to force-restore before first use (e.g., from a layout),
-    // you can call this once on app start. The JwtAuthStateProvider + BearerHandler
-    // already handle restore lazily, but this is handy if needed.
-    // public async Task RestoreAsync()
-    // {
-    //     if (string.IsNullOrWhiteSpace(_store.AccessToken))
-    //     {
-    //         var (token, exp) = await _storage.LoadAsync();
-    //         if (!string.IsNullOrWhiteSpace(token) && exp.HasValue && exp.Value > DateTime.UtcNow)
-    //         {
-    //             _store.Set(token, exp.Value);
-    //             _authState.NotifyChanged();
-    //         }
-    //     }
-    // }
 
     // ---------- Auth ----------
     public async Task<Result> LoginAsync(string email, string password)
@@ -63,20 +40,14 @@ public class AuthClient
         if (!res.IsSuccessStatusCode)
             return Result.Fail(ParseMessage(body) ?? "Login failed.");
 
-        var dto = await res.Content.ReadFromJsonAsync<LoginResponse>();
-        if (dto is null || string.IsNullOrWhiteSpace(dto.accessToken))
-            return Result.Fail("No token received.");
-
-        _store.Set(dto.accessToken, dto.expiresUtc);
-        await _storage.SaveAsync(dto.accessToken, dto.expiresUtc); // persist
+        // Cookie is set automatically by the browser
         _authState.NotifyChanged();
         return Result.Ok();
     }
 
     public async Task LogoutAsync()
     {
-        _store.Clear();
-        await _storage.ClearAsync();
+        await _http.PostAsync("api/auth/logout", null);
         _authState.NotifyChanged();
     }
 
@@ -89,12 +60,7 @@ public class AuthClient
         if (!res.IsSuccessStatusCode)
             return Result.Fail(ParseMessage(body) ?? "Refresh failed.");
 
-        var dto = await res.Content.ReadFromJsonAsync<LoginResponse>();
-        if (dto is null || string.IsNullOrWhiteSpace(dto.accessToken))
-            return Result.Fail("No token received.");
-
-        _store.Set(dto.accessToken, dto.expiresUtc);
-        await _storage.SaveAsync(dto.accessToken, dto.expiresUtc);
+        // Cookie is set automatically by the browser
         _authState.NotifyChanged();
         return Result.Ok();
     }
@@ -117,7 +83,7 @@ public class AuthClient
         return Result.Ok();
     }
 
-    // ---------- Password flows (optional) ----------
+    // ---------- Password ----------
     public async Task<Result> ForgotPasswordAsync(string email)
     {
         var res = await _http.PostAsJsonAsync("api/auth/forgot-password", new ForgotPasswordDTO(email));
@@ -131,6 +97,26 @@ public class AuthClient
         var body = await res.Content.ReadAsStringAsync();
         return res.IsSuccessStatusCode ? Result.Ok() : Result.Fail(ParseMessage(body) ?? "Password reset failed.");
     }
+
+    // ---------- SignalR Token ----------
+    public async Task<string?> GetSignalRTokenAsync()
+    {
+        try
+        {
+            var res = await _http.GetAsync("api/auth/signalr-token");
+            if (!res.IsSuccessStatusCode)
+                return null;
+
+            var response = await res.Content.ReadFromJsonAsync<SignalRTokenResponse>();
+            return response?.Token;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private record SignalRTokenResponse(string? Token);
 
     // ---------- Helpers ----------
     private static string? ParseMessage(string body)

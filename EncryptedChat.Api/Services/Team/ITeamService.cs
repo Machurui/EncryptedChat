@@ -9,14 +9,26 @@ namespace EncryptedChat.Services
     {
         Task<IEnumerable<TeamDTOPublic?>?> GetAllAsync();
 
-        Task<TeamDTOPublic?> GetByIdAsync(int id);
+        Task<TeamDTOPublic?> GetByIdAsync(Guid id);
 
         Task<TeamDTOPublic?> CreateAsync(TeamDTO team);
 
-        Task<TeamDTOPublic?> UpdateAsync(int id, TeamDTO team);
+        Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team);
 
-        Task<TeamDTOPublic?> DeleteAsync(int id);
+        Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name);
 
-        Task<bool> IsAdminAsync(string userId, int teamId);
+        Task<TeamDTOPublic?> DeleteAsync(Guid id);
+
+        Task<bool> IsAdminAsync(string userId, Guid teamId);
+
+        Task<bool> IsMemberAsync(string userId, Guid teamId);
+
+        Task<bool> AddMemberAsync(Guid teamId, string userId);
+
+        Task<bool> RemoveMemberAsync(Guid teamId, string userId);
+
+        Task<bool> PromoteToAdminAsync(Guid teamId, string userId);
+
+        Task<bool> DemoteFromAdminAsync(Guid teamId, string userId);
     }
 }

@@ -14,7 +14,6 @@ public class User : IdentityUser
     [Required]
     public string? Secret { get; set; } = string.Empty;
 
-    public ICollection<Team> TeamsAsAdmin { get; set; } = [];
-    public ICollection<Team> TeamsAsMember { get; set; } = [];
+    public ICollection<Member> Memberships { get; set; } = [];
 
 }

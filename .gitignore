@@ -6,6 +6,18 @@
 # dotenv files
 .env
 
+# AI assistants config
+.claude/
+.codex/
+CLAUDE.md
+AGENTS.md
+
+# Secrets / Sensitive config
+appsettings.Production.json
+appsettings.Local.json
+secrets.json
+**/secrets/
+
 # User-specific files
 *.rsuser
 *.suo

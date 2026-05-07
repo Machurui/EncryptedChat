@@ -96,13 +96,10 @@
         var result = await Auth.LoginAsync(loginModel.Email, loginModel.Password);
 
         if (result.Success)
-        {
-            Nav.NavigateTo("/chat"); // redirect after login
-        }
+            Nav.NavigateTo("/team");
         else
-        {
             errorMessage = result.ErrorMessage ?? "Login failed. Please try again.";
-        }
+
     }
 
     public class LoginModel

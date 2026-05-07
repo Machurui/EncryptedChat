@@ -1,7 +1,8 @@
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using EncryptedChat.Hubs;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore; // for UseSqlite
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -13,13 +14,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// DbContext first
 builder.Services.AddDbContext<EncryptedChatContext>(options =>
 {
-    options.UseSqlite("Data source=encryptedchat.db");
+    var connectionString = builder.Configuration.GetConnectionString("Default")
+        ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
+
+    if (string.IsNullOrWhiteSpace(connectionString))
+        throw new InvalidOperationException("Connection string 'Default' is empty.");
+
+    options.UseSqlServer(connectionString);
 });
 
-// Identity (still used for users, passwords, roles — but NOT for cookies)
+// Identity
 builder.Services
     .AddIdentity<User, IdentityRole>()
     .AddEntityFrameworkStores<EncryptedChatContext>()
@@ -27,8 +33,12 @@ builder.Services
 
 // ===== JWT auth =====
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+var keyValue = jwtSection["Key"];
+Console.WriteLine($"[JWT CONFIG] Issuer={jwtSection["Issuer"]}, Audience={jwtSection["Audience"]}, KeyLength={keyValue?.Length ?? 0}");
+
+var keyBytes = Encoding.UTF8.GetBytes(keyValue!);
 var signingKey = new SymmetricSecurityKey(keyBytes);
+
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -43,21 +53,49 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30),
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = signingKey
+            IssuerSigningKey = signingKey,
+        };
+
+        // Read JWT from cookie or query string (for SignalR WebSocket)
+        o.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                // For SignalR WebSocket connections, token comes in query string
+                var path = ctx.HttpContext.Request.Path;
+                if (path.StartsWithSegments("/hubs"))
+                {
+                    var accessToken = ctx.Request.Query["access_token"].FirstOrDefault();
+                    if (!string.IsNullOrEmpty(accessToken))
+                    {
+                        ctx.Token = accessToken;
+                        return Task.CompletedTask;
+                    }
+                }
+
+                // For HTTP requests, read from cookie
+                if (string.IsNullOrEmpty(ctx.Token) &&
+                    ctx.Request.Cookies.TryGetValue("ec.accessToken", out var cookieToken))
+                {
+                    ctx.Token = cookieToken;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
 builder.Services.AddAuthorization();
 
-// SignalR (optional, unchanged)
+// SignalR
 builder.Services.AddSignalR();
 
-// ===== CORS (no credentials needed with Bearer tokens) =====
-// Replace/trim this list to the exact origins you actually use.
+// ===== CORS =====
 var allowedOrigins = new[]
 {
     "http://localhost:5183",
     "https://localhost:5183",
+    "http://localhost:7174",
+    "https://localhost:7174",
     "http://localhost:7276",
     "https://localhost:7276"
 };
@@ -66,7 +104,7 @@ builder.Services.AddCors(o => o.AddPolicy("Client", p => p
     .WithOrigins(allowedOrigins)
     .AllowAnyHeader()
     .AllowAnyMethod()
-// No .AllowCredentials() for Bearer tokens
+    .AllowCredentials()
 ));
 
 // App services
@@ -74,13 +112,12 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 
-// Auth service now returns JWTs, not cookies
+// Auth service
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// New: token generator
+// Token generator
 builder.Services.AddScoped<JwtTokenService>();
 
-// (your email sender, unchanged)
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
 var app = builder.Build();
@@ -94,19 +131,18 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseStaticFiles(); // if you serve any
+app.UseStaticFiles();
 
 app.UseRouting();
 
 app.UseCors("Client");
 
-app.UseAuthentication(); // JWT
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-// app.MapHub<ChatHub>("/chat"); // if using SignalR
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.MapGet("/", () => @"Encrypted Chat API. Navigate to /swagger to open the Swagger test UI.");
-
 app.Run();

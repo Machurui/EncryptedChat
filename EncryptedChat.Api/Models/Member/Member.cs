@@ -2,25 +2,27 @@ using System.ComponentModel.DataAnnotations;
 
 namespace EncryptedChat.Models;
 
-public class Team
+public class Member
 {
+    public const string AdminRole = "Admin";
+    public const string MemberRole = "Member";
+
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required]
-    [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
+    public Guid TeamId { get; set; }
+
+    public Team? Team { get; set; }
 
     [Required]
-    [MaxLength(250)]
-    public string Secret { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+
+    public User? User { get; set; }
 
     [Required]
-    [MaxLength(100)]
-    public string Slug { get; set; } = string.Empty;
-
-    [Required]
-    public ICollection<Member> Members { get; set; } = [];
+    [MaxLength(50)]
+    public string Role { get; set; } = MemberRole;
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

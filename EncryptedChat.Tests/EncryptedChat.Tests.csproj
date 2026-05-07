@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EncryptedChat\EncryptedChat.csproj" />
+    <ProjectReference Include="..\EncryptedChat.Api\EncryptedChat.csproj" />
   </ItemGroup>
 
 </Project>

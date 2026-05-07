@@ -2,7 +2,7 @@
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedChat", "EncryptedChat\EncryptedChat.csproj", "{A6773088-76EB-BE9E-674F-7A29814B7974}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedChat", "EncryptedChat.Api\EncryptedChat.csproj", "{A6773088-76EB-BE9E-674F-7A29814B7974}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedChat.Tests", "EncryptedChat.Tests\EncryptedChat.Tests.csproj", "{C3D70C46-1762-495E-B746-6275D38EC827}"
 EndProject

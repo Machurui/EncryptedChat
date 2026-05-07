@@ -55,12 +55,37 @@ public class UserService
         return await _context.Messages
         .Include(m => m.Sender)
         .Include(m => m.Team)
-        // .Include(m => m.Team!.Admins) To maintain readability
-        // .Include(m => m.Team!.Members)
+            .ThenInclude(t => t!.Members)
+                .ThenInclude(m => m.User)
+        .AsNoTracking()
         .Where(m => m.Sender != null && m.Sender.Id == sender.Id)
         .Select(message => ItemToDTO(message))
         .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<TeamDTOPublic>> GetUserTeamsAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("User id is required.", nameof(userId));
+
+        var userExists = await _context.Users
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == userId);
+
+        if (!userExists)
+            return Array.Empty<TeamDTOPublic>();
+
+        var teams = await _context.Teams
+            .AsNoTracking()
+            .Include(t => t.Members)
+                .ThenInclude(m => m.User)
+            .Where(t => t.Members.Any(m => m.UserId == userId))
+            .Select(team => ItemToDTO(team))
+            .ToListAsync();
+
+        return teams;
+    }
+
 
     public UserDTOPublic? Update(string id, UserDTO user)
     {
@@ -97,7 +122,7 @@ public class UserService
         var userToDelete = _context.Users.Find(id);
         if (userToDelete == null)
             return null;
-        
+
 
         _context.Users.Remove(userToDelete);
         _context.SaveChanges();
@@ -133,8 +158,17 @@ public class UserService
         {
             Id = team.Id,
             Name = team.Name,
-            Admins = [.. (team.Admins ?? Enumerable.Empty<User>()).Select(MapUser)],
-            Members = [.. (team.Members ?? Enumerable.Empty<User>()).Select(MapUser)]
+            Slug = team.Slug,
+            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)],
+            CreatedAt = team.CreatedAt,
+            ModifiedAt = team.ModifiedAt
+        };
+
+        static MemberDTOPublic MapMember(Member member) => new()
+        {
+            Id = member.Id,
+            User = member.User is null ? null : MapUser(member.User),
+            Role = member.Role
         };
 
         return new MessageDTOPublic
@@ -144,6 +178,34 @@ public class UserService
             Sender = MapUser(message?.Sender ?? new User()),
             Team = MapTeam(message?.Team ?? new Team()),
             Date = message?.Date ?? DateTime.MinValue
+        };
+    }
+
+    private static TeamDTOPublic ItemToDTO(Team team)
+    {
+        static UserDTOPublic MapUser(User user) => new()
+        {
+            Id = user.Id,
+            Name = user.Name,
+            Email = user.Email,
+            Level = user.Level
+        };
+
+        return new TeamDTOPublic
+        {
+            Id = team.Id,
+            Name = team.Name,
+            Slug = team.Slug,
+            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)],
+            CreatedAt = team.CreatedAt,
+            ModifiedAt = team.ModifiedAt
+        };
+
+        static MemberDTOPublic MapMember(Member member) => new()
+        {
+            Id = member.Id,
+            User = member.User is null ? null : MapUser(member.User),
+            Role = member.Role
         };
     }
 }

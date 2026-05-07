@@ -2,31 +2,37 @@ using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace EncryptedChat.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "User")]
     public class UserController : ControllerBase
     {
-        UserService _service;
+        private readonly UserService _service;
 
         public UserController(UserService service)
         {
             _service = service;
         }
 
-        // GET: api/User api/User/5 api/User/email@example.com
+        /// GET: api/User
+        /// GET: api/User?id=5
+        /// GET: api/User?email=email@example.com
         [HttpGet]
-        [Authorize(Roles = "Manager")]
-        public ActionResult<IEnumerable<UserDTOPublic>> GetUsers([FromQuery] string? id, [FromQuery] string? email)
+        public ActionResult<IEnumerable<UserDTOPublic>> GetUsers(
+            [FromQuery] string? id,
+            [FromQuery] string? email)
         {
-            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email) && User.IsInRole("Admin") )
+            // No filters -> return all users to any "User"
+            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email))
+            {
                 return Ok(_service.GetAll());
-            else if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email) && !User.IsInRole("Admin"))
-                return Unauthorized();
+            }
 
+            // Filter by id or email
             var user = _service.Search(id, email);
             if (user == null)
                 return NotFound();
@@ -34,9 +40,8 @@ namespace EncryptedChat.Controllers
             return Ok(new[] { user });
         }
 
-        //GET: api/User/5/messages
+        /// GET: api/User/{id}/messages
         [HttpGet("{id}/messages")]
-        [Authorize(Roles = "User")]
         public ActionResult<IEnumerable<MessageDTO>> GetMessages(string id)
         {
             var user = _service.GetById(id);
@@ -50,7 +55,22 @@ namespace EncryptedChat.Controllers
             return Ok(messages);
         }
 
-        // PUT: api/User/5
+        /// GET: api/User/{id}/teams
+        [HttpGet("{id}/teams")]
+        public async Task<ActionResult<IEnumerable<TeamDTOPublic>>> GetTeams(string id)
+        {
+            var user = _service.GetById(id);
+            if (user == null)
+                return NotFound();
+
+            var teams = await _service.GetUserTeamsAsync(id);
+            if (teams == null || teams.Count == 0)
+                return NotFound();
+
+            return Ok(teams);
+        }
+
+        /// PUT: api/User/{id}
         [HttpPut("{id}")]
         public IActionResult PutUser(string id, UserDTO user)
         {
@@ -61,12 +81,13 @@ namespace EncryptedChat.Controllers
                 _service.Update(id, user);
                 return NoContent();
             }
-            else
-                return NotFound();
+
+            return NotFound();
         }
 
-        // DELETE: api/User/5
+        /// DELETE: api/User/{id}
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public IActionResult DeleteUser(string id)
         {
             var userToDelete = _service.GetById(id);
@@ -76,8 +97,8 @@ namespace EncryptedChat.Controllers
                 _service.Delete(id);
                 return NoContent();
             }
-            else
-                return NotFound();
+
+            return NotFound();
         }
     }
 }
