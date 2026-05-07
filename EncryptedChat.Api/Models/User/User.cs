@@ -6,14 +6,13 @@ public class User : IdentityUser
 {
     [Required]
     [MaxLength(100)]
-    public string? Name { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
 
     [Required]
     public int Level { get; set; } = 0;
 
     [Required]
-    public string? Secret { get; set; } = string.Empty;
+    public string Secret { get; set; } = string.Empty;
 
     public ICollection<Member> Memberships { get; set; } = [];
-
 }

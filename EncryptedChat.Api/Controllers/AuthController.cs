@@ -3,154 +3,166 @@ using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 
-namespace EncryptedChat.Controllers
+namespace EncryptedChat.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+public class AuthController(IAuthService authService) : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class AuthController(IAuthService authService) : ControllerBase
+    private readonly IAuthService _auth = authService;
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register(RegisterDTO model)
     {
-        private readonly IAuthService _auth = authService;
+        IdentityResult result = await _auth.RegisterAsync(model);
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterDTO model)
+        if (result.Succeeded)
+            return Ok(new { Message = "User created successfully" });
+
+        List<string> errors = result.Errors.Select(e => e.Description).ToList();
+        return BadRequest(new { Message = errors });
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginDTO model)
+    {
+        LoginResult result = await _auth.LoginAsync(model);
+
+        if (!result.Succeeded)
+            return BadRequest(new { Message = "Invalid login attempt" });
+
+        SetAccessTokenCookie(result.AccessToken!, result.ExpiresUtc!.Value);
+        SetRefreshTokenCookie(result.RefreshToken!);
+
+        return Ok(new
         {
-            IdentityResult result = await _auth.RegisterAsync(model);
+            expiresUtc = result.ExpiresUtc,
+            message = "Login successful"
+        });
+    }
 
-            if (result.Succeeded)
-                return Ok(new { Message = "User created successfully" });
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        string? refreshToken = Request.Cookies["ec.refreshToken"];
 
-            List<string> errors = result.Errors.Select(e => e.Description).ToList();
-            return BadRequest(new { Message = errors });
-        }
+        await _auth.LogoutAsync(refreshToken);
 
-        // Returns a JWT access token in HTTP-only cookie
-        [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginDTO model)
+        ClearCookie("ec.accessToken");
+        ClearCookie("ec.refreshToken");
+
+        return Ok(new { Message = "Logged out" });
+    }
+
+    [HttpGet("me")]
+    [Authorize]
+    public IActionResult Me()
+    {
+        string? userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        string? name = User.FindFirst("name")?.Value ?? User.Identity?.Name;
+        List<string> roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+
+        return Ok(new
         {
-            LoginResult result = await _auth.LoginAsync(model);
+            userId,
+            name,
+            roles,
+            isAuthenticated = true
+        });
+    }
 
-            if (!result.Succeeded)
-                return BadRequest(new { Message = "Invalid login attempt" });
+    [HttpGet("signalr-token")]
+    [Authorize]
+    public IActionResult GetSignalRToken()
+    {
+        if (Request.Cookies.TryGetValue("ec.accessToken", out string? token))
+            return Ok(new { token });
 
-            CookieOptions cookieOptions = new()
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = result.ExpiresUtc,
-                Path = "/"
-            };
-            Response.Cookies.Append("ec.accessToken", result.AccessToken!, cookieOptions);
+        return Unauthorized(new { Message = "No valid session" });
+    }
 
-            return Ok(new
-            {
-                expiresUtc = result.ExpiresUtc,
-                message = "Login successful"
-            });
-        }
+    public record RefreshRequest(string? RefreshToken);
 
-        // Clear the HTTP-only cookie
-        [HttpPost("logout")]
-        public IActionResult Logout()
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshRequest? req)
+    {
+        string? refreshToken = req?.RefreshToken ?? Request.Cookies["ec.refreshToken"];
+
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return Unauthorized(new { Message = "No refresh token" });
+
+        LoginResult result = await _auth.RefreshAsync(refreshToken);
+
+        if (!result.Succeeded)
+            return Unauthorized(new { Message = "Invalid refresh token" });
+
+        SetAccessTokenCookie(result.AccessToken!, result.ExpiresUtc!.Value);
+        SetRefreshTokenCookie(result.RefreshToken!);
+
+        return Ok(new
         {
-            CookieOptions cookieOptions = new()
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTimeOffset.UtcNow.AddDays(-1),
-                Path = "/"
-            };
-            Response.Cookies.Append("ec.accessToken", "", cookieOptions);
+            expiresUtc = result.ExpiresUtc,
+            message = "Token refreshed"
+        });
+    }
 
-            return Ok(new { Message = "Logged out" });
-        }
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO model)
+    {
+        throw new NotImplementedException();
+    }
 
-        // Returns current user info if authenticated
-        [HttpGet("me")]
-        [Authorize]
-        public IActionResult Me()
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordDTO model)
+    {
+        throw new NotImplementedException();
+    }
+
+    [HttpPost("resend-confirmation-email")]
+    [Authorize]
+    public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
+    {
+        throw new NotImplementedException();
+    }
+
+    private void SetAccessTokenCookie(string token, DateTime expiresUtc)
+    {
+        CookieOptions options = new()
         {
-            string? userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            string? name = User.FindFirst("name")?.Value ?? User.Identity?.Name;
-            List<string> roles = User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Expires = expiresUtc,
+            Path = "/"
+        };
+        Response.Cookies.Append("ec.accessToken", token, options);
+    }
 
-            return Ok(new
-            {
-                userId,
-                name,
-                roles,
-                isAuthenticated = true
-            });
-        }
-
-        // Returns the access token for SignalR connections (protected by cookie auth)
-        [HttpGet("signalr-token")]
-        [Authorize]
-        public IActionResult GetSignalRToken()
+    private void SetRefreshTokenCookie(string token)
+    {
+        CookieOptions options = new()
         {
-            if (Request.Cookies.TryGetValue("ec.accessToken", out string? token))
-            {
-                return Ok(new { token });
-            }
-            return Unauthorized(new { Message = "No valid session" });
-        }
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Expires = DateTime.UtcNow.AddDays(7),
+            Path = "/"
+        };
+        Response.Cookies.Append("ec.refreshToken", token, options);
+    }
 
-        // Optional: refresh flow (left as placeholder)
-        public record RefreshRequest(string refreshToken);
-
-        [HttpPost("refresh")]
-        public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
+    private void ClearCookie(string name)
+    {
+        CookieOptions options = new()
         {
-            LoginResult result = await _auth.RefreshAsync(req.refreshToken);
-            if (!result.Succeeded)
-                return Unauthorized();
-
-            CookieOptions cookieOptions = new()
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = result.ExpiresUtc,
-                Path = "/"
-            };
-            Response.Cookies.Append("ec.accessToken", result.AccessToken!, cookieOptions);
-
-            return Ok(new
-            {
-                expiresUtc = result.ExpiresUtc,
-                message = "Token refreshed"
-            });
-        }
-
-        [HttpPost("forgot-password")]
-        public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO model)
-        {
-            IdentityResult result = await _auth.ForgotPasswordAsync(model);
-
-            if (result.Succeeded)
-                return Ok(new { Message = "Password reset link sent" });
-
-            return BadRequest(result.Errors);
-        }
-
-        [HttpPost("reset-password")]
-        public async Task<IActionResult> ResetPassword(ResetPasswordDTO model)
-        {
-            IdentityResult result = await _auth.ResetPasswordAsync(model);
-
-            if (result.Succeeded)
-                return Ok(new { Message = "Password reset successful" });
-
-            return BadRequest(result.Errors);
-        }
-
-        [HttpPost("resend-confirmation-email")]
-        [Authorize]
-        public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
-        {
-            throw new NotImplementedException();
-        }
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Expires = DateTimeOffset.UtcNow.AddDays(-1),
+            Path = "/"
+        };
+        Response.Cookies.Append(name, "", options);
     }
 }

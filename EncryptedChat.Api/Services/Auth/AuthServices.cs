@@ -1,54 +1,44 @@
+using EncryptedChat.Data;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
-using System.Security.Claims;
 
 namespace EncryptedChat.Services;
 
-public class AuthService : IAuthService
+public class AuthService(
+    UserManager<User> userManager,
+    SignInManager<User> signInManager,
+    RoleManager<IdentityRole> roleManager,
+    JwtTokenService tokens,
+    EncryptedChatContext context) : IAuthService
 {
     private const string DefaultUserRole = "User";
 
-    private readonly UserManager<User> _userManager;
-    private readonly SignInManager<User> _signInManager; // still used for password checks/lockout
-    private readonly RoleManager<IdentityRole> _roleManager;
-    private readonly JwtTokenService _tokens;
-
-    public AuthService(UserManager<User> userManager,
-                       SignInManager<User> signInManager,
-                       RoleManager<IdentityRole> roleManager,
-                       JwtTokenService tokens)
-    {
-        _userManager = userManager;
-        _signInManager = signInManager;
-        _roleManager = roleManager;
-        _tokens = tokens;
-    }
+    private readonly UserManager<User> _userManager = userManager;
+    private readonly SignInManager<User> _signInManager = signInManager;
+    private readonly RoleManager<IdentityRole> _roleManager = roleManager;
+    private readonly JwtTokenService _tokens = tokens;
+    private readonly EncryptedChatContext _context = context;
 
     public async Task<IdentityResult> RegisterAsync(RegisterDTO model)
     {
-        // check email
-        if (await _userManager.FindByEmailAsync(model.Email) != null)
-        {
+        User? existingByEmail = await _userManager.FindByEmailAsync(model.Email);
+        if (existingByEmail != null)
             return IdentityResult.Failed(new IdentityError
             {
                 Code = "DuplicateEmail",
                 Description = "Email already in use"
             });
-        }
 
-        // check name
-        var existingName = await _userManager.Users.AnyAsync(u => u.Name == model.Name);
-        if (existingName)
-        {
+        bool nameExists = await _userManager.Users.AnyAsync(u => u.Name == model.Name);
+        if (nameExists)
             return IdentityResult.Failed(new IdentityError
             {
                 Code = "DuplicateName",
                 Description = "Name already in use"
             });
-        }
 
-        var user = new User
+        User user = new()
         {
             UserName = model.Email,
             Name = model.Name,
@@ -57,10 +47,11 @@ public class AuthService : IAuthService
             Secret = Guid.NewGuid().ToString("N")
         };
 
-        var result = await _userManager.CreateAsync(user, model.Password);
+        IdentityResult result = await _userManager.CreateAsync(user, model.Password);
         if (result.Succeeded)
         {
-            if (!await _roleManager.RoleExistsAsync(DefaultUserRole))
+            bool roleExists = await _roleManager.RoleExistsAsync(DefaultUserRole);
+            if (!roleExists)
             {
                 await _userManager.DeleteAsync(user);
                 return IdentityResult.Failed(new IdentityError
@@ -70,7 +61,7 @@ public class AuthService : IAuthService
                 });
             }
 
-            var roleResult = await _userManager.AddToRoleAsync(user, DefaultUserRole);
+            IdentityResult roleResult = await _userManager.AddToRoleAsync(user, DefaultUserRole);
             if (!roleResult.Succeeded)
             {
                 await _userManager.DeleteAsync(user);
@@ -81,81 +72,99 @@ public class AuthService : IAuthService
         return result;
     }
 
-    // NEW SHAPE: returns a result containing the JWT on success
     public async Task<LoginResult> LoginAsync(LoginDTO model)
     {
-        var user = await _userManager.FindByEmailAsync(model.Email)
-                   ?? await _userManager.FindByNameAsync(model.Email);
+        User? user = await _userManager.FindByEmailAsync(model.Email)
+                     ?? await _userManager.FindByNameAsync(model.Email);
 
         if (user is null)
-            return LoginResult.Fail("User not found");
+            return LoginResult.Fail("Invalid credentials");
 
-        var pwd = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
-        if (!pwd.Succeeded)
-            return LoginResult.Fail("Invalid password");
+        SignInResult signInResult = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
+        if (!signInResult.Succeeded)
+            return LoginResult.Fail("Invalid credentials");
 
-        var roles = await _userManager.GetRolesAsync(user);
+        IList<string> roles = await _userManager.GetRolesAsync(user);
 
-        // Issue a 15-minute access token
-        var token = _tokens.CreateAccessToken(user, roles, TimeSpan.FromMinutes(15));
+        JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
 
-        return LoginResult.Success(token.AccessToken, token.ExpiresUtc, token.RefreshToken);
+        RefreshToken refreshTokenEntity = new()
+        {
+            Id = Guid.NewGuid(),
+            Token = tokenPair.RefreshToken,
+            UserId = user.Id,
+            ExpiresAt = tokenPair.RefreshTokenExpiresUtc,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.RefreshTokens.Add(refreshTokenEntity);
+        await _context.SaveChangesAsync();
+
+        return LoginResult.Success(tokenPair.AccessToken, tokenPair.AccessTokenExpiresUtc, tokenPair.RefreshToken);
     }
 
-    // JWT "logout" is a no-op server-side (client discards token)
-    // ✅ new
-    public Task LogoutAsync()
+    public async Task LogoutAsync(string? refreshToken)
     {
-        // For JWT there’s nothing to do server-side.
-        // Client should just discard its token.
-        return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return;
+
+        RefreshToken? token = await _context.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+
+        if (token != null)
+        {
+            token.RevokedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
     }
 
-
-    // Refresh using a server-stored refresh token (placeholder)
     public async Task<LoginResult> RefreshAsync(string refreshToken)
     {
-        // TODO: validate refresh token from your store and load user.
-        // For now return failure so you don't accidentally rely on it.
-        await Task.CompletedTask;
-        return LoginResult.Fail("Refresh not implemented");
+        RefreshToken? storedToken = await _context.RefreshTokens
+            .Include(rt => rt.User)
+            .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+
+        if (storedToken is null || !storedToken.IsActive || storedToken.User is null)
+            return LoginResult.Fail("Invalid refresh token");
+
+        storedToken.RevokedAt = DateTime.UtcNow;
+
+        User user = storedToken.User;
+        IList<string> roles = await _userManager.GetRolesAsync(user);
+
+        JwtTokenService.TokenPair newTokenPair = _tokens.CreateTokenPair(user, roles);
+
+        RefreshToken newRefreshToken = new()
+        {
+            Id = Guid.NewGuid(),
+            Token = newTokenPair.RefreshToken,
+            UserId = user.Id,
+            ExpiresAt = newTokenPair.RefreshTokenExpiresUtc,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.RefreshTokens.Add(newRefreshToken);
+        await _context.SaveChangesAsync();
+
+        return LoginResult.Success(newTokenPair.AccessToken, newTokenPair.AccessTokenExpiresUtc, newTokenPair.RefreshToken);
     }
 
     public async Task<IdentityResult> ForgotPasswordAsync(ForgotPasswordDTO model)
     {
-        var user = await _userManager.FindByEmailAsync(model.Email);
-        if (user == null)
-            return IdentityResult.Failed(new IdentityError { Description = "User not found" });
-
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-
-        var callbackUrl = $"https://yourapp.com/reset-password?token={token}&email={model.Email}";
-        var message = $"Please reset your password by clicking here: <a href='{callbackUrl}'>link</a>";
-
-        // TODO: send email
-        return IdentityResult.Success;
+        throw new NotImplementedException();
     }
 
     public async Task<IdentityResult> ResetPasswordAsync(ResetPasswordDTO model)
     {
-        var user = await _userManager.FindByEmailAsync(model.Email);
-        if (user == null)
-        {
-            return IdentityResult.Failed(new IdentityError { Description = "User not found" });
-        }
-
-        var result = await _userManager.ResetPasswordAsync(user, model.Token, model.NewPassword);
-        return result;
+        throw new NotImplementedException();
     }
 
-    public async Task<NotImplementedException> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model)
+    public Task<IdentityResult> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model)
     {
-        await Task.CompletedTask;
-        return new NotImplementedException();
+        throw new NotImplementedException();
     }
 }
 
-// Helper result for login/refresh
 public record LoginResult(bool Succeeded, string? AccessToken, DateTime? ExpiresUtc, string? RefreshToken, string? Error)
 {
     public static LoginResult Success(string token, DateTime expiresUtc, string? refresh = null)

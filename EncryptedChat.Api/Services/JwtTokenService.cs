@@ -1,49 +1,60 @@
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using EncryptedChat.Models;
 
 namespace EncryptedChat.Services;
 
-public class JwtTokenService
+public class JwtTokenService(IConfiguration cfg)
 {
-    private readonly IConfiguration _cfg;
+    private readonly IConfiguration _cfg = cfg;
 
-    public JwtTokenService(IConfiguration cfg) => _cfg = cfg;
+    public record TokenPair(string AccessToken, DateTime AccessTokenExpiresUtc, string RefreshToken, DateTime RefreshTokenExpiresUtc);
 
-    public record TokenPair(string AccessToken, DateTime ExpiresUtc, string? RefreshToken = null);
-
-    public TokenPair CreateAccessToken(User user, IEnumerable<string>? roles = null,
-        TimeSpan? lifetime = null, string? refreshToken = null)
+    public TokenPair CreateTokenPair(User user, IEnumerable<string>? roles = null)
     {
-        var jwt = _cfg.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        IConfigurationSection jwt = _cfg.GetSection("Jwt");
+        SymmetricSecurityKey key = new(Encoding.UTF8.GetBytes(jwt["Key"]!));
+        SigningCredentials creds = new(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new List<Claim>
-        {
+        List<Claim> claims =
+        [
             new(JwtRegisteredClaimNames.Sub, user.Id),
             new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? user.Email ?? user.Id),
             new(ClaimTypes.NameIdentifier, user.Id),
-            new("name", user.Name ?? "") // optional, add your custom field
-        };
+            new("name", user.Name ?? "")
+        ];
 
         if (roles != null)
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
-        var expires = DateTime.UtcNow.Add(lifetime ?? TimeSpan.FromMinutes(15));
+        DateTime accessTokenExpires = DateTime.UtcNow.AddMinutes(15);
 
-        var token = new JwtSecurityToken(
+        JwtSecurityToken token = new(
             issuer: jwt["Issuer"],
             audience: jwt["Audience"],
             claims: claims,
-            expires: expires,
+            expires: accessTokenExpires,
             signingCredentials: creds
         );
 
-        var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
+        string accessToken = new JwtSecurityTokenHandler().WriteToken(token);
+        string refreshToken = GenerateRefreshToken();
+        DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(7);
 
-        return new TokenPair(accessToken, expires, refreshToken);
+        return new TokenPair(accessToken, accessTokenExpires, refreshToken, refreshTokenExpires);
+    }
+
+    private static string GenerateRefreshToken()
+    {
+        byte[] randomBytes = new byte[64];
+        using RandomNumberGenerator rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomBytes);
+        return Convert.ToBase64String(randomBytes)
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .Replace("=", "");
     }
 }
