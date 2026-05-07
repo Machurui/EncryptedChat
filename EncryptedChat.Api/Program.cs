@@ -1,3 +1,4 @@
+using EncryptedChat.Data;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using EncryptedChat.Hubs;

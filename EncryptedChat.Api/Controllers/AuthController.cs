@@ -2,29 +2,25 @@ using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 
 namespace EncryptedChat.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthController(IAuthService authService) : ControllerBase
     {
-        private readonly IAuthService _auth;
-
-        public AuthController(IAuthService authService)
-        {
-            _auth = authService;
-        }
+        private readonly IAuthService _auth = authService;
 
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDTO model)
         {
-            var result = await _auth.RegisterAsync(model);
+            IdentityResult result = await _auth.RegisterAsync(model);
 
             if (result.Succeeded)
                 return Ok(new { Message = "User created successfully" });
 
-            var errors = result.Errors.Select(e => e.Description).ToList();
+            List<string> errors = result.Errors.Select(e => e.Description).ToList();
             return BadRequest(new { Message = errors });
         }
 
@@ -32,13 +28,12 @@ namespace EncryptedChat.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDTO model)
         {
-            var result = await _auth.LoginAsync(model);
+            LoginResult result = await _auth.LoginAsync(model);
 
             if (!result.Succeeded)
                 return BadRequest(new { Message = "Invalid login attempt" });
 
-            // Set HTTP-only cookie
-            var cookieOptions = new CookieOptions
+            CookieOptions cookieOptions = new()
             {
                 HttpOnly = true,
                 Secure = true,
@@ -59,7 +54,7 @@ namespace EncryptedChat.Controllers
         [HttpPost("logout")]
         public IActionResult Logout()
         {
-            var cookieOptions = new CookieOptions
+            CookieOptions cookieOptions = new()
             {
                 HttpOnly = true,
                 Secure = true,
@@ -77,9 +72,9 @@ namespace EncryptedChat.Controllers
         [Authorize]
         public IActionResult Me()
         {
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var name = User.FindFirst("name")?.Value ?? User.Identity?.Name;
-            var roles = User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            string? userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            string? name = User.FindFirst("name")?.Value ?? User.Identity?.Name;
+            List<string> roles = User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
 
             return Ok(new
             {
@@ -95,7 +90,7 @@ namespace EncryptedChat.Controllers
         [Authorize]
         public IActionResult GetSignalRToken()
         {
-            if (Request.Cookies.TryGetValue("ec.accessToken", out var token))
+            if (Request.Cookies.TryGetValue("ec.accessToken", out string? token))
             {
                 return Ok(new { token });
             }
@@ -108,12 +103,11 @@ namespace EncryptedChat.Controllers
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
         {
-            var result = await _auth.RefreshAsync(req.refreshToken);
+            LoginResult result = await _auth.RefreshAsync(req.refreshToken);
             if (!result.Succeeded)
                 return Unauthorized();
 
-            // Set HTTP-only cookie
-            var cookieOptions = new CookieOptions
+            CookieOptions cookieOptions = new()
             {
                 HttpOnly = true,
                 Secure = true,
@@ -133,7 +127,7 @@ namespace EncryptedChat.Controllers
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO model)
         {
-            var result = await _auth.ForgotPasswordAsync(model);
+            IdentityResult result = await _auth.ForgotPasswordAsync(model);
 
             if (result.Succeeded)
                 return Ok(new { Message = "Password reset link sent" });
@@ -144,7 +138,7 @@ namespace EncryptedChat.Controllers
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword(ResetPasswordDTO model)
         {
-            var result = await _auth.ResetPasswordAsync(model);
+            IdentityResult result = await _auth.ResetPasswordAsync(model);
 
             if (result.Succeeded)
                 return Ok(new { Message = "Password reset successful" });
@@ -154,9 +148,9 @@ namespace EncryptedChat.Controllers
 
         [HttpPost("resend-confirmation-email")]
         [Authorize]
-        public async Task<NotImplementedException> ResendConfirmationEmail(ResendConfirmationEmailDTO model)
+        public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
         {
-            return new NotImplementedException();
+            throw new NotImplementedException();
         }
     }
 }
