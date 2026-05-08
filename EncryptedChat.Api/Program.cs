@@ -257,5 +257,3 @@ app.MapHub<ChatHub>("/hubs/chat");
 
 app.MapGet("/", () => @"Encrypted Chat API. Navigate to /swagger to open the Swagger test UI.");
 app.Run();
-
-public partial class Program;
