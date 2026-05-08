@@ -1,90 +1,101 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using System.Security.Claims;
 
-namespace EncryptedChat.Controllers
+namespace EncryptedChat.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+[Authorize]
+public class MessageController(IMessageService messageService, ITeamService teamService) : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class MessageController : ControllerBase
+    private readonly IMessageService _messageService = messageService;
+    private readonly ITeamService _teamService = teamService;
+
+    private string? GetCurrentUserId() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    [HttpGet("team/{teamId}")]
+    public async Task<IActionResult> GetMessagesByTeam(Guid teamId, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        private readonly IMessageService _service;
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
 
-        public MessageController(IMessageService service)
-        {
-            _service = service;
-        }
+        bool isMember = await _teamService.IsMemberAsync(userId, teamId);
+        if (!isMember)
+            return Forbid();
 
-        // GET: api/Message/
-        [HttpGet]
-        public async Task<IEnumerable<MessageDTOPublic>> GetMessages()
-        {
-            return await _service.GetAllAsync() ?? [];
-        }
-
-        // GET: api/Message/team/7
-        [HttpGet("team/{teamId}")]
-        public async Task<ActionResult<IEnumerable<MessageDTOPublic>>> GetMessageByTeam(Guid teamId)
-        {
-            var messages = await _service.GetAllByTeamAsync(teamId);
-
-            if (messages is not null)
-                return Ok(messages);
-
+        IReadOnlyList<MessageDTOPublic>? messages = await _messageService.GetAllByTeamAsync(teamId, page, pageSize);
+        if (messages is null)
             return NotFound();
-        }
 
-        // GET: api/Message/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<MessageDTOPublic>> GetMessage(int id)
-        {
-            var message = await _service.GetByIdAsync(id);
+        return Ok(messages);
+    }
 
-            if (message is not null)
-                return message;
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetMessage(int id)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
 
+        MessageDTOPublic? message = await _messageService.GetByIdAsync(id);
+        if (message is null)
             return NotFound();
-        }
 
-        // POST: api/Message
-        [HttpPost]
-        public async Task<IActionResult> PostMessage(MessageDTO newMessage)
+        bool isMember = await _teamService.IsMemberAsync(userId, message.TeamId);
+        if (!isMember)
+            return Forbid();
+
+        return Ok(message);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> PostMessage([FromBody] MessageCreateDTO dto)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        bool isMember = await _teamService.IsMemberAsync(userId, dto.Team);
+        if (!isMember)
+            return Forbid();
+
+        MessageDTO messageDto = new()
         {
-            var message = await _service.CreateAsync(newMessage);
+            Text = dto.Text,
+            Sender = userId,
+            Team = dto.Team
+        };
 
-            if (message is null)
-                return BadRequest("Message invalid data or the user is not in the team.");
+        MessageDTOPublic? message = await _messageService.CreateAsync(messageDto);
+        if (message is null)
+            return BadRequest(new { Message = "Invalid request" });
 
-            return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
-        }
+        return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
+    }
 
-        // PUT: api/Message/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutMessage(int id, MessageDTO message)
-        {
-            var messageToUpdate = await _service.GetByIdAsync(id);
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteMessage(int id)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
 
-            if (messageToUpdate is null)
-                return NotFound();
+        MessageDTOPublic? message = await _messageService.GetByIdAsync(id);
+        if (message is null)
+            return NotFound();
 
-            var messageUpdated = await _service.UpdateAsync(id, message);
-            if (messageUpdated is null)
-                return BadRequest("Message invalid data.");
+        bool isAdmin = await _teamService.IsAdminAsync(userId, message.TeamId);
+        bool isOwner = message.Sender?.Id == userId;
 
-            return NoContent();
-        }
+        if (!isAdmin && !isOwner)
+            return Forbid();
 
-        // DELETE: api/Message/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteMessage(int id)
-        {
-            var messageToDelete = await _service.GetByIdAsync(id);
-
-            if (messageToDelete is null)
-                return NotFound();
-
-            await _service.DeleteAsync(id);
-            return NoContent();
-        }
+        await _messageService.DeleteAsync(id);
+        return NoContent();
     }
 }

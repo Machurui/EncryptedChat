@@ -169,6 +169,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Token generator
 builder.Services.AddScoped<JwtTokenService>();
 
+builder.Services.AddSingleton<ICryptoService, CryptoService>();
+
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
 var app = builder.Build();
