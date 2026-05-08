@@ -4,7 +4,7 @@ namespace EncryptedChat.Models;
 
 public class MessageDTOPublic
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
     [Required]
     public string Text { get; set; } = string.Empty;
@@ -19,6 +19,8 @@ public class MessageDTOPublic
     public DateTime Date { get; set; } = DateTime.UtcNow;
 
     public bool SignatureVerified { get; set; } = true;
+
+    public IReadOnlyList<AttachmentDTOPublic> Attachments { get; set; } = [];
 }
 
 public class MessageSenderDTO

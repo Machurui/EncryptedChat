@@ -10,8 +10,20 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// File upload limits
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 26_214_400; // 25 MB
+});
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 26_214_400; // 25 MB
+});
 
 // ---------- Services ----------
 builder.Services.AddControllers(options =>
@@ -135,6 +147,18 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
+
+    options.AddPolicy("AttachmentUpload", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User.Identity?.Name
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 });
 
 // SignalR
@@ -171,6 +195,13 @@ builder.Services.AddScoped<JwtTokenService>();
 
 builder.Services.AddSingleton<ICryptoService, CryptoService>();
 
+// File storage
+builder.Services.Configure<FileStorageOptions>(
+    builder.Configuration.GetSection("FileStorage"));
+builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
+builder.Services.AddSingleton<MimeTypeValidator>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
 var app = builder.Build();
@@ -185,6 +216,9 @@ app.UseExceptionHandler(errorApp =>
         IExceptionHandlerFeature? exceptionFeature = context.Features.Get<IExceptionHandlerFeature>();
         Exception? exception = exceptionFeature?.Error;
 
+        ILogger<Program> logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(exception, "Unhandled exception occurred");
+
         int statusCode = exception switch
         {
             BadHttpRequestException => StatusCodes.Status400BadRequest,
@@ -192,9 +226,10 @@ app.UseExceptionHandler(errorApp =>
             _ => StatusCodes.Status500InternalServerError
         };
 
+        bool isDev = context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment();
         string message = statusCode == StatusCodes.Status400BadRequest
             ? "Invalid request"
-            : "An error occurred";
+            : isDev && exception != null ? exception.Message : "An error occurred";
 
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";

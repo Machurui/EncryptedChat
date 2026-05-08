@@ -17,6 +17,7 @@ appsettings.Production.json
 appsettings.Local.json
 secrets.json
 **/secrets/
+EncryptedChat.Api/storage/
 
 # User-specific files
 *.rsuser

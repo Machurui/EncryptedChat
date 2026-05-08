@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using EncryptedChat.Data;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
             .Include(m => m.Team)
                 .ThenInclude(t => t!.Members)
                     .ThenInclude(m => m.User)
+            .Include(m => m.Attachments)
             .AsNoTracking()
             .ToListAsync();
 
@@ -38,6 +40,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         List<Message> messages = await _context.Messages
             .Include(m => m.Sender)
             .Include(m => m.Team)
+            .Include(m => m.Attachments)
             .AsNoTracking()
             .Where(m => m.Team != null && m.Team.Id == team.Id)
             .OrderByDescending(m => m.Date)
@@ -48,13 +51,14 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return messages.Select(m => DecryptAndMapMessage(m, team.Secret)).ToList();
     }
 
-    public async Task<MessageDTOPublic?> GetByIdAsync(int id)
+    public async Task<MessageDTOPublic?> GetByIdAsync(Guid id)
     {
         Message? message = await _context.Messages
             .Include(m => m.Sender)
             .Include(m => m.Team)
                 .ThenInclude(t => t!.Members)
                     .ThenInclude(m => m.User)
+            .Include(m => m.Attachments)
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == id);
 
@@ -111,7 +115,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return ItemToDTO(newMessage, message.Text, signatureVerified: true);
     }
 
-    public async Task<MessageDTOPublic?> UpdateAsync(int id, MessageDTO message)
+    public async Task<MessageDTOPublic?> UpdateAsync(Guid id, MessageDTO message)
     {
         Message? messageToUpdate = await _context.Messages
             .Include(m => m.Sender)
@@ -162,7 +166,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return ItemToDTO(messageToUpdate, message.Text, signatureVerified: true);
     }
 
-    public async Task<MessageDTOPublic?> DeleteAsync(int id)
+    public async Task<MessageDTOPublic?> DeleteAsync(Guid id)
     {
         Message? messageToDelete = await _context.Messages
             .Include(m => m.Sender)
@@ -180,7 +184,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return dto;
     }
 
-    private bool MessageExists(int id)
+    private bool MessageExists(Guid id)
     {
         return _context.Messages.Any(e => e.Id == id);
     }
@@ -209,8 +213,40 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return ItemToDTO(message, plaintext, signatureVerified);
     }
 
-    private static MessageDTOPublic ItemToDTO(Message message, string text, bool signatureVerified)
+    private MessageDTOPublic ItemToDTO(Message message, string text, bool signatureVerified)
     {
+        string teamSecret = message.Team?.Secret ?? string.Empty;
+
+        List<AttachmentDTOPublic> attachments = [];
+        if (message.Attachments != null)
+        {
+            foreach (Attachment attachment in message.Attachments)
+            {
+                string fileName;
+                try
+                {
+                    byte[] encryptedFileName = Convert.FromBase64String(attachment.EncryptedFileName);
+                    byte[] fileNameBytes = _crypto.DecryptBytes(encryptedFileName, attachment.FileNameIv, teamSecret);
+                    fileName = Encoding.UTF8.GetString(fileNameBytes);
+                }
+                catch
+                {
+                    fileName = "[Decryption failed]";
+                }
+
+                attachments.Add(new AttachmentDTOPublic
+                {
+                    Id = attachment.Id,
+                    MessageId = attachment.MessageId,
+                    FileName = fileName,
+                    MimeType = attachment.MimeType,
+                    Size = attachment.Size,
+                    CreatedAt = attachment.CreatedAt,
+                    SignatureVerified = signatureVerified
+                });
+            }
+        }
+
         return new MessageDTOPublic
         {
             Id = message.Id,
@@ -222,7 +258,8 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
             },
             TeamId = message.Team?.Id ?? Guid.Empty,
             Date = message.Date,
-            SignatureVerified = signatureVerified
+            SignatureVerified = signatureVerified,
+            Attachments = attachments
         };
     }
 }

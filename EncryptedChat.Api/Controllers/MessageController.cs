@@ -36,7 +36,7 @@ public class MessageController(IMessageService messageService, ITeamService team
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetMessage(int id)
+    public async Task<IActionResult> GetMessage(Guid id)
     {
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))
@@ -79,7 +79,7 @@ public class MessageController(IMessageService messageService, ITeamService team
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteMessage(int id)
+    public async Task<IActionResult> DeleteMessage(Guid id)
     {
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))

@@ -103,7 +103,7 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            
+
             bool isAdmin = await _teamService.IsAdminAsync(currentUserId, id);
             if (!isAdmin)
                 return NotFound();

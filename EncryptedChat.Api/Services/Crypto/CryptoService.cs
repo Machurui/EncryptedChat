@@ -67,6 +67,59 @@ public class CryptoService : ICryptoService
             Convert.FromBase64String(signature));
     }
 
+    public (byte[] EncryptedData, string Iv) EncryptBytes(byte[] plaintext, string secret)
+    {
+        byte[] key = DeriveKey(secret);
+        byte[] nonce = RandomNumberGenerator.GetBytes(NonceSizeBytes);
+        byte[] ciphertext = new byte[plaintext.Length];
+        byte[] tag = new byte[TagSizeBytes];
+
+        using AesGcm aes = new(key, TagSizeBytes);
+        aes.Encrypt(nonce, plaintext, ciphertext, tag);
+
+        byte[] combined = new byte[ciphertext.Length + tag.Length];
+        Buffer.BlockCopy(ciphertext, 0, combined, 0, ciphertext.Length);
+        Buffer.BlockCopy(tag, 0, combined, ciphertext.Length, tag.Length);
+
+        return (combined, Convert.ToBase64String(nonce));
+    }
+
+    public byte[] DecryptBytes(byte[] ciphertext, string iv, string secret)
+    {
+        byte[] key = DeriveKey(secret);
+        byte[] nonce = Convert.FromBase64String(iv);
+
+        byte[] encryptedData = new byte[ciphertext.Length - TagSizeBytes];
+        byte[] tag = new byte[TagSizeBytes];
+        Buffer.BlockCopy(ciphertext, 0, encryptedData, 0, encryptedData.Length);
+        Buffer.BlockCopy(ciphertext, encryptedData.Length, tag, 0, TagSizeBytes);
+
+        byte[] plaintext = new byte[encryptedData.Length];
+
+        using AesGcm aes = new(key, TagSizeBytes);
+        aes.Decrypt(nonce, encryptedData, tag, plaintext);
+
+        return plaintext;
+    }
+
+    public string SignBytes(byte[] data, string userSecret)
+    {
+        byte[] key = Encoding.UTF8.GetBytes(userSecret);
+
+        using HMACSHA256 hmac = new(key);
+        byte[] hash = hmac.ComputeHash(data);
+
+        return Convert.ToBase64String(hash);
+    }
+
+    public bool VerifyBytes(byte[] data, string signature, string userSecret)
+    {
+        string computed = SignBytes(data, userSecret);
+        return CryptographicOperations.FixedTimeEquals(
+            Convert.FromBase64String(computed),
+            Convert.FromBase64String(signature));
+    }
+
     private static byte[] DeriveKey(string secret)
     {
         byte[] secretBytes = Encoding.UTF8.GetBytes(secret);

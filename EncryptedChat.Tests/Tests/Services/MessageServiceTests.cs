@@ -223,7 +223,7 @@ public class MessageServiceTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_ReturnsNull_WhenNotFound()
     {
-        MessageDTOPublic? result = await _service.GetByIdAsync(999);
+        MessageDTOPublic? result = await _service.GetByIdAsync(Guid.NewGuid());
 
         result.Should().BeNull();
     }
@@ -460,7 +460,7 @@ public class MessageServiceTests : IDisposable
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.UpdateAsync(999, dto);
+        MessageDTOPublic? result = await _service.UpdateAsync(Guid.NewGuid(), dto);
 
         result.Should().BeNull();
     }
@@ -549,7 +549,7 @@ public class MessageServiceTests : IDisposable
     [Fact]
     public async Task DeleteAsync_ReturnsNull_WhenNotFound()
     {
-        MessageDTOPublic? result = await _service.DeleteAsync(999);
+        MessageDTOPublic? result = await _service.DeleteAsync(Guid.NewGuid());
 
         result.Should().BeNull();
     }

@@ -10,6 +10,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject TeamClient TeamClient
 @inject ChatClient ChatClient
+@inject AttachmentClient AttachmentClient
 @inject AuthClient AuthClient
 @inject NavigationManager Navigation
 @inject HttpClient Http
@@ -107,22 +108,96 @@
                                             <div class="ml-2 text-gray-100">
                                                 @msg.Text
                                             </div>
+                                            @if (msg.Attachments?.Any() == true)
+                                            {
+                                                <div class="ml-2 mt-1 flex flex-wrap gap-2">
+                                                    @foreach (var att in msg.Attachments)
+                                                    {
+                                                        @if (att.MimeType.StartsWith("image/"))
+                                                        {
+                                                            <a href="@GetAttachmentUrl(att.Id)" target="_blank"
+                                                                class="block max-w-[200px]">
+                                                                <img src="@GetAttachmentUrl(att.Id)"
+                                                                    alt="@att.FileName"
+                                                                    class="rounded-lg max-h-32 object-cover border border-white/10" />
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <a href="@GetAttachmentUrl(att.Id)" target="_blank"
+                                                                class="flex items-center gap-1 px-2 py-1 bg-white/10 rounded text-[10px] text-blue-300 hover:bg-white/20">
+                                                                <span>📎</span>
+                                                                <span>@att.FileName</span>
+                                                                <span class="text-gray-400">(@FormatFileSize(att.Size))</span>
+                                                            </a>
+                                                        }
+                                                    }
+                                                </div>
+                                            }
                                         </div>
                                     }
                                 }
                             </div>
 
+                            <!-- Selected files preview -->
+                            @if (selectedFiles.Any())
+                            {
+                                <div class="flex flex-wrap gap-2 p-2 bg-black/20 rounded-lg border border-white/10">
+                                    @foreach (var file in selectedFiles)
+                                    {
+                                        <div class="relative group">
+                                            @if (file.ContentType.StartsWith("image/"))
+                                            {
+                                                <img src="@file.PreviewUrl" alt="@file.Name"
+                                                    class="h-16 w-16 object-cover rounded-lg border border-white/10" />
+                                            }
+                                            else
+                                            {
+                                                <div class="h-16 w-16 flex items-center justify-center bg-white/10 rounded-lg border border-white/10">
+                                                    <span class="text-2xl">📎</span>
+                                                </div>
+                                            }
+                                            <button type="button"
+                                                class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                                                @onclick="() => RemoveSelectedFile(file)">
+                                                ✕
+                                            </button>
+                                            <div class="text-[9px] text-gray-400 truncate w-16 text-center mt-1">
+                                                @file.Name
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
                             <!-- Input -->
                             <div class="flex items-center gap-2">
+                                <label class="cursor-pointer px-2 py-2 bg-black/40 border border-white/10 rounded-lg hover:bg-white/10 transition">
+                                    <span class="text-lg">📎</span>
+                                    <InputFile OnChange="OnFilesSelected" multiple class="hidden" />
+                                </label>
+
                                 <input
                                     class="flex-1 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-sm text-white"
                                     placeholder="Type a message..." @bind="newMessageText" @bind:event="oninput" />
 
                                 <button type="button" class="glass-button-primary px-3 py-2 text-sm"
-                                    @onclick="SendMessageAsync" disabled="@string.IsNullOrWhiteSpace(newMessageText)">
-                                    Send
+                                    @onclick="SendMessageAsync" disabled="@(isSending || (string.IsNullOrWhiteSpace(newMessageText) && !selectedFiles.Any()))">
+                                    @if (isSending)
+                                    {
+                                        <span>...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Send</span>
+                                    }
                                 </button>
                             </div>
+
+                            @if (!string.IsNullOrEmpty(uploadError))
+                            {
+                                <p class="text-xs text-red-400">@uploadError</p>
+                            }
                         </div>
                     }
                 </div>
@@ -205,8 +280,22 @@
     private List<ChatClient.MessageDTOPublic> messages = new();
     private string newMessageText = string.Empty;
     private bool isLoadingMessages;
+    private bool isSending;
+    private string? uploadError;
 
     private List<TeamClient.TeamDTOPublic> teams = new();
+
+    private List<SelectedFile> selectedFiles = new();
+    private const long MaxFileSize = 25 * 1024 * 1024;
+
+    private class SelectedFile
+    {
+        public string Name { get; set; } = string.Empty;
+        public string ContentType { get; set; } = string.Empty;
+        public long Size { get; set; }
+        public IBrowserFile BrowserFile { get; set; } = null!;
+        public string? PreviewUrl { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -365,26 +454,131 @@
         if (selectedTeam is null)
             return;
 
-        var text = newMessageText?.Trim();
-        if (string.IsNullOrWhiteSpace(text))
+        var text = newMessageText?.Trim() ?? string.Empty;
+        var hasFiles = selectedFiles.Any();
+
+        if (string.IsNullOrWhiteSpace(text) && !hasFiles)
             return;
 
-        if (hubConnection == null || hubConnection.State != HubConnectionState.Connected)
-        {
-            try
-            {
-                if (hubConnection != null)
-                    await hubConnection.StartAsync();
-            }
-            catch
-            {
-                errorMessage = "Chat connection is not available.";
-                return;
-            }
-        }
+        isSending = true;
+        uploadError = null;
 
-        await hubConnection!.InvokeAsync("SendMessageToTeam", selectedTeam.Id, text);
-        newMessageText = string.Empty;
+        try
+        {
+            if (hubConnection == null || hubConnection.State != HubConnectionState.Connected)
+            {
+                try
+                {
+                    if (hubConnection != null)
+                        await hubConnection.StartAsync();
+                }
+                catch
+                {
+                    errorMessage = "Chat connection is not available.";
+                    return;
+                }
+            }
+
+            var messageText = string.IsNullOrWhiteSpace(text) ? " " : text;
+            await hubConnection!.InvokeAsync("SendMessageToTeam", selectedTeam.Id, messageText);
+
+            if (hasFiles && messages.Any())
+            {
+                var lastMessage = messages.Last();
+                foreach (var file in selectedFiles.ToList())
+                {
+                    try
+                    {
+                        using var stream = file.BrowserFile.OpenReadStream(MaxFileSize);
+                        using var ms = new MemoryStream();
+                        await stream.CopyToAsync(ms);
+                        ms.Position = 0;
+
+                        var result = await AttachmentClient.UploadAsync(
+                            lastMessage.Id,
+                            ms,
+                            file.Name,
+                            file.ContentType);
+
+                        if (!result.Success)
+                        {
+                            uploadError = $"Failed to upload {file.Name}: {result.ErrorMessage}";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        uploadError = $"Error uploading {file.Name}: {ex.Message}";
+                    }
+                }
+
+                await LoadMessagesAsync();
+            }
+
+            newMessageText = string.Empty;
+            selectedFiles.Clear();
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private async Task OnFilesSelected(InputFileChangeEventArgs e)
+    {
+        uploadError = null;
+
+        foreach (var file in e.GetMultipleFiles(10))
+        {
+            if (file.Size > MaxFileSize)
+            {
+                uploadError = $"{file.Name} is too large (max 25 MB)";
+                continue;
+            }
+
+            var selectedFile = new SelectedFile
+            {
+                Name = file.Name,
+                ContentType = file.ContentType,
+                Size = file.Size,
+                BrowserFile = file
+            };
+
+            if (file.ContentType.StartsWith("image/"))
+            {
+                try
+                {
+                    var resized = await file.RequestImageFileAsync(file.ContentType, 200, 200);
+                    using var stream = resized.OpenReadStream(MaxFileSize);
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms);
+                    var base64 = Convert.ToBase64String(ms.ToArray());
+                    selectedFile.PreviewUrl = $"data:{file.ContentType};base64,{base64}";
+                }
+                catch
+                {
+                    selectedFile.PreviewUrl = null;
+                }
+            }
+
+            selectedFiles.Add(selectedFile);
+        }
+    }
+
+    private void RemoveSelectedFile(SelectedFile file)
+    {
+        selectedFiles.Remove(file);
+    }
+
+    private string GetAttachmentUrl(int attachmentId)
+    {
+        return $"https://localhost:7294/api/attachment/{attachmentId}/download";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
     private void OpenNewChatModal()

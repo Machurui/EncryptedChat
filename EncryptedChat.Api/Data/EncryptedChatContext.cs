@@ -9,6 +9,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<Member> Members => Set<Member>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -52,6 +53,15 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
         modelBuilder.Entity<RefreshToken>()
             .HasIndex(rt => rt.Token)
             .IsUnique();
+
+        modelBuilder.Entity<Attachment>()
+            .HasOne(a => a.Message)
+            .WithMany(m => m.Attachments)
+            .HasForeignKey(a => a.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Attachment>()
+            .HasIndex(a => a.MessageId);
 
         modelBuilder.Entity<IdentityRole>().HasData(
             new IdentityRole
