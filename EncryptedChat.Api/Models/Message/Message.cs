@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-
 namespace EncryptedChat.Models;
 
 public class Message
@@ -11,7 +10,15 @@ public class Message
     public int Id { get; set; }
 
     [Required]
-    public string? Text { get; set; } = string.Empty;
+    public string EncryptedText { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(24)]
+    public string Iv { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(64)]
+    public string Signature { get; set; } = string.Empty;
 
     [Required]
     public User? Sender { get; set; }

@@ -1,83 +1,87 @@
+using System.Security.Cryptography;
 using EncryptedChat.Data;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-public class MessageService : IMessageService
+public class MessageService(EncryptedChatContext context, ICryptoService crypto) : IMessageService
 {
-    private readonly EncryptedChatContext _context;
-
-    public MessageService(EncryptedChatContext context)
-    {
-        _context = context;
-    }
+    private readonly EncryptedChatContext _context = context;
+    private readonly ICryptoService _crypto = crypto;
 
     public async Task<IEnumerable<MessageDTOPublic>?> GetAllAsync()
     {
-        // Return a list of messages
-        return await _context.Messages
-        .Include(m => m.Sender)
-        .Include(m => m.Team)
-            .ThenInclude(t => t!.Members)
-                .ThenInclude(m => m.User)
-        .AsNoTracking()
-        .Select(team => ItemToDTO(team))
-        .ToListAsync();
+        List<Message> messages = await _context.Messages
+            .Include(m => m.Sender)
+            .Include(m => m.Team)
+                .ThenInclude(t => t!.Members)
+                    .ThenInclude(m => m.User)
+            .AsNoTracking()
+            .ToListAsync();
+
+        return messages.Select(m => DecryptAndMapMessage(m));
     }
 
-    public async Task<IEnumerable<MessageDTOPublic?>?> GetAllByTeamAsync(Guid id)
+    private const int MaxPageSize = 100;
+
+    public async Task<IReadOnlyList<MessageDTOPublic>?> GetAllByTeamAsync(Guid id, int page = 1, int pageSize = 50)
     {
-        // Return a list of messages by team id
-        var team = await _context.Teams.FindAsync(id);
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 50;
+        if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+
+        Team? team = await _context.Teams.FindAsync(id);
         if (team == null)
             return null;
 
-        return await _context.Messages
-        .Include(m => m.Sender)
-        .Include(m => m.Team)
-            .ThenInclude(t => t!.Members)
-                .ThenInclude(m => m.User)
-        .AsNoTracking()
-        .Where(m => m.Team != null && m.Team.Id == team.Id)
-        .Select(message => ItemToDTO(message))
-        .ToListAsync();
+        List<Message> messages = await _context.Messages
+            .Include(m => m.Sender)
+            .Include(m => m.Team)
+            .AsNoTracking()
+            .Where(m => m.Team != null && m.Team.Id == team.Id)
+            .OrderByDescending(m => m.Date)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return messages.Select(m => DecryptAndMapMessage(m, team.Secret)).ToList();
     }
 
     public async Task<MessageDTOPublic?> GetByIdAsync(int id)
     {
-        // Return a message by id
-        return await _context.Messages
-        .Include(m => m.Sender)
-        .Include(m => m.Team)
-            .ThenInclude(t => t!.Members)
-                .ThenInclude(m => m.User)
-        .AsNoTracking()
-        .Where(m => m.Id == id)
-        .Select(message => ItemToDTO(message))
-        .SingleOrDefaultAsync();
+        Message? message = await _context.Messages
+            .Include(m => m.Sender)
+            .Include(m => m.Team)
+                .ThenInclude(t => t!.Members)
+                    .ThenInclude(m => m.User)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (message == null)
+            return null;
+
+        return DecryptAndMapMessage(message);
     }
 
     public async Task<MessageDTOPublic?> CreateAsync(MessageDTO message)
     {
-        // Create a new message
-        var sender = await _context.Users.FindAsync(message?.Sender);
+        User? sender = await _context.Users.FindAsync(message?.Sender);
         if (sender == null)
             return null;
 
-        var teamId = message?.Team;
+        Guid? teamId = message?.Team;
         if (teamId == null)
             return null;
 
-        var team = await _context.Teams
-        .Include(t => t.Members)
-            .ThenInclude(m => m.User)
-        .FirstOrDefaultAsync(t => t.Id == teamId);
+        Team? team = await _context.Teams
+            .Include(t => t.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == teamId);
 
         if (team == null)
             return null;
 
-        // Check if the sender is a member of the team
         if (team.Members == null)
             return null;
 
@@ -85,12 +89,17 @@ public class MessageService : IMessageService
         if (!isMember)
             return null;
 
-        if (string.IsNullOrWhiteSpace(message?.Text) || message.Text.Length == 0)
+        if (string.IsNullOrWhiteSpace(message?.Text))
             return null;
 
-        var newMessage = new Message
+        (string encryptedText, string iv) = _crypto.Encrypt(message.Text, team.Secret);
+        string signature = _crypto.Sign(message.Text, sender.Secret);
+
+        Message newMessage = new()
         {
-            Text = message?.Text,
+            EncryptedText = encryptedText,
+            Iv = iv,
+            Signature = signature,
             Sender = sender,
             Team = team,
             Date = DateTime.UtcNow
@@ -99,13 +108,12 @@ public class MessageService : IMessageService
         await _context.Messages.AddAsync(newMessage);
         await _context.SaveChangesAsync();
 
-        return ItemToDTO(newMessage);
+        return ItemToDTO(newMessage, message.Text, signatureVerified: true);
     }
 
     public async Task<MessageDTOPublic?> UpdateAsync(int id, MessageDTO message)
     {
-        // Update a message
-        var messageToUpdate = await _context.Messages
+        Message? messageToUpdate = await _context.Messages
             .Include(m => m.Sender)
             .Include(m => m.Team)
                 .ThenInclude(t => t!.Members)
@@ -115,14 +123,14 @@ public class MessageService : IMessageService
         if (messageToUpdate == null)
             return null;
 
-        var sender = await _context.Users.FindAsync(message?.Sender);
+        User? sender = await _context.Users.FindAsync(message?.Sender);
         if (sender == null)
             return null;
 
         if (message?.Team is null)
             return null;
 
-        var team = await _context.Teams
+        Team? team = await _context.Teams
             .Include(t => t.Members)
                 .ThenInclude(m => m.User)
             .FirstOrDefaultAsync(t => t.Id == message.Team.Value);
@@ -130,7 +138,15 @@ public class MessageService : IMessageService
         if (team == null)
             return null;
 
-        messageToUpdate.Text = message?.Text;
+        if (string.IsNullOrWhiteSpace(message?.Text))
+            return null;
+
+        (string encryptedText, string iv) = _crypto.Encrypt(message.Text, team.Secret);
+        string signature = _crypto.Sign(message.Text, sender.Secret);
+
+        messageToUpdate.EncryptedText = encryptedText;
+        messageToUpdate.Iv = iv;
+        messageToUpdate.Signature = signature;
 
         try
         {
@@ -143,20 +159,25 @@ public class MessageService : IMessageService
             throw;
         }
 
-        return ItemToDTO(messageToUpdate);
+        return ItemToDTO(messageToUpdate, message.Text, signatureVerified: true);
     }
 
     public async Task<MessageDTOPublic?> DeleteAsync(int id)
     {
-        // Delete a user
-        var messageToDelete = await _context.Messages.FindAsync(id);
+        Message? messageToDelete = await _context.Messages
+            .Include(m => m.Sender)
+            .Include(m => m.Team)
+            .FirstOrDefaultAsync(m => m.Id == id);
+
         if (messageToDelete == null)
             return null;
+
+        MessageDTOPublic dto = DecryptAndMapMessage(messageToDelete);
 
         _context.Messages.Remove(messageToDelete);
         await _context.SaveChangesAsync();
 
-        return ItemToDTO(messageToDelete);
+        return dto;
     }
 
     private bool MessageExists(int id)
@@ -164,36 +185,44 @@ public class MessageService : IMessageService
         return _context.Messages.Any(e => e.Id == id);
     }
 
-    private static MessageDTOPublic ItemToDTO(Message message)
+    private MessageDTOPublic DecryptAndMapMessage(Message message, string? teamSecret = null)
     {
-        static UserDTOPublic MapUser(User user) => new()
-        {
-            Id = user.Id,
-            Name = user.Name,
-            Level = user.Level
-        };
+        string secret = teamSecret ?? message.Team?.Secret ?? string.Empty;
+        string plaintext;
+        bool signatureVerified = false;
 
-        static TeamDTOPublic MapTeam(Team team) => new()
+        try
         {
-            Id = team.Id,
-            Name = team.Name,
-            Slug = team.Slug,
-            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)]
-        };
-
-        static MemberDTOPublic MapMember(Member member) => new()
+            plaintext = _crypto.Decrypt(message.EncryptedText, message.Iv, secret);
+            string senderSecret = message.Sender?.Secret ?? string.Empty;
+            signatureVerified = _crypto.Verify(plaintext, message.Signature, senderSecret);
+        }
+        catch (CryptographicException)
         {
-            User = member.User is null ? null : MapUser(member.User),
-            Role = member.Role
-        };
+            plaintext = "[Decryption failed]";
+        }
+        catch (FormatException)
+        {
+            plaintext = "[Invalid message format]";
+        }
 
+        return ItemToDTO(message, plaintext, signatureVerified);
+    }
+
+    private static MessageDTOPublic ItemToDTO(Message message, string text, bool signatureVerified)
+    {
         return new MessageDTOPublic
         {
             Id = message.Id,
-            Text = message.Text,
-            Sender = MapUser(message?.Sender ?? new User()),
-            Team = MapTeam(message?.Team ?? new Team()),
-            Date = message?.Date ?? DateTime.MinValue
+            Text = text,
+            Sender = new MessageSenderDTO
+            {
+                Id = message.Sender?.Id ?? string.Empty,
+                Name = message.Sender?.Name ?? string.Empty
+            },
+            TeamId = message.Team?.Id ?? Guid.Empty,
+            Date = message.Date,
+            SignatureVerified = signatureVerified
         };
     }
 }
