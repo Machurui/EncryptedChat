@@ -43,6 +43,8 @@ public class AttachmentService(
         (byte[] encryptedContent, string fileIv) = _crypto.EncryptBytes(content, message.Team.Secret);
         (byte[] encryptedFileName, string fileNameIv) = _crypto.EncryptBytes(Encoding.UTF8.GetBytes(fileName), message.Team.Secret);
 
+        string storagePath = await _storage.SaveAsync(encryptedContent, message.Team.Id);
+
         Attachment attachment = new()
         {
             MessageId = messageId,
@@ -50,16 +52,24 @@ public class AttachmentService(
             FileNameIv = fileNameIv,
             MimeType = mimeType,
             Size = content.Length,
-            StoragePath = await _storage.SaveAsync(encryptedContent, message.Team.Id),
+            StoragePath = storagePath,
             FileIv = fileIv,
             Signature = _crypto.SignBytes(content, message.Sender.Secret),
             CreatedAt = DateTime.UtcNow
         };
 
-        _context.Attachments.Add(attachment);
-        await _context.SaveChangesAsync();
+        try
+        {
+            _context.Attachments.Add(attachment);
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            await _storage.DeleteAsync(storagePath);
+            throw;
+        }
 
-        return (ToDTO(attachment, fileName, signatureVerified: true), null, false);
+        return (ToDTO(attachment, fileName), null, false);
     }
 
     public async Task<AttachmentDTOPublic?> GetByIdAsync(Guid id, string userId)
@@ -71,7 +81,7 @@ public class AttachmentService(
         if (!await IsMemberAsync(attachment.Message.Team.Id, userId))
             return null;
 
-        return DecryptAndMap(attachment);
+        return DecryptMetadata(attachment);
     }
 
     public async Task<IReadOnlyList<AttachmentDTOPublic>> GetByMessageIdAsync(Guid messageId, string userId)
@@ -82,13 +92,12 @@ public class AttachmentService(
 
         List<Attachment> attachments = await _context.Attachments
             .Include(a => a.Message).ThenInclude(m => m!.Team)
-            .Include(a => a.Message).ThenInclude(m => m!.Sender)
             .AsNoTracking()
             .Where(a => a.MessageId == messageId)
             .OrderBy(a => a.CreatedAt)
             .ToListAsync();
 
-        return attachments.Select(DecryptAndMap).ToList();
+        return attachments.Select(DecryptMetadata).ToList();
     }
 
     public async Task<bool> CanAccessMessageAsync(Guid messageId, string userId)
@@ -131,9 +140,19 @@ public class AttachmentService(
         if (!isOwner && !isAdmin)
             return false;
 
-        await _storage.DeleteAsync(attachment.StoragePath);
+        string storagePath = attachment.StoragePath;
+
         _context.Attachments.Remove(attachment);
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _storage.DeleteAsync(storagePath);
+        }
+        catch (FileNotFoundException)
+        {
+            // Fichier déjà absent - pas grave
+        }
 
         return true;
     }
@@ -151,39 +170,26 @@ public class AttachmentService(
     private Task<Attachment?> GetAttachmentWithRelationsAsync(Guid id) =>
         _context.Attachments
             .Include(a => a.Message).ThenInclude(m => m!.Team)
-            .Include(a => a.Message).ThenInclude(m => m!.Sender)
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.Id == id);
 
-    private AttachmentDTOPublic DecryptAndMap(Attachment attachment)
+    private AttachmentDTOPublic DecryptMetadata(Attachment attachment)
     {
         string fileName;
-        bool signatureVerified = false;
 
         try
         {
             string teamSecret = attachment.Message?.Team?.Secret ?? string.Empty;
-            string userSecret = attachment.Message?.Sender?.Secret ?? string.Empty;
-
             fileName = Encoding.UTF8.GetString(
                 _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
-
-            if (!string.IsNullOrEmpty(userSecret) && !string.IsNullOrEmpty(attachment.Signature))
-            {
-                byte[] content = _crypto.DecryptBytes(
-                    _storage.LoadAsync(attachment.StoragePath).GetAwaiter().GetResult(),
-                    attachment.FileIv, teamSecret);
-                signatureVerified = _crypto.VerifyBytes(content, attachment.Signature, userSecret);
-            }
         }
         catch (CryptographicException) { fileName = "[Decryption failed]"; }
         catch (FormatException) { fileName = "[Invalid format]"; }
-        catch (FileNotFoundException) { fileName = "[File not found]"; }
 
-        return ToDTO(attachment, fileName, signatureVerified);
+        return ToDTO(attachment, fileName);
     }
 
-    private static AttachmentDTOPublic ToDTO(Attachment attachment, string fileName, bool signatureVerified) => new()
+    private static AttachmentDTOPublic ToDTO(Attachment attachment, string fileName) => new()
     {
         Id = attachment.Id,
         MessageId = attachment.MessageId,
@@ -191,6 +197,6 @@ public class AttachmentService(
         MimeType = attachment.MimeType,
         Size = attachment.Size,
         CreatedAt = attachment.CreatedAt,
-        SignatureVerified = signatureVerified
+        SignatureVerified = false
     };
 }

@@ -47,12 +47,16 @@ namespace EncryptedChat.Controllers
         [Authorize(Roles = "User")]
         public async Task<IActionResult?> PostTeam([FromBody] TeamDTO newTeam)
         {
-            TeamDTOPublic? team = await _teamService.CreateAsync(newTeam);
+            string? creatorId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(creatorId))
+                return Unauthorized();
+
+            TeamDTOPublic? team = await _teamService.CreateAsync(newTeam, creatorId);
 
             if (team is null)
-                return BadRequest("Team invalid data.");
+                return BadRequest(new { Message = "Données invalides" });
 
-            return CreatedAtAction(nameof(GetTeam), new { id = team!.Id }, team);
+            return CreatedAtAction(nameof(GetTeam), new { id = team.Id }, team);
         }
 
         // PATCH: api/Team/5 (partial update)

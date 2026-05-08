@@ -11,7 +11,7 @@ namespace EncryptedChat.Services
 
         Task<TeamDTOPublic?> GetByIdAsync(Guid id);
 
-        Task<TeamDTOPublic?> CreateAsync(TeamDTO team);
+        Task<TeamDTOPublic?> CreateAsync(TeamDTO team, string creatorId);
 
         Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team);
 

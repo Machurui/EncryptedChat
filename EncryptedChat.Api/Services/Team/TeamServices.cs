@@ -37,18 +37,21 @@ public class TeamService : ITeamService
         .SingleOrDefaultAsync();
     }
 
-    public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam)
+    public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam, string creatorId)
     {
-        if (newTeam.Admins == null || newTeam.Admins.Count == 0)
+        User? creator = await _context.Users.FindAsync(creatorId);
+        if (creator == null)
             return null;
 
-        var admins = await _context.Users
-            .Where(u => newTeam.Admins.Contains(u.Id))
+        HashSet<string> adminIds = new(newTeam.Admins ?? []) { creatorId };
+
+        List<User> admins = await _context.Users
+            .Where(u => adminIds.Contains(u.Id))
             .ToListAsync();
 
-        var members = newTeam.Members != null && newTeam.Members.Count != 0
-        ? await _context.Users.Where(u => newTeam.Members.Contains(u.Id)).ToListAsync()
-        : [];
+        List<User> members = newTeam.Members != null && newTeam.Members.Count != 0
+            ? await _context.Users.Where(u => newTeam.Members.Contains(u.Id)).ToListAsync()
+            : [];
 
         if (admins.Count == 0)
             return null;
