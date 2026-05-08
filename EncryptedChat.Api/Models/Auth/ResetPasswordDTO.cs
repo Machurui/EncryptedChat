@@ -9,6 +9,7 @@ public class ResetPasswordDTO
     public string Email { get; set; } = string.Empty;
 
     [Required]
+    [MaxLength(512)]
     public string Token { get; set; } = string.Empty;
 
     [Required]

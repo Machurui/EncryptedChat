@@ -9,6 +9,7 @@ public class Team
 
     [Required]
     [MaxLength(100)]
+    [MinLength(1)]
     public string Name { get; set; } = string.Empty;
 
     [Required]
