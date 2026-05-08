@@ -149,9 +149,9 @@ public class AttachmentService(
         {
             await _storage.DeleteAsync(storagePath);
         }
-        catch (FileNotFoundException)
+        catch (IOException)
         {
-            // Fichier déjà absent - pas grave
+            // Orphan file - preferable to dangling DB reference
         }
 
         return true;

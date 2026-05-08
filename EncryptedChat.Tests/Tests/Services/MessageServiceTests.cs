@@ -271,11 +271,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "New message",
-            Sender = user.Id,
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().NotBeNull();
         result!.Text.Should().Be("New message");
@@ -298,11 +297,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "Hello",
-            Sender = "nonexistent-user",
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, "nonexistent-user");
 
         result.Should().BeNull();
     }
@@ -315,11 +313,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "Hello",
-            Sender = user.Id,
             Team = Guid.NewGuid()
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().BeNull();
     }
@@ -333,11 +330,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "Hello",
-            Sender = user.Id,
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().BeNull();
     }
@@ -352,11 +348,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "",
-            Sender = user.Id,
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().BeNull();
     }
@@ -371,11 +366,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "   ",
-            Sender = user.Id,
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().BeNull();
     }
@@ -390,11 +384,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "Hello 世界 🌍 Привет",
-            Sender = user.Id,
             Team = team.Id
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().NotBeNull();
         result!.Text.Should().Be("Hello 世界 🌍 Привет");
@@ -408,11 +401,10 @@ public class MessageServiceTests : IDisposable
         MessageDTO dto = new()
         {
             Text = "Hello",
-            Sender = user.Id,
             Team = null
         };
 
-        MessageDTOPublic? result = await _service.CreateAsync(dto);
+        MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().BeNull();
     }
@@ -433,12 +425,10 @@ public class MessageServiceTests : IDisposable
 
         MessageDTO dto = new()
         {
-            Text = "Updated text",
-            Sender = user.Id,
-            Team = team.Id
+            Text = "Updated text"
         };
 
-        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto);
+        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto, user.Id);
 
         result.Should().NotBeNull();
         result!.Text.Should().Be("Updated text");
@@ -451,56 +441,42 @@ public class MessageServiceTests : IDisposable
     public async Task UpdateAsync_ReturnsNull_WhenMessageNotFound()
     {
         User user = await CreateUser("user-1");
-        Team team = await CreateTeam();
 
-        MessageDTO dto = new()
-        {
-            Text = "Updated",
-            Sender = user.Id,
-            Team = team.Id
-        };
+        MessageDTO dto = new() { Text = "Updated" };
 
-        MessageDTOPublic? result = await _service.UpdateAsync(Guid.NewGuid(), dto);
+        MessageDTOPublic? result = await _service.UpdateAsync(Guid.NewGuid(), dto, user.Id);
 
         result.Should().BeNull();
     }
 
     [Fact]
-    public async Task UpdateAsync_ReturnsNull_WhenSenderNotFound()
+    public async Task UpdateAsync_ReturnsNull_WhenActorNotOwner()
+    {
+        User owner = await CreateUser("owner");
+        User other = await CreateUser("other");
+        Team team = await CreateTeam();
+        await AddMember(owner, team);
+        await AddMember(other, team);
+        Message message = await CreateMessage(owner, team, "Original");
+
+        MessageDTO dto = new() { Text = "Updated" };
+
+        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto, other.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ReturnsNull_WhenActorNotFound()
     {
         User user = await CreateUser("user-1");
         Team team = await CreateTeam();
         await AddMember(user, team);
         Message message = await CreateMessage(user, team, "Original");
 
-        MessageDTO dto = new()
-        {
-            Text = "Updated",
-            Sender = "nonexistent",
-            Team = team.Id
-        };
+        MessageDTO dto = new() { Text = "Updated" };
 
-        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto);
-
-        result.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task UpdateAsync_ReturnsNull_WhenTeamNotFound()
-    {
-        User user = await CreateUser("user-1");
-        Team team = await CreateTeam();
-        await AddMember(user, team);
-        Message message = await CreateMessage(user, team, "Original");
-
-        MessageDTO dto = new()
-        {
-            Text = "Updated",
-            Sender = user.Id,
-            Team = Guid.NewGuid()
-        };
-
-        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto);
+        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto, "nonexistent");
 
         result.Should().BeNull();
     }
@@ -513,14 +489,9 @@ public class MessageServiceTests : IDisposable
         await AddMember(user, team);
         Message message = await CreateMessage(user, team, "Original");
 
-        MessageDTO dto = new()
-        {
-            Text = "",
-            Sender = user.Id,
-            Team = team.Id
-        };
+        MessageDTO dto = new() { Text = "" };
 
-        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto);
+        MessageDTOPublic? result = await _service.UpdateAsync(message.Id, dto, user.Id);
 
         result.Should().BeNull();
     }
@@ -530,14 +501,14 @@ public class MessageServiceTests : IDisposable
     #region DeleteAsync
 
     [Fact]
-    public async Task DeleteAsync_RemovesMessage_ReturnsDto()
+    public async Task DeleteAsync_RemovesMessage_WhenOwner()
     {
         User user = await CreateUser("user-1");
         Team team = await CreateTeam();
         await AddMember(user, team);
         Message message = await CreateMessage(user, team, "To delete");
 
-        MessageDTOPublic? result = await _service.DeleteAsync(message.Id);
+        MessageDTOPublic? result = await _service.DeleteAsync(message.Id, user.Id);
 
         result.Should().NotBeNull();
         result!.Text.Should().Be("To delete");
@@ -547,9 +518,45 @@ public class MessageServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteAsync_RemovesMessage_WhenAdmin()
+    {
+        User owner = await CreateUser("owner");
+        User admin = await CreateUser("admin");
+        Team team = await CreateTeam();
+        await AddMember(owner, team, Member.MemberRole);
+        await AddMember(admin, team, Member.AdminRole);
+        Message message = await CreateMessage(owner, team, "To delete");
+
+        MessageDTOPublic? result = await _service.DeleteAsync(message.Id, admin.Id);
+
+        result.Should().NotBeNull();
+        Message? deleted = await _context.Messages.FindAsync(message.Id);
+        deleted.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ReturnsNull_WhenNotOwnerNorAdmin()
+    {
+        User owner = await CreateUser("owner");
+        User other = await CreateUser("other");
+        Team team = await CreateTeam();
+        await AddMember(owner, team, Member.MemberRole);
+        await AddMember(other, team, Member.MemberRole);
+        Message message = await CreateMessage(owner, team, "Secret");
+
+        MessageDTOPublic? result = await _service.DeleteAsync(message.Id, other.Id);
+
+        result.Should().BeNull();
+        Message? stillExists = await _context.Messages.FindAsync(message.Id);
+        stillExists.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task DeleteAsync_ReturnsNull_WhenNotFound()
     {
-        MessageDTOPublic? result = await _service.DeleteAsync(Guid.NewGuid());
+        User user = await CreateUser("user-1");
+
+        MessageDTOPublic? result = await _service.DeleteAsync(Guid.NewGuid(), user.Id);
 
         result.Should().BeNull();
     }

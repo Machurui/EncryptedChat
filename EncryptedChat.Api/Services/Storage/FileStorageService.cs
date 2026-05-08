@@ -20,7 +20,7 @@ public class FileStorageOptions
 
 public class FileStorageService(IOptions<FileStorageOptions> options) : IFileStorageService
 {
-    private readonly string _basePath = Path.GetFullPath(options.Value.BasePath);
+    private readonly string _basePath = Path.GetFullPath(options.Value.BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
     public async Task<string> SaveAsync(byte[] encryptedContent, Guid teamId)
     {
@@ -64,7 +64,12 @@ public class FileStorageService(IOptions<FileStorageOptions> options) : IFileSto
 
     private void ValidatePath(string fullPath)
     {
-        if (!Path.GetFullPath(fullPath).StartsWith(_basePath, StringComparison.OrdinalIgnoreCase))
+        string canonical = Path.GetFullPath(fullPath);
+        if (!canonical.StartsWith(_basePath, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Invalid storage path");
+
+        string relativePath = Path.GetRelativePath(_basePath, canonical);
+        if (relativePath.StartsWith("..") || Path.IsPathRooted(relativePath))
             throw new UnauthorizedAccessException("Invalid storage path");
     }
 }

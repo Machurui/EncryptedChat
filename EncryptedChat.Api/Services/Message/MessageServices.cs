@@ -11,20 +11,6 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
     private readonly EncryptedChatContext _context = context;
     private readonly ICryptoService _crypto = crypto;
 
-    public async Task<IEnumerable<MessageDTOPublic>?> GetAllAsync()
-    {
-        List<Message> messages = await _context.Messages
-            .Include(m => m.Sender)
-            .Include(m => m.Team)
-                .ThenInclude(t => t!.Members)
-                    .ThenInclude(m => m.User)
-            .Include(m => m.Attachments)
-            .AsNoTracking()
-            .ToListAsync();
-
-        return messages.Select(m => DecryptAndMapMessage(m));
-    }
-
     private const int MaxPageSize = 100;
 
     public async Task<IReadOnlyList<MessageDTOPublic>?> GetAllByTeamAsync(Guid id, int page = 1, int pageSize = 50)
@@ -68,9 +54,12 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return DecryptAndMapMessage(message);
     }
 
-    public async Task<MessageDTOPublic?> CreateAsync(MessageDTO message)
+    public async Task<MessageDTOPublic?> CreateAsync(MessageDTO message, string senderId)
     {
-        User? sender = await _context.Users.FindAsync(message?.Sender);
+        if (string.IsNullOrWhiteSpace(senderId))
+            return null;
+
+        User? sender = await _context.Users.FindAsync(senderId);
         if (sender == null)
             return null;
 
@@ -115,38 +104,34 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return ItemToDTO(newMessage, message.Text, signatureVerified: true);
     }
 
-    public async Task<MessageDTOPublic?> UpdateAsync(Guid id, MessageDTO message)
+    public async Task<MessageDTOPublic?> UpdateAsync(Guid id, MessageDTO message, string actorId)
     {
+        if (string.IsNullOrWhiteSpace(actorId))
+            return null;
+
         Message? messageToUpdate = await _context.Messages
             .Include(m => m.Sender)
             .Include(m => m.Team)
-                .ThenInclude(t => t!.Members)
-                    .ThenInclude(m => m.User)
             .FirstOrDefaultAsync(m => m.Id == id);
 
         if (messageToUpdate == null)
             return null;
 
-        User? sender = await _context.Users.FindAsync(message?.Sender);
-        if (sender == null)
+        if (messageToUpdate.Sender?.Id != actorId)
             return null;
 
-        if (message?.Team is null)
-            return null;
-
-        Team? team = await _context.Teams
-            .Include(t => t.Members)
-                .ThenInclude(m => m.User)
-            .FirstOrDefaultAsync(t => t.Id == message.Team.Value);
-
-        if (team == null)
+        if (messageToUpdate.Team == null)
             return null;
 
         if (string.IsNullOrWhiteSpace(message?.Text))
             return null;
 
-        (string encryptedText, string iv) = _crypto.Encrypt(message.Text, team.Secret);
-        string signature = _crypto.Sign(message.Text, sender.Secret);
+        User? actor = await _context.Users.FindAsync(actorId);
+        if (actor == null)
+            return null;
+
+        (string encryptedText, string iv) = _crypto.Encrypt(message.Text, messageToUpdate.Team.Secret);
+        string signature = _crypto.Sign(message.Text, actor.Secret);
 
         messageToUpdate.EncryptedText = encryptedText;
         messageToUpdate.Iv = iv;
@@ -166,14 +151,24 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         return ItemToDTO(messageToUpdate, message.Text, signatureVerified: true);
     }
 
-    public async Task<MessageDTOPublic?> DeleteAsync(Guid id)
+    public async Task<MessageDTOPublic?> DeleteAsync(Guid id, string actorId)
     {
+        if (string.IsNullOrWhiteSpace(actorId))
+            return null;
+
         Message? messageToDelete = await _context.Messages
             .Include(m => m.Sender)
             .Include(m => m.Team)
             .FirstOrDefaultAsync(m => m.Id == id);
 
         if (messageToDelete == null)
+            return null;
+
+        bool isOwner = messageToDelete.Sender?.Id == actorId;
+        bool isAdmin = messageToDelete.Team != null && await _context.Members
+            .AnyAsync(m => m.TeamId == messageToDelete.Team.Id && m.UserId == actorId && m.Role == Member.AdminRole);
+
+        if (!isOwner && !isAdmin)
             return null;
 
         MessageDTOPublic dto = DecryptAndMapMessage(messageToDelete);
@@ -242,7 +237,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
                     MimeType = attachment.MimeType,
                     Size = attachment.Size,
                     CreatedAt = attachment.CreatedAt,
-                    SignatureVerified = signatureVerified
+                    SignatureVerified = false // Non vérifié au listing - vérification au téléchargement
                 });
             }
         }

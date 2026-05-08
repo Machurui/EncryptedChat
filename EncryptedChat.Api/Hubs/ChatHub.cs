@@ -62,11 +62,10 @@ public class ChatHub : Hub
         MessageDTO dto = new()
         {
             Text = text,
-            Sender = senderId,
             Team = teamId
         };
 
-        MessageDTOPublic? created = await _messageService.CreateAsync(dto);
+        MessageDTOPublic? created = await _messageService.CreateAsync(dto, senderId);
         if (created is null)
             return;
 

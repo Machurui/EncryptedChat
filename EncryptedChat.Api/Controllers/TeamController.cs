@@ -68,13 +68,9 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
-            bool isAdmin = await _teamService.IsAdminAsync(userId, id);
-            if (!isAdmin)
-                return NotFound();
-
-            TeamDTOPublic? teamUpdated = await _teamService.UpdateNameAsync(id, dto.Name);
+            TeamDTOPublic? teamUpdated = await _teamService.UpdateNameAsync(id, dto.Name, userId);
             if (teamUpdated is null)
-                return BadRequest(new { Message = "Invalid data." });
+                return NotFound();
 
             return NoContent();
         }
@@ -88,11 +84,10 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
-            bool isAdmin = await _teamService.IsAdminAsync(userId, id);
-            if (!isAdmin)
+            TeamDTOPublic? deleted = await _teamService.DeleteAsync(id, userId);
+            if (deleted is null)
                 return NotFound();
 
-            await _teamService.DeleteAsync(id);
             return NoContent();
         }
 
@@ -107,14 +102,9 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-
-            bool isAdmin = await _teamService.IsAdminAsync(currentUserId, id);
-            if (!isAdmin)
-                return NotFound();
-
-            bool success = await _teamService.AddMemberAsync(id, dto.UserId);
+            bool success = await _teamService.AddMemberAsync(id, dto.UserId, currentUserId);
             if (!success)
-                return BadRequest(new { Message = "Cannot add member. User not found or already a member." });
+                return NotFound();
 
             return NoContent();
         }
@@ -128,16 +118,12 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            bool isAdmin = await _teamService.IsAdminAsync(currentUserId, id);
-            if (!isAdmin)
-                return NotFound();
-
             if (userId == currentUserId)
                 return BadRequest(new { Message = "You cannot remove yourself. Use leave or transfer ownership." });
 
-            bool success = await _teamService.RemoveMemberAsync(id, userId);
+            bool success = await _teamService.RemoveMemberAsync(id, userId, currentUserId);
             if (!success)
-                return BadRequest(new { Message = "Cannot remove member. User not found or is the last admin." });
+                return NotFound();
 
             return NoContent();
         }
@@ -151,13 +137,9 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            bool isAdmin = await _teamService.IsAdminAsync(currentUserId, id);
-            if (!isAdmin)
-                return NotFound();
-
-            bool success = await _teamService.PromoteToAdminAsync(id, dto.UserId);
+            bool success = await _teamService.PromoteToAdminAsync(id, dto.UserId, currentUserId);
             if (!success)
-                return BadRequest(new { Message = "Cannot promote. User not found or already admin." });
+                return NotFound();
 
             return NoContent();
         }
@@ -171,17 +153,12 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            //
-            bool isAdmin = await _teamService.IsAdminAsync(currentUserId, id);
-            if (!isAdmin)
-                return NotFound();
-
             if (userId == currentUserId)
                 return BadRequest(new { Message = "You cannot demote yourself." });
 
-            bool success = await _teamService.DemoteFromAdminAsync(id, userId);
+            bool success = await _teamService.DemoteFromAdminAsync(id, userId, currentUserId);
             if (!success)
-                return BadRequest(new { Message = "Cannot demote. User not found, not admin, or is the last admin." });
+                return NotFound();
 
             return NoContent();
         }

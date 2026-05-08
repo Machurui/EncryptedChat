@@ -43,6 +43,10 @@ public class TeamService : ITeamService
         if (creator == null)
             return null;
 
+        string trimmedName = newTeam.Name?.Trim() ?? string.Empty;
+        if (trimmedName.Length < 1 || trimmedName.Length > 100)
+            return null;
+
         HashSet<string> adminIds = new(newTeam.Admins ?? []) { creatorId };
 
         List<User> admins = await _context.Users
@@ -56,11 +60,11 @@ public class TeamService : ITeamService
         if (admins.Count == 0)
             return null;
 
-        var slug = await CreateUniqueSlugAsync(newTeam.Name);
+        string slug = await CreateUniqueSlugAsync(trimmedName);
 
-        var team = new Team
+        Team team = new()
         {
-            Name = newTeam.Name ?? string.Empty,
+            Name = trimmedName,
             Slug = slug,
             Secret = Guid.NewGuid().ToString("N"),
             CreatedAt = DateTime.UtcNow,
@@ -95,13 +99,22 @@ public class TeamService : ITeamService
         return ItemToDTO(team);
     }
 
-    public async Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team)
+    public async Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team, string actorId)
     {
-        // Update a team
+        if (string.IsNullOrWhiteSpace(actorId))
+            return null;
+
+        if (!await IsAdminAsync(actorId, id))
+            return null;
+
+        string trimmedName = team.Name?.Trim() ?? string.Empty;
+        if (trimmedName.Length < 1 || trimmedName.Length > 100)
+            return null;
+
         if (team.Admins == null || team.Admins.Count == 0)
             return null;
 
-        var teamToUpdate = await _context.Teams
+        Team? teamToUpdate = await _context.Teams
             .Include(t => t.Members)
                 .ThenInclude(m => m.User)
             .FirstOrDefaultAsync(t => t.Id == id);
@@ -146,8 +159,8 @@ public class TeamService : ITeamService
             });
         }
 
-        teamToUpdate.Name = team.Name ?? string.Empty;
-        teamToUpdate.Slug = await CreateUniqueSlugAsync(team.Name, teamToUpdate.Id);
+        teamToUpdate.Name = trimmedName;
+        teamToUpdate.Slug = await CreateUniqueSlugAsync(trimmedName, teamToUpdate.Id);
         teamToUpdate.ModifiedAt = DateTime.UtcNow;
 
         try
@@ -167,8 +180,18 @@ public class TeamService : ITeamService
         return ItemToDTO(teamToUpdate);
     }
 
-    public async Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name)
+    public async Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name, string actorId)
     {
+        if (string.IsNullOrWhiteSpace(actorId))
+            return null;
+
+        if (!await IsAdminAsync(actorId, id))
+            return null;
+
+        string trimmedName = name?.Trim() ?? string.Empty;
+        if (trimmedName.Length < 1 || trimmedName.Length > 100)
+            return null;
+
         Team? team = await _context.Teams
             .Include(t => t.Members)
                 .ThenInclude(m => m.User)
@@ -177,7 +200,7 @@ public class TeamService : ITeamService
         if (team is null)
             return null;
 
-        team.Name = name;
+        team.Name = trimmedName;
         team.Slug = await CreateUniqueSlugAsync(name, id);
         team.ModifiedAt = DateTime.UtcNow;
 
@@ -185,8 +208,14 @@ public class TeamService : ITeamService
         return ItemToDTO(team);
     }
 
-    public async Task<TeamDTOPublic?> DeleteAsync(Guid id)
+    public async Task<TeamDTOPublic?> DeleteAsync(Guid id, string actorId)
     {
+        if (string.IsNullOrWhiteSpace(actorId))
+            return null;
+
+        if (!await IsAdminAsync(actorId, id))
+            return null;
+
         Team? teamToDelete = await _context.Teams
             .Include(t => t.Members)
                 .ThenInclude(m => m.User)
@@ -223,9 +252,12 @@ public class TeamService : ITeamService
             .AnyAsync(m => m.TeamId == teamId && m.UserId == userId);
     }
 
-    public async Task<bool> AddMemberAsync(Guid teamId, string userId)
+    public async Task<bool> AddMemberAsync(Guid teamId, string userId, string actorId)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
+            return false;
+
+        if (!await IsAdminAsync(actorId, teamId))
             return false;
 
         var team = await _context.Teams.FindAsync(teamId);
@@ -255,9 +287,12 @@ public class TeamService : ITeamService
         return true;
     }
 
-    public async Task<bool> RemoveMemberAsync(Guid teamId, string userId)
+    public async Task<bool> RemoveMemberAsync(Guid teamId, string userId, string actorId)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
+            return false;
+
+        if (!await IsAdminAsync(actorId, teamId))
             return false;
 
         var member = await _context.Members
@@ -280,9 +315,12 @@ public class TeamService : ITeamService
         return true;
     }
 
-    public async Task<bool> PromoteToAdminAsync(Guid teamId, string userId)
+    public async Task<bool> PromoteToAdminAsync(Guid teamId, string userId, string actorId)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
+            return false;
+
+        if (!await IsAdminAsync(actorId, teamId))
             return false;
 
         var member = await _context.Members
@@ -300,9 +338,12 @@ public class TeamService : ITeamService
         return true;
     }
 
-    public async Task<bool> DemoteFromAdminAsync(Guid teamId, string userId)
+    public async Task<bool> DemoteFromAdminAsync(Guid teamId, string userId, string actorId)
     {
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
+            return false;
+
+        if (!await IsAdminAsync(actorId, teamId))
             return false;
 
         var member = await _context.Members
