@@ -26,14 +26,10 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ---------- Services ----------
-builder.Services.AddControllers(options =>
-    {
-        options.Filters.Add<EncryptedChat.Filters.ValidateModelFilter>();
-    })
+builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
         options.SuppressMapClientErrors = true;
-        options.SuppressModelStateInvalidFilter = true;
     })
     .AddJsonOptions(options =>
     {
