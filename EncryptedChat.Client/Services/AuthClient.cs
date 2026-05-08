@@ -129,7 +129,7 @@ public class AuthClient
             return msg.ValueKind switch
             {
                 JsonValueKind.String => msg.GetString(),
-                JsonValueKind.Array  => string.Join("\n",
+                JsonValueKind.Array => string.Join("\n",
                                         msg.EnumerateArray()
                                            .Where(e => e.ValueKind == JsonValueKind.String)
                                            .Select(e => e.GetString())

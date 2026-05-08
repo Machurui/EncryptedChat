@@ -2,6 +2,8 @@ using EncryptedChat.Data;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace EncryptedChat.Services;
 
@@ -91,7 +93,7 @@ public class AuthService(
         RefreshToken refreshTokenEntity = new()
         {
             Id = Guid.NewGuid(),
-            Token = tokenPair.RefreshToken,
+            Token = HashRefreshToken(tokenPair.RefreshToken),
             UserId = user.Id,
             ExpiresAt = tokenPair.RefreshTokenExpiresUtc,
             CreatedAt = DateTime.UtcNow
@@ -108,8 +110,9 @@ public class AuthService(
         if (string.IsNullOrWhiteSpace(refreshToken))
             return;
 
+        string refreshTokenHash = HashRefreshToken(refreshToken);
         RefreshToken? token = await _context.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+            .FirstOrDefaultAsync(rt => rt.Token == refreshTokenHash);
 
         if (token != null)
         {
@@ -120,9 +123,10 @@ public class AuthService(
 
     public async Task<LoginResult> RefreshAsync(string refreshToken)
     {
+        string refreshTokenHash = HashRefreshToken(refreshToken);
         RefreshToken? storedToken = await _context.RefreshTokens
             .Include(rt => rt.User)
-            .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+            .FirstOrDefaultAsync(rt => rt.Token == refreshTokenHash);
 
         if (storedToken is null || !storedToken.IsActive || storedToken.User is null)
             return LoginResult.Fail("Invalid refresh token");
@@ -137,7 +141,7 @@ public class AuthService(
         RefreshToken newRefreshToken = new()
         {
             Id = Guid.NewGuid(),
-            Token = newTokenPair.RefreshToken,
+            Token = HashRefreshToken(newTokenPair.RefreshToken),
             UserId = user.Id,
             ExpiresAt = newTokenPair.RefreshTokenExpiresUtc,
             CreatedAt = DateTime.UtcNow
@@ -162,6 +166,15 @@ public class AuthService(
     public Task<IdentityResult> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model)
     {
         throw new NotImplementedException();
+    }
+
+    private static string HashRefreshToken(string refreshToken)
+    {
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
+        return Convert.ToBase64String(bytes)
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .Replace("=", "");
     }
 }
 

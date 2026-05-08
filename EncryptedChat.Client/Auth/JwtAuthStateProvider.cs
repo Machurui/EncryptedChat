@@ -64,8 +64,8 @@ public class JwtAuthStateProvider : AuthenticationStateProvider
         var nameId = S("nameid") ?? sub;
 
         if (!string.IsNullOrEmpty(nameId)) yield return new Claim(ClaimTypes.NameIdentifier, nameId);
-        if (!string.IsNullOrEmpty(name))   yield return new Claim(ClaimTypes.Name, name);
-        if (!string.IsNullOrEmpty(sub))    yield return new Claim("sub", sub);
+        if (!string.IsNullOrEmpty(name)) yield return new Claim(ClaimTypes.Name, name);
+        if (!string.IsNullOrEmpty(sub)) yield return new Claim("sub", sub);
 
         if (root.TryGetProperty("role", out var roleEl)) foreach (var r in ReadStrOrArray(roleEl)) yield return new Claim(ClaimTypes.Role, r);
         else if (root.TryGetProperty("roles", out var rolesEl)) foreach (var r in ReadStrOrArray(rolesEl)) yield return new Claim(ClaimTypes.Role, r);
@@ -75,7 +75,7 @@ public class JwtAuthStateProvider : AuthenticationStateProvider
     {
         if (el.ValueKind == JsonValueKind.Array)
             foreach (var i in el.EnumerateArray()) if (i.ValueKind == JsonValueKind.String) yield return i.GetString()!;
-        else if (el.ValueKind == JsonValueKind.String) yield return el.GetString()!;
+                else if (el.ValueKind == JsonValueKind.String) yield return el.GetString()!;
     }
 
     private static byte[] Base64UrlDecode(string s)
