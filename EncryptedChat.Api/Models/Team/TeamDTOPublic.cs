@@ -16,10 +16,4 @@ public class TeamDTOPublic
     [Required]
     [MaxLength(100)]
     public string Slug { get; set; } = string.Empty;
-
-    [Required]
-    public DateTime CreatedAt { get; set; }
-
-    [Required]
-    public DateTime ModifiedAt { get; set; }
 }

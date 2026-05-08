@@ -31,19 +31,15 @@ public class TeamControllerTests
             [
                 new MemberDTOPublic
                 {
-                    Id = Guid.NewGuid(),
                     User = new UserDTOPublic { Id = adminId },
                     Role = Member.AdminRole
                 },
                 new MemberDTOPublic
                 {
-                    Id = Guid.NewGuid(),
                     User = new UserDTOPublic { Id = memberId },
                     Role = Member.MemberRole
                 }
-            ],
-            CreatedAt = DateTime.UtcNow,
-            ModifiedAt = DateTime.UtcNow
+            ]
         };
 
         mockTeamService

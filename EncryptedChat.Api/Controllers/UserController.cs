@@ -2,103 +2,96 @@ using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Security.Claims;
 
-namespace EncryptedChat.Controllers
+namespace EncryptedChat.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class UserController(IUserService userService) : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "User")]
-    public class UserController : ControllerBase
+    private readonly IUserService _service = userService;
+
+    private string? GetCurrentUserId() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMe()
     {
-        private readonly UserService _service;
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
 
-        public UserController(UserService service)
-        {
-            _service = service;
-        }
-
-        /// GET: api/User
-        /// GET: api/User?id=5
-        /// GET: api/User?email=email@example.com
-        [HttpGet]
-        public ActionResult<IEnumerable<UserDTOPublic>> GetUsers(
-            [FromQuery] string? id,
-            [FromQuery] string? email)
-        {
-            // No filters -> return all users to any "User"
-            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email))
-            {
-                return Ok(_service.GetAll());
-            }
-
-            // Filter by id or email
-            var user = _service.Search(id, email);
-            if (user == null)
-                return NotFound();
-
-            return Ok(new[] { user });
-        }
-
-        /// GET: api/User/{id}/messages
-        [HttpGet("{id}/messages")]
-        public ActionResult<IEnumerable<MessageDTO>> GetMessages(string id)
-        {
-            var user = _service.GetById(id);
-            if (user == null)
-                return NotFound();
-
-            var messages = _service.GetUserMessages(id);
-            if (messages == null)
-                return NotFound();
-
-            return Ok(messages);
-        }
-
-        /// GET: api/User/{id}/teams
-        [HttpGet("{id}/teams")]
-        public async Task<ActionResult<IEnumerable<TeamDTOPublic>>> GetTeams(string id)
-        {
-            var user = _service.GetById(id);
-            if (user == null)
-                return NotFound();
-
-            var teams = await _service.GetUserTeamsAsync(id);
-            if (teams == null || teams.Count == 0)
-                return NotFound();
-
-            return Ok(teams);
-        }
-
-        /// PUT: api/User/{id}
-        [HttpPut("{id}")]
-        public IActionResult PutUser(string id, UserDTO user)
-        {
-            var userToUpdate = _service.GetById(id);
-
-            if (userToUpdate is not null)
-            {
-                _service.Update(id, user);
-                return NoContent();
-            }
-
+        UserProfileDTO? user = await _service.GetOwnProfileAsync(userId);
+        if (user == null)
             return NotFound();
-        }
 
-        /// DELETE: api/User/{id}
-        [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
-        public IActionResult DeleteUser(string id)
+        return Ok(user);
+    }
+
+    [HttpPatch("me")]
+    public async Task<IActionResult> UpdateMe([FromBody] UserUpdateDTO dto)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        UserUpdateResult result = await _service.UpdateAsync(userId, userId, dto);
+
+        return result.Status switch
         {
-            var userToDelete = _service.GetById(id);
+            UserOperationStatus.Success => Ok(result.User),
+            UserOperationStatus.NotFound => NotFound(),
+            UserOperationStatus.Conflict => Conflict(new { Message = "Name or email already in use" }),
+            UserOperationStatus.Forbidden => Forbid(),
+            UserOperationStatus.ValidationFailed => BadRequest(new { Message = "Invalid request" }),
+            _ => BadRequest()
+        };
+    }
 
-            if (userToDelete is not null)
-            {
-                _service.Delete(id);
-                return NoContent();
-            }
+    [HttpGet("me/teams")]
+    public async Task<IActionResult> GetMyTeams([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
 
+        IReadOnlyList<UserTeamDTO> teams = await _service.GetUserTeamsAsync(userId, userId, page, pageSize);
+        return Ok(teams);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetUser(string id)
+    {
+        string? requesterId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(requesterId))
+            return Unauthorized();
+
+        UserDTOPublic? user = await _service.GetUserAsync(id, requesterId);
+        if (user == null)
             return NotFound();
-        }
+
+        return Ok(user);
+    }
+
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteUser(string id)
+    {
+        string? currentUserId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            return Unauthorized();
+
+        UserDeleteResult result = await _service.DeleteAsync(id, currentUserId);
+
+        return result.Status switch
+        {
+            UserOperationStatus.Success => NoContent(),
+            UserOperationStatus.NotFound => NotFound(),
+            UserOperationStatus.Forbidden => Forbid(),
+            UserOperationStatus.ValidationFailed => BadRequest(new { Message = "Cannot delete this user" }),
+            _ => BadRequest()
+        };
     }
 }

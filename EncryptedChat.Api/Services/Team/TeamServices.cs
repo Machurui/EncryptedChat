@@ -334,13 +334,11 @@ public class TeamService : ITeamService
         {
             Id = user.Id,
             Name = user.Name,
-            Email = user.Email,
             Level = user.Level
         };
 
         static MemberDTOPublic MapMember(Member member) => new()
         {
-            Id = member.Id,
             User = member.User is null ? null : MapUser(member.User),
             Role = member.Role
         };
@@ -350,9 +348,7 @@ public class TeamService : ITeamService
             Id = team.Id,
             Name = team.Name,
             Slug = team.Slug,
-            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)],
-            CreatedAt = team.CreatedAt,
-            ModifiedAt = team.ModifiedAt
+            Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)]
         };
     }
 

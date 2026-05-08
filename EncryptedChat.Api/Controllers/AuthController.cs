@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
@@ -56,33 +57,6 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(new { Message = "Logged out" });
     }
 
-    [HttpGet("me")]
-    [Authorize]
-    public IActionResult Me()
-    {
-        string? userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        string? name = User.FindFirst("name")?.Value ?? User.Identity?.Name;
-        List<string> roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-
-        return Ok(new
-        {
-            userId,
-            name,
-            roles,
-            isAuthenticated = true
-        });
-    }
-
-    [HttpGet("signalr-token")]
-    [Authorize]
-    public IActionResult GetSignalRToken()
-    {
-        if (Request.Cookies.TryGetValue("ec.accessToken", out string? token))
-            return Ok(new { token });
-
-        return Unauthorized(new { Message = "No valid session" });
-    }
-
     public record RefreshRequest(string? RefreshToken);
 
     [HttpPost("refresh")]
@@ -121,7 +95,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     }
 
     [HttpPost("resend-confirmation-email")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
     {
         throw new NotImplementedException();
