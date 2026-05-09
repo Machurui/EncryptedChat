@@ -6,8 +6,7 @@ namespace EncryptedChat.Models;
 public class Message
 {
     [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required]
     public string EncryptedText { get; set; } = string.Empty;
@@ -28,4 +27,6 @@ public class Message
 
     [Required]
     public DateTime Date { get; set; } = DateTime.UtcNow;
+
+    public ICollection<Attachment> Attachments { get; set; } = [];
 }

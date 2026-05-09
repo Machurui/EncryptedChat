@@ -36,7 +36,7 @@ public class MessageController(IMessageService messageService, ITeamService team
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetMessage(int id)
+    public async Task<IActionResult> GetMessage(Guid id)
     {
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))
@@ -67,11 +67,10 @@ public class MessageController(IMessageService messageService, ITeamService team
         MessageDTO messageDto = new()
         {
             Text = dto.Text,
-            Sender = userId,
             Team = dto.Team
         };
 
-        MessageDTOPublic? message = await _messageService.CreateAsync(messageDto);
+        MessageDTOPublic? message = await _messageService.CreateAsync(messageDto, userId);
         if (message is null)
             return BadRequest(new { Message = "Invalid request" });
 
@@ -79,23 +78,16 @@ public class MessageController(IMessageService messageService, ITeamService team
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteMessage(int id)
+    public async Task<IActionResult> DeleteMessage(Guid id)
     {
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        MessageDTOPublic? message = await _messageService.GetByIdAsync(id);
-        if (message is null)
+        MessageDTOPublic? deleted = await _messageService.DeleteAsync(id, userId);
+        if (deleted is null)
             return NotFound();
 
-        bool isAdmin = await _teamService.IsAdminAsync(userId, message.TeamId);
-        bool isOwner = message.Sender?.Id == userId;
-
-        if (!isAdmin && !isOwner)
-            return Forbid();
-
-        await _messageService.DeleteAsync(id);
         return NoContent();
     }
 }

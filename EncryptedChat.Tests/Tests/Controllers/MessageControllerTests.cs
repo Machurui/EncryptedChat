@@ -15,6 +15,7 @@ public class MessageControllerTests
     private readonly Mock<ITeamService> _mockTeamService;
     private readonly string _userId = Guid.NewGuid().ToString();
     private readonly Guid _teamId = Guid.NewGuid();
+    private readonly Guid _messageId = Guid.NewGuid();
 
     public MessageControllerTests()
     {
@@ -48,8 +49,8 @@ public class MessageControllerTests
     {
         var messages = new List<MessageDTOPublic>
         {
-            new() { Id = 1, Text = "Hello", TeamId = _teamId, Sender = new MessageSenderDTO { Id = _userId, Name = "User" } },
-            new() { Id = 2, Text = "World", TeamId = _teamId, Sender = new MessageSenderDTO { Id = _userId, Name = "User" } }
+            new() { Id = Guid.NewGuid(), Text = "Hello", TeamId = _teamId, Sender = new MessageSenderDTO { Id = _userId, Name = "User" } },
+            new() { Id = Guid.NewGuid(), Text = "World", TeamId = _teamId, Sender = new MessageSenderDTO { Id = _userId, Name = "User" } }
         };
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
@@ -67,7 +68,7 @@ public class MessageControllerTests
     {
         var messages = new List<MessageDTOPublic>
         {
-            new() { Id = 3, Text = "Page 2", TeamId = _teamId }
+            new() { Id = Guid.NewGuid(), Text = "Page 2", TeamId = _teamId }
         };
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
@@ -121,17 +122,17 @@ public class MessageControllerTests
     {
         var message = new MessageDTOPublic
         {
-            Id = 1,
+            Id = _messageId,
             Text = "Hello",
             TeamId = _teamId,
             Sender = new MessageSenderDTO { Id = _userId, Name = "User" }
         };
 
-        _mockMessageService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(message);
+        _mockMessageService.Setup(s => s.GetByIdAsync(_messageId)).ReturnsAsync(message);
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
 
         var controller = CreateController(_userId);
-        var result = await controller.GetMessage(1);
+        var result = await controller.GetMessage(_messageId);
 
         var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
         okResult.Value.Should().BeEquivalentTo(message);
@@ -141,7 +142,7 @@ public class MessageControllerTests
     public async Task GetMessage_ReturnsUnauthorized_WhenNoUserId()
     {
         var controller = CreateController(userId: null);
-        var result = await controller.GetMessage(1);
+        var result = await controller.GetMessage(_messageId);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -149,10 +150,11 @@ public class MessageControllerTests
     [Fact]
     public async Task GetMessage_ReturnsNotFound_WhenMessageDoesNotExist()
     {
-        _mockMessageService.Setup(s => s.GetByIdAsync(999)).ReturnsAsync((MessageDTOPublic?)null);
+        var nonExistentId = Guid.NewGuid();
+        _mockMessageService.Setup(s => s.GetByIdAsync(nonExistentId)).ReturnsAsync((MessageDTOPublic?)null);
 
         var controller = CreateController(_userId);
-        var result = await controller.GetMessage(999);
+        var result = await controller.GetMessage(nonExistentId);
 
         result.Should().BeOfType<NotFoundResult>();
     }
@@ -163,17 +165,17 @@ public class MessageControllerTests
         var otherTeamId = Guid.NewGuid();
         var message = new MessageDTOPublic
         {
-            Id = 1,
+            Id = _messageId,
             Text = "Secret",
             TeamId = otherTeamId,
             Sender = new MessageSenderDTO { Id = "other-user", Name = "Other" }
         };
 
-        _mockMessageService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(message);
+        _mockMessageService.Setup(s => s.GetByIdAsync(_messageId)).ReturnsAsync(message);
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, otherTeamId)).ReturnsAsync(false);
 
         var controller = CreateController(_userId);
-        var result = await controller.GetMessage(1);
+        var result = await controller.GetMessage(_messageId);
 
         result.Should().BeOfType<ForbidResult>();
     }
@@ -188,7 +190,7 @@ public class MessageControllerTests
         var createDto = new MessageCreateDTO { Text = "Hello team!", Team = _teamId };
         var createdMessage = new MessageDTOPublic
         {
-            Id = 1,
+            Id = _messageId,
             Text = "Hello team!",
             TeamId = _teamId,
             Sender = new MessageSenderDTO { Id = _userId, Name = "User" },
@@ -197,15 +199,15 @@ public class MessageControllerTests
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
         _mockMessageService.Setup(s => s.CreateAsync(It.Is<MessageDTO>(m =>
-            m.Text == "Hello team!" && m.Sender == _userId && m.Team == _teamId
-        ))).ReturnsAsync(createdMessage);
+            m.Text == "Hello team!" && m.Team == _teamId
+        ), _userId)).ReturnsAsync(createdMessage);
 
         var controller = CreateController(_userId);
         var result = await controller.PostMessage(createDto);
 
         var createdResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
         createdResult.ActionName.Should().Be(nameof(MessageController.GetMessage));
-        createdResult.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(1);
+        createdResult.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(_messageId);
         createdResult.Value.Should().BeEquivalentTo(createdMessage);
     }
 
@@ -239,7 +241,7 @@ public class MessageControllerTests
         var createDto = new MessageCreateDTO { Text = "", Team = _teamId };
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
-        _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>())).ReturnsAsync((MessageDTOPublic?)null);
+        _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>(), _userId)).ReturnsAsync((MessageDTOPublic?)null);
 
         var controller = CreateController(_userId);
         var result = await controller.PostMessage(createDto);
@@ -251,18 +253,17 @@ public class MessageControllerTests
     public async Task PostMessage_UsesSenderFromJwt_NotFromClient()
     {
         var createDto = new MessageCreateDTO { Text = "Hello", Team = _teamId };
-        MessageDTO? capturedDto = null;
+        string? capturedSenderId = null;
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
-        _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>()))
-            .Callback<MessageDTO>(dto => capturedDto = dto)
-            .ReturnsAsync(new MessageDTOPublic { Id = 1, Text = "Hello", TeamId = _teamId });
+        _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>(), It.IsAny<string>()))
+            .Callback<MessageDTO, string>((dto, senderId) => capturedSenderId = senderId)
+            .ReturnsAsync(new MessageDTOPublic { Id = _messageId, Text = "Hello", TeamId = _teamId });
 
         var controller = CreateController(_userId);
         await controller.PostMessage(createDto);
 
-        capturedDto.Should().NotBeNull();
-        capturedDto!.Sender.Should().Be(_userId);
+        capturedSenderId.Should().Be(_userId);
     }
 
     #endregion
@@ -270,44 +271,20 @@ public class MessageControllerTests
     #region DeleteMessage
 
     [Fact]
-    public async Task DeleteMessage_ReturnsNoContent_WhenOwnerDeletes()
+    public async Task DeleteMessage_ReturnsNoContent_WhenServiceSucceeds()
     {
         var message = new MessageDTOPublic
         {
-            Id = 1,
+            Id = _messageId,
             Text = "My message",
             TeamId = _teamId,
             Sender = new MessageSenderDTO { Id = _userId, Name = "User" }
         };
 
-        _mockMessageService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(message);
-        _mockTeamService.Setup(s => s.IsAdminAsync(_userId, _teamId)).ReturnsAsync(false);
-        _mockMessageService.Setup(s => s.DeleteAsync(1)).ReturnsAsync(message);
+        _mockMessageService.Setup(s => s.DeleteAsync(_messageId, _userId)).ReturnsAsync(message);
 
         var controller = CreateController(_userId);
-        var result = await controller.DeleteMessage(1);
-
-        result.Should().BeOfType<NoContentResult>();
-    }
-
-    [Fact]
-    public async Task DeleteMessage_ReturnsNoContent_WhenAdminDeletes()
-    {
-        var otherUserId = Guid.NewGuid().ToString();
-        var message = new MessageDTOPublic
-        {
-            Id = 1,
-            Text = "Other's message",
-            TeamId = _teamId,
-            Sender = new MessageSenderDTO { Id = otherUserId, Name = "Other" }
-        };
-
-        _mockMessageService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(message);
-        _mockTeamService.Setup(s => s.IsAdminAsync(_userId, _teamId)).ReturnsAsync(true);
-        _mockMessageService.Setup(s => s.DeleteAsync(1)).ReturnsAsync(message);
-
-        var controller = CreateController(_userId);
-        var result = await controller.DeleteMessage(1);
+        var result = await controller.DeleteMessage(_messageId);
 
         result.Should().BeOfType<NoContentResult>();
     }
@@ -316,63 +293,20 @@ public class MessageControllerTests
     public async Task DeleteMessage_ReturnsUnauthorized_WhenNoUserId()
     {
         var controller = CreateController(userId: null);
-        var result = await controller.DeleteMessage(1);
+        var result = await controller.DeleteMessage(_messageId);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
-    public async Task DeleteMessage_ReturnsNotFound_WhenMessageDoesNotExist()
+    public async Task DeleteMessage_ReturnsNotFound_WhenServiceReturnsNull()
     {
-        _mockMessageService.Setup(s => s.GetByIdAsync(999)).ReturnsAsync((MessageDTOPublic?)null);
+        _mockMessageService.Setup(s => s.DeleteAsync(_messageId, _userId)).ReturnsAsync((MessageDTOPublic?)null);
 
         var controller = CreateController(_userId);
-        var result = await controller.DeleteMessage(999);
+        var result = await controller.DeleteMessage(_messageId);
 
         result.Should().BeOfType<NotFoundResult>();
-    }
-
-    [Fact]
-    public async Task DeleteMessage_ReturnsForbid_WhenNotOwnerNorAdmin()
-    {
-        var otherUserId = Guid.NewGuid().ToString();
-        var message = new MessageDTOPublic
-        {
-            Id = 1,
-            Text = "Other's message",
-            TeamId = _teamId,
-            Sender = new MessageSenderDTO { Id = otherUserId, Name = "Other" }
-        };
-
-        _mockMessageService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(message);
-        _mockTeamService.Setup(s => s.IsAdminAsync(_userId, _teamId)).ReturnsAsync(false);
-
-        var controller = CreateController(_userId);
-        var result = await controller.DeleteMessage(1);
-
-        result.Should().BeOfType<ForbidResult>();
-    }
-
-    [Fact]
-    public async Task DeleteMessage_ReturnsForbid_WhenMemberButNotOwnerNorAdmin()
-    {
-        var otherUserId = Guid.NewGuid().ToString();
-        var message = new MessageDTOPublic
-        {
-            Id = 1,
-            Text = "Other's message",
-            TeamId = _teamId,
-            Sender = new MessageSenderDTO { Id = otherUserId, Name = "Other" }
-        };
-
-        _mockMessageService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(message);
-        _mockTeamService.Setup(s => s.IsAdminAsync(_userId, _teamId)).ReturnsAsync(false);
-        _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
-
-        var controller = CreateController(_userId);
-        var result = await controller.DeleteMessage(1);
-
-        result.Should().BeOfType<ForbidResult>();
     }
 
     #endregion

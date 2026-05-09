@@ -11,24 +11,24 @@ namespace EncryptedChat.Services
 
         Task<TeamDTOPublic?> GetByIdAsync(Guid id);
 
-        Task<TeamDTOPublic?> CreateAsync(TeamDTO team);
+        Task<TeamDTOPublic?> CreateAsync(TeamDTO team, string creatorId);
 
-        Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team);
+        Task<TeamDTOPublic?> UpdateAsync(Guid id, TeamDTO team, string actorId);
 
-        Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name);
+        Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name, string actorId);
 
-        Task<TeamDTOPublic?> DeleteAsync(Guid id);
+        Task<TeamDTOPublic?> DeleteAsync(Guid id, string actorId);
 
         Task<bool> IsAdminAsync(string userId, Guid teamId);
 
         Task<bool> IsMemberAsync(string userId, Guid teamId);
 
-        Task<bool> AddMemberAsync(Guid teamId, string userId);
+        Task<bool> AddMemberAsync(Guid teamId, string userId, string actorId);
 
-        Task<bool> RemoveMemberAsync(Guid teamId, string userId);
+        Task<bool> RemoveMemberAsync(Guid teamId, string userId, string actorId);
 
-        Task<bool> PromoteToAdminAsync(Guid teamId, string userId);
+        Task<bool> PromoteToAdminAsync(Guid teamId, string userId, string actorId);
 
-        Task<bool> DemoteFromAdminAsync(Guid teamId, string userId);
+        Task<bool> DemoteFromAdminAsync(Guid teamId, string userId, string actorId);
     }
 }

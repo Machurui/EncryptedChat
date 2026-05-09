@@ -14,6 +14,7 @@ public class ChatClient
         public TeamClient.UserDTOPublic? Sender { get; set; }
         public TeamClient.TeamDTOPublic? Team { get; set; }
         public DateTime Date { get; set; }
+        public List<AttachmentClient.AttachmentDTOPublic>? Attachments { get; set; }
     }
 
     public ChatClient(HttpClient http)

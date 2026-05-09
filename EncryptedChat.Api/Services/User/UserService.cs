@@ -24,7 +24,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             Id = user.Id,
             Name = user.Name,
-            Email = user.Email,
+            Email = user.Email ?? string.Empty,
             Level = user.Level
         };
     }
@@ -170,7 +170,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             Id = user.Id,
             Name = user.Name,
-            Email = user.Email,
+            Email = user.Email ?? string.Empty,
             Level = user.Level
         });
     }

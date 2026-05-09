@@ -7,9 +7,11 @@ public class RefreshToken
     public Guid Id { get; set; }
 
     [Required]
+    [MaxLength(128)]
     public string Token { get; set; } = string.Empty;
 
     [Required]
+    [MaxLength(450)]
     public string UserId { get; set; } = string.Empty;
 
     public User? User { get; set; }
