@@ -9,8 +9,8 @@ public class AttachmentClient(HttpClient http)
 
     public class AttachmentDTOPublic
     {
-        public int Id { get; set; }
-        public int MessageId { get; set; }
+        public Guid Id { get; set; }
+        public Guid MessageId { get; set; }
         public string FileName { get; set; } = string.Empty;
         public string MimeType { get; set; } = string.Empty;
         public long Size { get; set; }
@@ -38,7 +38,7 @@ public class AttachmentClient(HttpClient http)
     }
 
     public async Task<Result<AttachmentDTOPublic>> UploadAsync(
-        int messageId,
+        Guid messageId,
         Stream fileStream,
         string fileName,
         string contentType)
@@ -65,7 +65,7 @@ public class AttachmentClient(HttpClient http)
         return Result<AttachmentDTOPublic>.Ok(attachment);
     }
 
-    public async Task<Result<AttachmentDTOPublic>> GetMetadataAsync(int attachmentId)
+    public async Task<Result<AttachmentDTOPublic>> GetMetadataAsync(Guid attachmentId)
     {
         HttpResponseMessage res = await _http.GetAsync($"api/attachment/{attachmentId}");
         string body = await res.Content.ReadAsStringAsync();
@@ -82,12 +82,12 @@ public class AttachmentClient(HttpClient http)
         return Result<AttachmentDTOPublic>.Ok(attachment);
     }
 
-    public string GetDownloadUrl(int attachmentId)
+    public string GetDownloadUrl(Guid attachmentId)
     {
         return $"api/attachment/{attachmentId}/download";
     }
 
-    public async Task<Result> DeleteAsync(int attachmentId)
+    public async Task<Result> DeleteAsync(Guid attachmentId)
     {
         HttpResponseMessage res = await _http.DeleteAsync($"api/attachment/{attachmentId}");
 

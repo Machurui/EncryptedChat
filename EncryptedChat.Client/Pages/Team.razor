@@ -1,19 +1,15 @@
 @page "/Team"
+@attribute [Authorize]
 
 @using System.ComponentModel.DataAnnotations
-@using System.Diagnostics
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
-@using Microsoft.AspNetCore.SignalR.Client
 @using EncryptedChat.Client.Services
 
 @inject AuthenticationStateProvider AuthStateProvider
 @inject TeamClient TeamClient
-@inject ChatClient ChatClient
-@inject AttachmentClient AttachmentClient
-@inject AuthClient AuthClient
 @inject NavigationManager Navigation
-@inject HttpClient Http
 
 <section>
     <div class="relative grid place-items-center px-6 py-10 mx-auto min-h-[60svh] md:min-h-[65svh] lg:min-h-[70svh]">
@@ -26,24 +22,27 @@
                 <div class="liquid-glass-shine" aria-hidden="true"></div>
 
                 <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
-                    <h1
-                        class="flex justify-center text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
-                        Teams
+                    <h1 class="flex justify-center text-xl font-bold leading-tight tracking-tight text-white md:text-2xl">
+                        My Teams
                     </h1>
 
-                    <button type="button" class="glass-button-primary w-full justify-center"
-                        @onclick="OpenNewChatModal">
-                        <span>New Team</span>
+                    <button type="button" class="glass-button-primary w-full justify-center cursor-pointer"
+                        @onclick="OpenNewTeamModal">
+                        <span>+ New Team</span>
                     </button>
 
                     @if (!string.IsNullOrEmpty(errorMessage))
                     {
-                        <p class="mt-2 text-sm text-red-400">@errorMessage</p>
+                        <p class="text-sm text-red-400">@errorMessage</p>
                     }
 
                     <!-- Teams list -->
-                    <div class="mt-6 max-h-64 md:max-h-80 overflow-y-auto space-y-3 pr-1">
-                        @if (!teams.Any())
+                    <div class="mt-4 space-y-3 pr-1" style="max-height: 50vh; overflow-y: auto;">
+                        @if (isLoading)
+                        {
+                            <p class="text-sm text-gray-300 text-center">Loading...</p>
+                        }
+                        else if (!teams.Any())
                         {
                             <p class="text-sm text-gray-300 text-center">
                                 No teams yet. Click "New Team" to create one.
@@ -54,208 +53,69 @@
                             @foreach (var team in teams)
                             {
                                 <button type="button"
-                                    class="w-full text-left rounded-xl p-3 bg-black/20 border border-white/5 hover:bg-white/5 transition"
-                                    @onclick="() => SelectTeam(team)">
+                                    class="w-full text-left rounded-xl p-4 bg-black/20 border border-white/5 hover:bg-white/10 transition group cursor-pointer"
+                                    @onclick="() => OpenTeam(team.Id)">
                                     <div class="flex justify-between items-center">
                                         <div>
-                                            <h2 class="font-semibold text-white">@team.Name</h2>
-                                            <p class="text-xs text-gray-300 mt-1">
-                                                <span class="font-semibold">Admins: </span>
-                                                @if (team.Admins != null && team.Admins.Any())
-                                                {
-                                                    @string.Join(", ", team.Admins.Select(a => a.Name))
-                                                }
-                                                else
-                                                {
-                                                    <span class="italic text-gray-400">None</span>
-                                                }
+                                            <h2 class="font-semibold text-white group-hover:text-blue-300 transition">
+                                                @team.Name
+                                            </h2>
+                                            <p class="text-xs text-gray-400 mt-1">
+                                                <span class="@(team.Role == "Admin" ? "text-yellow-400" : "text-gray-400")">
+                                                    @team.Role
+                                                </span>
                                             </p>
                                         </div>
+                                        <span class="text-gray-500 group-hover:text-white transition">&rarr;</span>
                                     </div>
                                 </button>
                             }
                         }
                     </div>
-
-                    <!-- Chat panel for selected team -->
-                    @if (selectedTeam != null)
-                    {
-                        <div class="mt-6 border-t border-white/10 pt-4 space-y-3">
-                            <h2 class="text-sm font-semibold text-white">
-                                Chat – @selectedTeam.Name
-                            </h2>
-
-                            <!-- Messages -->
-                            <div
-                                class="max-h-72 overflow-y-auto space-y-2 pr-1 bg-black/30 rounded-xl p-3 border border-white/5">
-                                @if (isLoadingMessages)
-                                {
-                                    <p class="text-xs text-gray-400">Loading messages...</p>
-                                }
-                                else if (!messages.Any())
-                                {
-                                    <p class="text-xs text-gray-400 italic">No messages yet. Start the conversation.</p>
-                                }
-                                else
-                                {
-                                    @foreach (var msg in messages)
-                                    {
-                                        <div class="text-xs text-gray-200">
-                                            <span class="font-semibold">@msg.Sender?.Name</span>
-                                            <span class="text-[10px] text-gray-400 ml-1">
-                                                @msg.Date.ToLocalTime().ToString("HH:mm")
-                                            </span>
-                                            <div class="ml-2 text-gray-100">
-                                                @msg.Text
-                                            </div>
-                                            @if (msg.Attachments?.Any() == true)
-                                            {
-                                                <div class="ml-2 mt-1 flex flex-wrap gap-2">
-                                                    @foreach (var att in msg.Attachments)
-                                                    {
-                                                        @if (att.MimeType.StartsWith("image/"))
-                                                        {
-                                                            <a href="@GetAttachmentUrl(att.Id)" target="_blank"
-                                                                class="block max-w-[200px]">
-                                                                <img src="@GetAttachmentUrl(att.Id)"
-                                                                    alt="@att.FileName"
-                                                                    class="rounded-lg max-h-32 object-cover border border-white/10" />
-                                                            </a>
-                                                        }
-                                                        else
-                                                        {
-                                                            <a href="@GetAttachmentUrl(att.Id)" target="_blank"
-                                                                class="flex items-center gap-1 px-2 py-1 bg-white/10 rounded text-[10px] text-blue-300 hover:bg-white/20">
-                                                                <span>📎</span>
-                                                                <span>@att.FileName</span>
-                                                                <span class="text-gray-400">(@FormatFileSize(att.Size))</span>
-                                                            </a>
-                                                        }
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                }
-                            </div>
-
-                            <!-- Selected files preview -->
-                            @if (selectedFiles.Any())
-                            {
-                                <div class="flex flex-wrap gap-2 p-2 bg-black/20 rounded-lg border border-white/10">
-                                    @foreach (var file in selectedFiles)
-                                    {
-                                        <div class="relative group">
-                                            @if (file.ContentType.StartsWith("image/"))
-                                            {
-                                                <img src="@file.PreviewUrl" alt="@file.Name"
-                                                    class="h-16 w-16 object-cover rounded-lg border border-white/10" />
-                                            }
-                                            else
-                                            {
-                                                <div class="h-16 w-16 flex items-center justify-center bg-white/10 rounded-lg border border-white/10">
-                                                    <span class="text-2xl">📎</span>
-                                                </div>
-                                            }
-                                            <button type="button"
-                                                class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                                                @onclick="() => RemoveSelectedFile(file)">
-                                                ✕
-                                            </button>
-                                            <div class="text-[9px] text-gray-400 truncate w-16 text-center mt-1">
-                                                @file.Name
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                            }
-
-                            <!-- Input -->
-                            <div class="flex items-center gap-2">
-                                <label class="cursor-pointer px-2 py-2 bg-black/40 border border-white/10 rounded-lg hover:bg-white/10 transition">
-                                    <span class="text-lg">📎</span>
-                                    <InputFile OnChange="OnFilesSelected" multiple class="hidden" />
-                                </label>
-
-                                <input
-                                    class="flex-1 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-sm text-white"
-                                    placeholder="Type a message..." @bind="newMessageText" @bind:event="oninput" />
-
-                                <button type="button" class="glass-button-primary px-3 py-2 text-sm"
-                                    @onclick="SendMessageAsync" disabled="@(isSending || (string.IsNullOrWhiteSpace(newMessageText) && !selectedFiles.Any()))">
-                                    @if (isSending)
-                                    {
-                                        <span>...</span>
-                                    }
-                                    else
-                                    {
-                                        <span>Send</span>
-                                    }
-                                </button>
-                            </div>
-
-                            @if (!string.IsNullOrEmpty(uploadError))
-                            {
-                                <p class="text-xs text-red-400">@uploadError</p>
-                            }
-                        </div>
-                    }
                 </div>
             </div>
         </div>
     </div>
 
     <!-- New Team Modal -->
-    @if (isNewChatModalOpen)
+    @if (isNewTeamModalOpen)
     {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
             <div class="liquid-glass-wrapper rounded-3xl shadow-2xl w-full max-w-lg mx-4"
-                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05); box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;">
+                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05);">
 
                 <div class="liquid-glass-effect" aria-hidden="true"></div>
                 <div class="liquid-glass-tint" aria-hidden="true"></div>
                 <div class="liquid-glass-shine" aria-hidden="true"></div>
 
-                <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
+                <div class="liquid-glass-content p-6 space-y-4 sm:p-8">
                     <div class="flex items-center justify-between mb-2">
-                        <h2 class="text-lg font-semibold text-white">
-                            Create New Team
-                        </h2>
-                        <button type="button" class="text-gray-400 hover:text-gray-200" @onclick="CloseNewChatModal">
-                            ✕
+                        <h2 class="text-lg font-semibold text-white">Create New Team</h2>
+                        <button type="button" class="text-gray-400 hover:text-gray-200 cursor-pointer" @onclick="CloseNewTeamModal">
+                            &times;
                         </button>
                     </div>
 
                     <EditForm Model="@teamModel" OnValidSubmit="@HandleNewTeam">
                         <DataAnnotationsValidator />
-                        <ValidationSummary />
 
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-200 mb-1">
-                                    Team Name
-                                </label>
+                                <label class="block text-sm font-medium text-gray-200 mb-1">Team Name</label>
                                 <InputText class="w-full rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-white"
                                     @bind-Value="teamModel.Name" />
-                                <ValidationMessage For="() => teamModel.Name" />
+                                <ValidationMessage For="() => teamModel.Name" class="text-xs text-red-400" />
                             </div>
 
                             <div class="flex justify-end gap-3 mt-4">
                                 <button type="button"
-                                    class="px-4 py-2 rounded-lg border border-white/10 bg-black/30 text-sm text-gray-200"
-                                    @onclick="CloseNewChatModal" disabled="@isSubmitting">
+                                    class="px-4 py-2 rounded-lg border border-white/10 bg-black/30 text-sm text-gray-200 cursor-pointer hover:bg-black/50"
+                                    @onclick="CloseNewTeamModal" disabled="@isSubmitting">
                                     Cancel
                                 </button>
-                                <button type="submit" class="glass-button-primary px-4 py-2 text-sm"
+                                <button type="submit" class="glass-button-primary px-4 py-2 text-sm cursor-pointer"
                                     disabled="@isSubmitting">
-                                    @if (isSubmitting)
-                                    {
-                                        <span>Creating...</span>
-                                    }
-                                    else
-                                    {
-                                        <span>Create Team</span>
-                                    }
+                                    @(isSubmitting ? "Creating..." : "Create Team")
                                 </button>
                             </div>
                         </div>
@@ -267,47 +127,23 @@
 </section>
 
 @code {
-    private TeamModel teamModel = new();
-
     private string? _userId;
     private string? errorMessage;
-    private bool isNewChatModalOpen;
+    private bool isLoading;
+    private bool isNewTeamModalOpen;
     private bool isSubmitting;
 
-    private HubConnection? hubConnection;
-
-    private TeamClient.TeamDTOPublic? selectedTeam;
-    private List<ChatClient.MessageDTOPublic> messages = new();
-    private string newMessageText = string.Empty;
-    private bool isLoadingMessages;
-    private bool isSending;
-    private string? uploadError;
-
     private List<TeamClient.TeamDTOPublic> teams = new();
-
-    private List<SelectedFile> selectedFiles = new();
-    private const long MaxFileSize = 25 * 1024 * 1024;
-
-    private class SelectedFile
-    {
-        public string Name { get; set; } = string.Empty;
-        public string ContentType { get; set; } = string.Empty;
-        public long Size { get; set; }
-        public IBrowserFile BrowserFile { get; set; } = null!;
-        public string? PreviewUrl { get; set; }
-    }
+    private TeamModel teamModel = new();
 
     protected override async Task OnInitializedAsync()
     {
-        errorMessage = null;
-        teams.Clear();
-
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
         if (user?.Identity is null || !user.Identity.IsAuthenticated)
         {
-            errorMessage = "You must be logged in.";
+            Navigation.NavigateTo("/Login");
             return;
         }
 
@@ -315,282 +151,51 @@
 
         if (string.IsNullOrWhiteSpace(_userId))
         {
-            errorMessage = "Could not determine your user id from the token.";
+            errorMessage = "Could not determine your user id.";
             return;
         }
 
         await LoadTeamsAsync();
-        await SetupHubAsync();
     }
 
     private async Task LoadTeamsAsync()
     {
-        if (string.IsNullOrWhiteSpace(_userId))
-        {
-            errorMessage = "Cannot load teams: user id is missing.";
-            return;
-        }
+        isLoading = true;
+        errorMessage = null;
 
         try
         {
-            var result = await TeamClient.GetTeamsByUserAsync(_userId);
-
-            if (!result.Success)
+            var result = await TeamClient.GetTeamsByUserAsync(_userId!);
+            if (result.Success)
+            {
+                teams = result.Value ?? [];
+            }
+            else
             {
                 errorMessage = result.ErrorMessage;
-                return;
             }
-
-            teams = result.Value ?? new List<TeamClient.TeamDTOPublic>();
-        }
-        catch (Exception ex)
-        {
-            errorMessage ??= $"Failed to load teams: {ex.Message}";
-        }
-    }
-
-    private async Task SetupHubAsync()
-{
-    try
-    {
-        // Get SignalR token from API (protected by cookie auth)
-        var signalRToken = await AuthClient.GetSignalRTokenAsync();
-        if (string.IsNullOrEmpty(signalRToken))
-        {
-            errorMessage = "Could not authenticate for chat.";
-            return;
-        }
-
-        var hubUrl = "https://localhost:7294/hubs/chat";
-
-        hubConnection = new HubConnectionBuilder()
-            .WithUrl(hubUrl, options =>
-            {
-                options.AccessTokenProvider = () => Task.FromResult<string?>(signalRToken);
-            })
-            .WithAutomaticReconnect()
-            .Build();
-
-        hubConnection.On<ChatClient.MessageDTOPublic>("ReceiveMessage", message =>
-        {
-            if (selectedTeam != null && message.Team != null && message.Team.Id == selectedTeam.Id)
-            {
-                messages.Add(message);
-                InvokeAsync(StateHasChanged);
-            }
-        });
-
-        await hubConnection.StartAsync();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine("[SignalR] Failed to start hub connection: " + ex);
-        errorMessage = "Chat connection could not be established.";
-    }
-}
-
-    private async Task SelectTeam(TeamClient.TeamDTOPublic team)
-    {
-        // If connection is not active, try to start it once
-        if (hubConnection != null && hubConnection.State != HubConnectionState.Connected)
-        {
-            try
-            {
-                await hubConnection.StartAsync();
-            }
-            catch
-            {
-                errorMessage = "Chat connection is not available.";
-                selectedTeam = team;
-                messages.Clear();
-                await LoadMessagesAsync();
-                return;
-            }
-        }
-
-        if (hubConnection != null && selectedTeam != null)
-        {
-            await hubConnection.InvokeAsync("LeaveTeam", selectedTeam.Id);
-        }
-
-        selectedTeam = team;
-        messages.Clear();
-
-        if (hubConnection != null)
-        {
-            await hubConnection.InvokeAsync("JoinTeam", selectedTeam.Id);
-        }
-
-        await LoadMessagesAsync();
-    }
-
-    private async Task LoadMessagesAsync()
-    {
-        if (selectedTeam is null)
-            return;
-
-        try
-        {
-            isLoadingMessages = true;
-            var result = await ChatClient.GetMessagesByTeamAsync(selectedTeam.Id);
-
-            if (!result.Success)
-            {
-                errorMessage = result.ErrorMessage ?? "Failed to load messages.";
-                messages = new();
-                return;
-            }
-
-            messages = result.Value ?? new();
         }
         finally
         {
-            isLoadingMessages = false;
+            isLoading = false;
         }
     }
 
-    private async Task SendMessageAsync()
+    private void OpenTeam(Guid teamId)
     {
-        if (selectedTeam is null)
-            return;
-
-        var text = newMessageText?.Trim() ?? string.Empty;
-        var hasFiles = selectedFiles.Any();
-
-        if (string.IsNullOrWhiteSpace(text) && !hasFiles)
-            return;
-
-        isSending = true;
-        uploadError = null;
-
-        try
-        {
-            if (hubConnection == null || hubConnection.State != HubConnectionState.Connected)
-            {
-                try
-                {
-                    if (hubConnection != null)
-                        await hubConnection.StartAsync();
-                }
-                catch
-                {
-                    errorMessage = "Chat connection is not available.";
-                    return;
-                }
-            }
-
-            var messageText = string.IsNullOrWhiteSpace(text) ? " " : text;
-            await hubConnection!.InvokeAsync("SendMessageToTeam", selectedTeam.Id, messageText);
-
-            if (hasFiles && messages.Any())
-            {
-                var lastMessage = messages.Last();
-                foreach (var file in selectedFiles.ToList())
-                {
-                    try
-                    {
-                        using var stream = file.BrowserFile.OpenReadStream(MaxFileSize);
-                        using var ms = new MemoryStream();
-                        await stream.CopyToAsync(ms);
-                        ms.Position = 0;
-
-                        var result = await AttachmentClient.UploadAsync(
-                            lastMessage.Id,
-                            ms,
-                            file.Name,
-                            file.ContentType);
-
-                        if (!result.Success)
-                        {
-                            uploadError = $"Failed to upload {file.Name}: {result.ErrorMessage}";
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        uploadError = $"Error uploading {file.Name}: {ex.Message}";
-                    }
-                }
-
-                await LoadMessagesAsync();
-            }
-
-            newMessageText = string.Empty;
-            selectedFiles.Clear();
-        }
-        finally
-        {
-            isSending = false;
-        }
+        Navigation.NavigateTo($"/Team/{teamId}");
     }
 
-    private async Task OnFilesSelected(InputFileChangeEventArgs e)
-    {
-        uploadError = null;
-
-        foreach (var file in e.GetMultipleFiles(10))
-        {
-            if (file.Size > MaxFileSize)
-            {
-                uploadError = $"{file.Name} is too large (max 25 MB)";
-                continue;
-            }
-
-            var selectedFile = new SelectedFile
-            {
-                Name = file.Name,
-                ContentType = file.ContentType,
-                Size = file.Size,
-                BrowserFile = file
-            };
-
-            if (file.ContentType.StartsWith("image/"))
-            {
-                try
-                {
-                    var resized = await file.RequestImageFileAsync(file.ContentType, 200, 200);
-                    using var stream = resized.OpenReadStream(MaxFileSize);
-                    using var ms = new MemoryStream();
-                    await stream.CopyToAsync(ms);
-                    var base64 = Convert.ToBase64String(ms.ToArray());
-                    selectedFile.PreviewUrl = $"data:{file.ContentType};base64,{base64}";
-                }
-                catch
-                {
-                    selectedFile.PreviewUrl = null;
-                }
-            }
-
-            selectedFiles.Add(selectedFile);
-        }
-    }
-
-    private void RemoveSelectedFile(SelectedFile file)
-    {
-        selectedFiles.Remove(file);
-    }
-
-    private string GetAttachmentUrl(int attachmentId)
-    {
-        return $"https://localhost:7294/api/attachment/{attachmentId}/download";
-    }
-
-    private static string FormatFileSize(long bytes)
-    {
-        if (bytes < 1024) return $"{bytes} B";
-        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-        return $"{bytes / (1024.0 * 1024.0):F1} MB";
-    }
-
-    private void OpenNewChatModal()
+    private void OpenNewTeamModal()
     {
         errorMessage = null;
         teamModel = new TeamModel();
-        isNewChatModalOpen = true;
+        isNewTeamModalOpen = true;
     }
 
-    private void CloseNewChatModal()
+    private void CloseNewTeamModal()
     {
-        isNewChatModalOpen = false;
+        isNewTeamModalOpen = false;
     }
 
     private async Task HandleNewTeam()
@@ -605,7 +210,7 @@
 
         if (string.IsNullOrWhiteSpace(_userId))
         {
-            errorMessage = "Cannot create team: user id is missing.";
+            errorMessage = "User id is missing.";
             return;
         }
 
@@ -621,14 +226,13 @@
                 return;
             }
 
-            isNewChatModalOpen = false;
+            isNewTeamModalOpen = false;
             teamModel = new TeamModel();
-
             await LoadTeamsAsync();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Unexpected error while creating team: {ex.Message}";
+            errorMessage = $"Error: {ex.Message}";
         }
         finally
         {
@@ -638,7 +242,8 @@
 
     public class TeamModel
     {
-        [Required]
+        [Required(ErrorMessage = "Team name is required")]
+        [StringLength(100, MinimumLength = 1, ErrorMessage = "Name must be 1-100 characters")]
         public string Name { get; set; } = string.Empty;
     }
 }

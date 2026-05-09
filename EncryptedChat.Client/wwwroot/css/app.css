@@ -103,7 +103,6 @@ select:-webkit-autofill:focus {
     display: flex;
     overflow: hidden;
     transition: all .4s cubic-bezier(.175, .885, .32, 2.2);
-    cursor: pointer;
 }
 
 .glass-button {

@@ -1,0 +1,285 @@
+@page "/Friends"
+@attribute [Authorize]
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using EncryptedChat.Client.Services
+
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FriendClient FriendClient
+@inject NavigationManager Navigation
+
+<section>
+    <div class="relative grid place-items-center px-6 py-10 mx-auto min-h-[60svh] md:min-h-[65svh] lg:min-h-[70svh]">
+        <div class="flex flex-col items-center w-full sm:max-w-md md:mt-0">
+            <div class="liquid-glass-wrapper rounded-3xl shadow-2xl w-full"
+                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05); box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;">
+
+                <div class="liquid-glass-effect" aria-hidden="true"></div>
+                <div class="liquid-glass-tint" aria-hidden="true"></div>
+                <div class="liquid-glass-shine" aria-hidden="true"></div>
+
+                <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
+                    <h1 class="flex justify-center text-xl font-bold leading-tight tracking-tight text-white md:text-2xl">
+                        Friends
+                    </h1>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <p class="text-sm text-red-400">@errorMessage</p>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <p class="text-sm text-green-400">@successMessage</p>
+                    }
+
+                    <!-- Add Friend Section -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-200">Add Friend</label>
+                        <div class="flex gap-2">
+                            <input type="text" placeholder="Search by name or email..."
+                                class="flex-1 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-white text-sm"
+                                @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                        </div>
+
+                        @if (searchResults.Any())
+                        {
+                            <div class="max-h-32 overflow-y-auto bg-black/30 rounded-lg border border-white/10">
+                                @foreach (var user in searchResults)
+                                {
+                                    <button type="button"
+                                        class="w-full text-left px-3 py-2 hover:bg-white/10 text-sm text-gray-200 flex justify-between items-center cursor-pointer"
+                                        @onclick="() => SendFriendRequest(user.Id)">
+                                        <span>@user.Name</span>
+                                        <span class="text-xs text-blue-400">+ Send Request</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Pending Requests -->
+                    @if (pendingRequests.Any())
+                    {
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-200">Pending Requests</label>
+                            <div class="max-h-40 overflow-y-auto space-y-1">
+                                @foreach (var req in pendingRequests)
+                                {
+                                    <div class="flex justify-between items-center px-3 py-2 bg-black/20 rounded-lg">
+                                        <div>
+                                            <span class="text-sm text-white">@req.Name</span>
+                                            <span class="ml-2 text-xs @(req.IsIncoming ? "text-yellow-400" : "text-gray-400")">
+                                                @(req.IsIncoming ? "wants to be your friend" : "request sent")
+                                            </span>
+                                        </div>
+                                        @if (req.IsIncoming)
+                                        {
+                                            <div class="flex gap-2">
+                                                <button type="button"
+                                                    class="text-xs text-green-400 hover:text-green-300 cursor-pointer"
+                                                    @onclick="() => AcceptRequest(req.RequestId)">
+                                                    Accept
+                                                </button>
+                                                <button type="button"
+                                                    class="text-xs text-red-400 hover:text-red-300 cursor-pointer"
+                                                    @onclick="() => RejectRequest(req.RequestId)">
+                                                    Reject
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Friends List -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-200">Your Friends (@friends.Count)</label>
+                        @if (isLoading)
+                        {
+                            <p class="text-xs text-gray-400">Loading...</p>
+                        }
+                        else if (!friends.Any())
+                        {
+                            <p class="text-xs text-gray-400 italic">No friends yet. Search and send a request above.</p>
+                        }
+                        else
+                        {
+                            <div class="space-y-1" style="max-height: 35vh; overflow-y: auto;">
+                                @foreach (var friend in friends)
+                                {
+                                    <div class="flex justify-between items-center px-3 py-2 bg-black/20 rounded-lg">
+                                        <div>
+                                            <span class="text-sm text-white">@friend.Name</span>
+                                            <span class="ml-2 text-xs text-gray-400">
+                                                Level @friend.Level
+                                            </span>
+                                        </div>
+                                        <button type="button"
+                                            class="text-xs text-red-400 hover:text-red-300 cursor-pointer"
+                                            @onclick="() => RemoveFriend(friend.UserId)">
+                                            Remove
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private string? _userId;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isLoading;
+
+    private string searchQuery = string.Empty;
+    private List<FriendClient.UserDTO> searchResults = new();
+    private List<FriendClient.FriendDTO> friends = new();
+    private List<FriendClient.FriendRequestDTO> pendingRequests = new();
+
+    private System.Timers.Timer? searchDebounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/Login");
+            return;
+        }
+
+        _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var friendsResult = await FriendClient.GetFriendsAsync();
+            if (friendsResult.Success)
+                friends = friendsResult.Value ?? [];
+
+            var requestsResult = await FriendClient.GetPendingRequestsAsync();
+            if (requestsResult.Success)
+                pendingRequests = requestsResult.Value ?? [];
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+
+        searchDebounceTimer = new System.Timers.Timer(300);
+        searchDebounceTimer.Elapsed += async (s, args) =>
+        {
+            searchDebounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                await SearchUsers();
+                StateHasChanged();
+            });
+        };
+        searchDebounceTimer.AutoReset = false;
+        searchDebounceTimer.Start();
+    }
+
+    private async Task SearchUsers()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery) || searchQuery.Length < 2)
+        {
+            searchResults.Clear();
+            return;
+        }
+
+        var result = await FriendClient.SearchUsersToAddAsync(searchQuery);
+        if (result.Success && result.Value != null)
+        {
+            searchResults = result.Value;
+        }
+        else
+        {
+            searchResults.Clear();
+        }
+    }
+
+    private async Task SendFriendRequest(string userId)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var result = await FriendClient.SendRequestAsync(userId);
+        if (result.Success)
+        {
+            successMessage = "Friend request sent!";
+            searchQuery = string.Empty;
+            searchResults.Clear();
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+
+    private async Task AcceptRequest(Guid requestId)
+    {
+        errorMessage = null;
+        var result = await FriendClient.AcceptRequestAsync(requestId);
+        if (result.Success)
+        {
+            successMessage = "Friend request accepted!";
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+
+    private async Task RejectRequest(Guid requestId)
+    {
+        errorMessage = null;
+        var result = await FriendClient.RejectRequestAsync(requestId);
+        if (result.Success)
+        {
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+
+    private async Task RemoveFriend(string friendId)
+    {
+        errorMessage = null;
+        var result = await FriendClient.RemoveFriendAsync(friendId);
+        if (result.Success)
+        {
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

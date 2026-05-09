@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace EncryptedChat.Client.Services;
@@ -12,7 +13,9 @@ public class UserClient
     }
 
     // DTO match API
-    public record UserDTOPublic(string Id, string Name, string Email, int Level);
+    public record UserDTOPublic(string Id, string Name, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null);
+    public record UserProfileDTO(string Id, string Name, string Email, int Level, string NameColor, string? ProfileImageUrl);
+    public record UserUpdateDTO(string? Name, string? Email, string? NameColor, string? ProfileImageUrl);
 
     public class Result
     {
@@ -38,6 +41,56 @@ public class UserClient
             Success = false,
             ErrorMessage = msg
         };
+    }
+
+    // ---------- Get Profile ----------
+    public async Task<Result<UserProfileDTO>> GetProfileAsync()
+    {
+        try
+        {
+            var res = await _http.GetAsync("api/user/me");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<UserProfileDTO>.Fail(ParseMessage(body) ?? "Failed to load profile.");
+
+            var profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (profile == null)
+                return Result<UserProfileDTO>.Fail("Invalid response.");
+
+            return Result<UserProfileDTO>.Ok(profile);
+        }
+        catch (Exception)
+        {
+            return Result<UserProfileDTO>.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Update Profile ----------
+    public async Task<Result<UserProfileDTO>> UpdateProfileAsync(UserUpdateDTO dto)
+    {
+        try
+        {
+            var res = await _http.PatchAsJsonAsync("api/user/me", dto);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<UserProfileDTO>.Fail(ParseMessage(body) ?? "Failed to update profile.");
+
+            var profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (profile == null)
+                return Result<UserProfileDTO>.Fail("Invalid response.");
+
+            return Result<UserProfileDTO>.Ok(profile);
+        }
+        catch (Exception)
+        {
+            return Result<UserProfileDTO>.Fail("Unexpected error.");
+        }
     }
 
     // ---------- Get Users ----------
@@ -70,6 +123,31 @@ public class UserClient
         catch (Exception)
         {
             return Result<List<UserDTOPublic>>.Fail("Unexpected error while fetching users.");
+        }
+    }
+
+    // ---------- Search Users ----------
+    public async Task<Result<List<UserDTOPublic>>> SearchUsersAsync(string query, int limit = 10)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+                return Result<List<UserDTOPublic>>.Ok([]);
+
+            var res = await _http.GetAsync($"api/user/search?q={Uri.EscapeDataString(query)}&limit={limit}");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<List<UserDTOPublic>>.Fail(ParseMessage(body) ?? "Search failed.");
+
+            var users = JsonSerializer.Deserialize<List<UserDTOPublic>>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+
+            return Result<List<UserDTOPublic>>.Ok(users);
+        }
+        catch (Exception)
+        {
+            return Result<List<UserDTOPublic>>.Fail("Unexpected error.");
         }
     }
 

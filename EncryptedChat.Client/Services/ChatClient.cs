@@ -9,12 +9,18 @@ public class ChatClient
 
     public class MessageDTOPublic
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string? Text { get; set; }
-        public TeamClient.UserDTOPublic? Sender { get; set; }
-        public TeamClient.TeamDTOPublic? Team { get; set; }
+        public SenderDTO? Sender { get; set; }
+        public Guid TeamId { get; set; }
         public DateTime Date { get; set; }
         public List<AttachmentClient.AttachmentDTOPublic>? Attachments { get; set; }
+    }
+
+    public class SenderDTO
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
     }
 
     public ChatClient(HttpClient http)
@@ -33,7 +39,7 @@ public class ChatClient
     }
 
     // GET api/Message/team/{teamId}
-    public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(int teamId)
+    public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(Guid teamId)
     {
         var res = await _http.GetAsync($"api/Message/team/{teamId}");
         var body = await res.Content.ReadAsStringAsync();
@@ -54,10 +60,10 @@ public class ChatClient
     {
         public string Text { get; set; } = string.Empty;
         public string Sender { get; set; } = string.Empty;
-        public int Team { get; set; }
+        public Guid Team { get; set; }
     }
 
-    public async Task<Result<MessageDTOPublic>> SendMessageRestAsync(string senderId, int teamId, string text)
+    public async Task<Result<MessageDTOPublic>> SendMessageRestAsync(string senderId, Guid teamId, string text)
     {
         var dto = new MessageDTO { Text = text, Sender = senderId, Team = teamId };
         var json = JsonSerializer.Serialize(dto);
