@@ -42,6 +42,26 @@ namespace EncryptedChat.Controllers
             return team;
         }
 
+        // GET: api/Team/5/details - For team members
+        [HttpGet("{id}/details")]
+        [Authorize(Roles = "User")]
+        public async Task<ActionResult<TeamDTOPublic?>> GetTeamDetails(Guid id)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            bool isMember = await _teamService.IsMemberAsync(userId, id);
+            if (!isMember)
+                return Forbid();
+
+            TeamDTOPublic? team = await _teamService.GetByIdAsync(id);
+            if (team is null)
+                return NotFound();
+
+            return Ok(team);
+        }
+
         // POST: api/Team
         [HttpPost]
         [Authorize(Roles = "User")]

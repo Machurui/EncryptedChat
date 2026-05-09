@@ -61,6 +61,20 @@ public class UserController(IUserService userService) : ControllerBase
         return Ok(teams);
     }
 
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchUsers([FromQuery] string q, [FromQuery] int limit = 10)
+    {
+        string? requesterId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(requesterId))
+            return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            return Ok(Array.Empty<UserDTOPublic>());
+
+        IReadOnlyList<UserDTOPublic> users = await _service.SearchUsersAsync(q, requesterId, limit);
+        return Ok(users);
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUser(string id)
     {
