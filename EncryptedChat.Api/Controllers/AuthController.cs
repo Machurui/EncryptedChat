@@ -101,6 +101,17 @@ public class AuthController(IAuthService authService) : ControllerBase
         throw new NotImplementedException();
     }
 
+    [HttpGet("signalr-token")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public IActionResult GetSignalRToken()
+    {
+        string? accessToken = Request.Cookies["ec.accessToken"];
+        if (string.IsNullOrEmpty(accessToken))
+            return Unauthorized(new { Message = "No access token" });
+
+        return Ok(new { Token = accessToken });
+    }
+
     private void SetAccessTokenCookie(string token, DateTime expiresUtc)
     {
         CookieOptions options = new()
