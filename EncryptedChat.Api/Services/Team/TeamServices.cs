@@ -8,10 +8,12 @@ namespace EncryptedChat.Services;
 public class TeamService : ITeamService
 {
     private readonly EncryptedChatContext _context;
+    private readonly IFriendService _friendService;
 
-    public TeamService(EncryptedChatContext context)
+    public TeamService(EncryptedChatContext context, IFriendService friendService)
     {
         _context = context;
+        _friendService = friendService;
     }
 
     public async Task<IEnumerable<TeamDTOPublic?>?> GetAllAsync()
@@ -258,6 +260,10 @@ public class TeamService : ITeamService
             return false;
 
         if (!await IsAdminAsync(actorId, teamId))
+            return false;
+
+        // Only friends can be added to a team
+        if (!await _friendService.AreFriendsAsync(actorId, userId))
             return false;
 
         var team = await _context.Teams.FindAsync(teamId);
