@@ -3,6 +3,7 @@ using EncryptedChat.Models;
 using EncryptedChat.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 
 namespace EncryptedChat.Tests;
 
@@ -10,6 +11,7 @@ public class TeamServiceTests : IDisposable
 {
     private readonly EncryptedChatContext _context;
     private readonly TeamService _service;
+    private readonly Mock<IFriendService> _friendServiceMock;
 
     public TeamServiceTests()
     {
@@ -18,7 +20,10 @@ public class TeamServiceTests : IDisposable
             .Options;
 
         _context = new EncryptedChatContext(options);
-        _service = new TeamService(_context);
+        _friendServiceMock = new Mock<IFriendService>();
+        _friendServiceMock.Setup(f => f.AreFriendsAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
+        _service = new TeamService(_context, _friendServiceMock.Object);
     }
 
     public void Dispose()
