@@ -14,5 +14,11 @@ public class User : IdentityUser
     [Required]
     public string Secret { get; set; } = string.Empty;
 
+    [MaxLength(7)]
+    public string NameColor { get; set; } = "#FFFFFF";
+
+    [MaxLength(500)]
+    public string? ProfileImageUrl { get; set; }
+
     public ICollection<Member> Memberships { get; set; } = [];
 }

@@ -25,7 +25,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             Id = user.Id,
             Name = user.Name,
             Email = user.Email ?? string.Empty,
-            Level = user.Level
+            Level = user.Level,
+            NameColor = user.NameColor,
+            ProfileImageUrl = user.ProfileImageUrl
         };
     }
 
@@ -38,7 +40,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             User? self = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
             if (self == null) return null;
-            return new UserDTOPublic { Id = self.Id, Name = self.Name, Level = self.Level };
+            return new UserDTOPublic { Id = self.Id, Name = self.Name, Level = self.Level, NameColor = self.NameColor, ProfileImageUrl = self.ProfileImageUrl };
         }
 
         bool areTeammates = await _context.Members
@@ -61,7 +63,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             Id = user.Id,
             Name = user.Name,
-            Level = user.Level
+            Level = user.Level,
+            NameColor = user.NameColor,
+            ProfileImageUrl = user.ProfileImageUrl
         };
     }
 
@@ -98,6 +102,38 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         return teams;
     }
 
+    public async Task<IReadOnlyList<UserDTOPublic>> SearchUsersAsync(string query, string requesterId, int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(requesterId))
+            return [];
+
+        if (limit < 1) limit = 1;
+        if (limit > 20) limit = 20;
+
+        string normalizedQuery = query.Trim().ToLowerInvariant();
+        if (normalizedQuery.Length < 2)
+            return [];
+
+        List<UserDTOPublic> users = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id != requesterId &&
+                        (u.Name.ToLower().Contains(normalizedQuery) ||
+                         (u.Email != null && u.Email.ToLower().Contains(normalizedQuery))))
+            .OrderBy(u => u.Name)
+            .Take(limit)
+            .Select(u => new UserDTOPublic
+            {
+                Id = u.Id,
+                Name = u.Name,
+                Level = u.Level,
+                NameColor = u.NameColor,
+                ProfileImageUrl = u.ProfileImageUrl
+            })
+            .ToListAsync();
+
+        return users;
+    }
+
     public async Task<UserUpdateResult> UpdateAsync(string id, string requesterId, UserUpdateDTO dto)
     {
         if (id != requesterId)
@@ -108,8 +144,10 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
 
         string? name = string.IsNullOrWhiteSpace(dto.Name) ? null : dto.Name.Trim();
         string? email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
+        string? nameColor = string.IsNullOrWhiteSpace(dto.NameColor) ? null : dto.NameColor.Trim();
+        string? profileImageUrl = dto.ProfileImageUrl?.Trim();
 
-        if (name == null && email == null)
+        if (name == null && email == null && nameColor == null && profileImageUrl == null)
             return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
         User? user = await _userManager.FindByIdAsync(id);
@@ -150,6 +188,20 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
         }
 
+        if (nameColor != null)
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(nameColor, @"^#[0-9A-Fa-f]{6}$"))
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+            user.NameColor = nameColor;
+        }
+
+        if (profileImageUrl != null)
+        {
+            if (profileImageUrl.Length > 500)
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+            user.ProfileImageUrl = string.IsNullOrEmpty(profileImageUrl) ? null : profileImageUrl;
+        }
+
         IdentityResult updateResult;
         try
         {
@@ -171,7 +223,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             Id = user.Id,
             Name = user.Name,
             Email = user.Email ?? string.Empty,
-            Level = user.Level
+            Level = user.Level,
+            NameColor = user.NameColor,
+            ProfileImageUrl = user.ProfileImageUrl
         });
     }
 
