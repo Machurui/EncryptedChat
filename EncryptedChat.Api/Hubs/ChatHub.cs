@@ -19,14 +19,16 @@ public class ChatHub : Hub
     private readonly ITeamService _teamService;
     private readonly IUserService _userService;
     private readonly IFriendService _friendService;
+    private readonly IRealtimeService _realtimeService;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, ILogger<ChatHub> logger)
+    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, ILogger<ChatHub> logger)
     {
         _messageService = messageService;
         _teamService = teamService;
         _userService = userService;
         _friendService = friendService;
+        _realtimeService = realtimeService;
         _logger = logger;
     }
 
@@ -191,23 +193,14 @@ public class ChatHub : Hub
         if (created is null)
             return;
 
-        await Clients.Group(TeamGroup(teamId)).SendAsync("ReceiveMessage", created);
+        await _realtimeService.BroadcastMessageAsync(teamId, created);
 
         var memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
         if (memberIds.Count > 0)
         {
             var preview = text.Length > 50 ? text[..50] + "..." : text;
             preview = preview.Replace("\n", " ").Trim();
-
-            var lastMessageUpdate = new
-            {
-                TeamId = teamId,
-                LastMessagePreview = preview,
-                LastMessageTime = created.Date,
-                LastMessageSenderName = created.Sender?.Name
-            };
-
-            await Clients.Users(memberIds).SendAsync("TeamLastMessageUpdated", lastMessageUpdate);
+            await _realtimeService.BroadcastTeamLastMessageAsync(teamId, memberIds, preview, created.Date, created.Sender?.Name);
         }
     }
 
