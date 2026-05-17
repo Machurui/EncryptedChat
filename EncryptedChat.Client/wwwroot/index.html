@@ -29,7 +29,7 @@
         function scrollToBottom(elementId) {
             const endMarker = document.getElementById('messages-end');
             if (endMarker) {
-                endMarker.scrollIntoView({ behavior: 'instant', block: 'end' });
+                endMarker.scrollIntoView(false);
                 return;
             }
             const container = document.getElementById(elementId);
