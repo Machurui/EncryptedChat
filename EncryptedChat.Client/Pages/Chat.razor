@@ -449,7 +449,32 @@
                                             <span class="message-time">@msg.Date.ToLocalTime().ToString("HH:mm")</span>
                                         </div>
                                     }
-                                    <div class="message-bubble @(isOwn ? "own" : "")">@((MarkupString)RenderMessageWithMentions(msg.Text ?? ""))</div>
+                                    <div class="message-bubble @(isOwn ? "own" : "")">
+                                        @((MarkupString)RenderMessageContent(msg.Text ?? ""))
+                                    </div>
+                                    @if (msg.Attachments?.Any() == true)
+                                    {
+                                        <div class="message-attachments">
+                                            @foreach (var att in msg.Attachments)
+                                            {
+                                                @if (IsImageMimeType(att.MimeType))
+                                                {
+                                                    <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
+                                                        <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-attachment">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                        <span class="attachment-file-name">@att.FileName</span>
+                                                        <span class="attachment-file-size">@FormatFileSize(att.Size)</span>
+                                                    </a>
+                                                }
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         }
@@ -1749,6 +1774,86 @@
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px var(--accent-glow);
     }
 
+    /* GIF in messages */
+    .message-gif {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 12px;
+        display: block;
+    }
+
+    .message-gif-inline {
+        max-width: 200px;
+        max-height: 150px;
+        border-radius: 8px;
+        vertical-align: middle;
+        margin: 4px 0;
+    }
+
+    /* Attachments in messages */
+    .message-attachments {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .message-attachment {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 12px;
+        transition: background 0.15s;
+        max-width: fit-content;
+    }
+
+    .message-attachment:hover {
+        background: rgba(255,255,255,0.12);
+    }
+
+    .message-attachment svg {
+        flex-shrink: 0;
+        color: var(--accent);
+    }
+
+    .attachment-file-name {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+    }
+
+    .attachment-file-size {
+        color: rgba(255,255,255,0.5);
+        flex-shrink: 0;
+    }
+
+    .message-image-attachment {
+        display: block;
+        max-width: 300px;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .message-image-attachment img {
+        width: 100%;
+        height: auto;
+        display: block;
+        transition: opacity 0.15s;
+    }
+
+    .message-image-attachment:hover img {
+        opacity: 0.9;
+    }
+
     .typing-indicator {
         display: flex;
         align-items: center;
@@ -2538,6 +2643,9 @@
     private record TeamLastMessageInfo(string? Preview, DateTime? Time, string? SenderName);
     private Dictionary<Guid, TeamLastMessageInfo> lastMessageUpdates = new();
 
+    // Attachments
+    private record AttachmentAddedEvent(Guid MessageId, AttachmentClient.AttachmentDTOPublic Attachment);
+
     // Typing indicators
     private record TypingUser(string UserId, string UserName, DateTime StartedAt);
     private Dictionary<Guid, List<TypingUser>> typingUsers = new();
@@ -3081,6 +3189,37 @@
                 await InvokeAsync(StateHasChanged);
             });
 
+            hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>
+            {
+                Console.WriteLine($"[SignalR] AttachmentAdded: MessageId={evt.MessageId}");
+
+                // Find in current team messages
+                var message = messages.FirstOrDefault(m => m.Id == evt.MessageId);
+                if (message != null)
+                {
+                    message.Attachments ??= new List<AttachmentClient.AttachmentDTOPublic>();
+                    if (!message.Attachments.Any(a => a.Id == evt.Attachment.Id))
+                    {
+                        message.Attachments.Add(evt.Attachment);
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+
+                // Also update in teamMessages cache
+                foreach (var kvp in teamMessages)
+                {
+                    var cachedMessage = kvp.Value.FirstOrDefault(m => m.Id == evt.MessageId);
+                    if (cachedMessage != null)
+                    {
+                        cachedMessage.Attachments ??= new List<AttachmentClient.AttachmentDTOPublic>();
+                        if (!cachedMessage.Attachments.Any(a => a.Id == evt.Attachment.Id))
+                        {
+                            cachedMessage.Attachments.Add(evt.Attachment);
+                        }
+                    }
+                }
+            });
+
             hubConnection.On<FriendProfileUpdate>("FriendProfileUpdated", update =>
             {
                 // Update friend list
@@ -3514,19 +3653,33 @@
             // If we have an attachment, use REST API to get message ID
             if (selectedFile != null)
             {
-                var messageText = string.IsNullOrWhiteSpace(newMessageText) ? "[Attachment]" : newMessageText;
-                var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText);
+                var messageText = string.IsNullOrWhiteSpace(newMessageText) ? "" : newMessageText;
+                var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText.Length > 0 ? messageText : "📎");
 
                 if (result.Success && result.Value != null)
                 {
+                    var messageId = result.Value.Id;
+                    var fileName = selectedFile.Name;
+                    var contentType = selectedFile.ContentType ?? "application/octet-stream";
+
                     // Upload attachment
                     using var stream = selectedFile.OpenReadStream(maxAllowedSize: 26_214_400);
-                    await AttachmentClient.UploadAsync(
-                        result.Value.Id,
-                        stream,
-                        selectedFile.Name,
-                        selectedFile.ContentType ?? "application/octet-stream"
-                    );
+                    var uploadResult = await AttachmentClient.UploadAsync(messageId, stream, fileName, contentType);
+
+                    // Add message to local list with attachment
+                    var messageWithAttachment = result.Value;
+                    if (uploadResult.Success && uploadResult.Value != null)
+                    {
+                        messageWithAttachment.Attachments = new List<AttachmentClient.AttachmentDTOPublic> { uploadResult.Value };
+                    }
+
+                    // Add to messages list
+                    if (!messages.Any(m => m.Id == messageWithAttachment.Id))
+                    {
+                        messages.Add(messageWithAttachment);
+                        teamMessages[selectedTeamId.Value] = messages;
+                        StateHasChanged();
+                    }
 
                     selectedFile = null;
                 }
@@ -3589,11 +3742,12 @@
         emojiSearch = "";
     }
 
-    private void InsertEmoji(string emoji)
+    private async Task InsertEmoji(string emoji)
     {
         newMessageText += emoji;
         showEmojiPicker = false;
         emojiSearch = "";
+        await FocusComposerInput();
     }
 
     // GIF picker methods
@@ -3622,30 +3776,36 @@
 
         try
         {
-            // Using Tenor API (free tier)
-            var apiKey = "AIzaSyAyimkuYQYF_FXVvIQI1t0mpZlZVL9F8P8"; // Google/Tenor API key
-            var url = $"https://tenor.googleapis.com/v2/search?q={Uri.EscapeDataString(gifSearch)}&key={apiKey}&limit=20&media_filter=gif,tinygif";
+            // Using Tenor API v1 (no key required for basic search)
+            var url = $"https://g.tenor.com/v1/search?q={Uri.EscapeDataString(gifSearch)}&limit=20&media_filter=minimal";
 
             using var http = new HttpClient();
+            http.DefaultRequestHeaders.Add("Accept", "application/json");
             var response = await http.GetStringAsync(url);
             var json = System.Text.Json.JsonDocument.Parse(response);
 
             gifResults.Clear();
             foreach (var result in json.RootElement.GetProperty("results").EnumerateArray())
             {
-                var media = result.GetProperty("media_formats");
-                var gifUrl = media.GetProperty("gif").GetProperty("url").GetString();
-                var previewUrl = media.GetProperty("tinygif").GetProperty("url").GetString();
-
-                if (!string.IsNullOrEmpty(gifUrl) && !string.IsNullOrEmpty(previewUrl))
+                var media = result.GetProperty("media").EnumerateArray().FirstOrDefault();
+                if (media.ValueKind != System.Text.Json.JsonValueKind.Undefined)
                 {
-                    gifResults.Add(new GifResult(gifUrl, previewUrl));
+                    var gif = media.GetProperty("gif");
+                    var tinygif = media.GetProperty("tinygif");
+                    var gifUrl = gif.GetProperty("url").GetString();
+                    var previewUrl = tinygif.GetProperty("url").GetString();
+
+                    if (!string.IsNullOrEmpty(gifUrl) && !string.IsNullOrEmpty(previewUrl))
+                    {
+                        gifResults.Add(new GifResult(gifUrl, previewUrl));
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"GIF search error: {ex.Message}");
+            gifResults.Clear();
         }
         finally
         {
@@ -3654,12 +3814,18 @@
         }
     }
 
-    private void InsertGif(string gifUrl)
+    private async Task InsertGif(string gifUrl)
     {
         newMessageText += $" {gifUrl} ";
         showGifPicker = false;
         gifSearch = "";
         gifResults.Clear();
+        await FocusComposerInput();
+    }
+
+    private async Task FocusComposerInput()
+    {
+        await JS.InvokeVoidAsync("eval", "document.querySelector('.composer-input')?.focus()");
     }
 
     private void CloseAllPickers()
@@ -3917,12 +4083,37 @@
         unreadCounts[teamId] = unreadCounts.GetValueOrDefault(teamId, 0) + 1;
     }
 
+    private string RenderMessageContent(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+
+        // Check if the message is only a GIF URL
+        var gifPattern = new System.Text.RegularExpressions.Regex(@"^\s*(https?://[^\s]+\.gif[^\s]*)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var gifMatch = gifPattern.Match(text);
+        if (gifMatch.Success)
+        {
+            var gifUrl = System.Net.WebUtility.HtmlEncode(gifMatch.Groups[1].Value);
+            return $"<img src=\"{gifUrl}\" alt=\"GIF\" class=\"message-gif\" loading=\"lazy\" />";
+        }
+
+        // Otherwise render with mentions
+        return RenderMessageWithMentions(text);
+    }
+
     private string RenderMessageWithMentions(string text)
     {
         if (string.IsNullOrEmpty(text)) return "";
 
         // Escape HTML first
         text = System.Net.WebUtility.HtmlEncode(text);
+
+        // Find GIF URLs inline and render them
+        var inlineGifPattern = new System.Text.RegularExpressions.Regex(@"(https?://[^\s]+\.gif[^\s]*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        text = inlineGifPattern.Replace(text, match =>
+        {
+            var url = match.Groups[1].Value;
+            return $"<img src=\"{url}\" alt=\"GIF\" class=\"message-gif-inline\" loading=\"lazy\" />";
+        });
 
         // Find @mentions and highlight them
         var mentionPattern = new System.Text.RegularExpressions.Regex(@"@(\w+)");
@@ -3936,6 +4127,17 @@
         });
 
         return text;
+    }
+
+    private string GetAttachmentDownloadUrl(Guid attachmentId)
+    {
+        return $"{ApiBaseUrl}/api/attachment/{attachmentId}/download";
+    }
+
+    private static bool IsImageMimeType(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return false;
+        return mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool MessageMentionsUser(string? text)
