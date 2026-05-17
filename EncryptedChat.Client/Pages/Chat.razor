@@ -3203,11 +3203,8 @@
                     if (!message.Attachments.Any(a => a.Id == evt.Attachment.Id))
                     {
                         message.Attachments.Add(evt.Attachment);
+                        _shouldScrollToBottom = true;
                         await InvokeAsync(StateHasChanged);
-
-                        // Wait for image to render then scroll
-                        await Task.Delay(150);
-                        await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
                     }
                 }
 
