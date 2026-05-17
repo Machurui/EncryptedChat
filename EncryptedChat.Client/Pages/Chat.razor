@@ -3152,6 +3152,7 @@
                     if (!messages.Any(m => m.Id == message.Id))
                     {
                         messages.Add(message);
+                        _shouldScrollToBottom = true;
                         await InvokeAsync(StateHasChanged);
                     }
                 }
@@ -3188,12 +3189,6 @@
                 }
 
                 await InvokeAsync(StateHasChanged);
-
-                if (message.TeamId == selectedTeamId)
-                {
-                    await Task.Delay(100);
-                    await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
-                }
             });
 
             hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>
