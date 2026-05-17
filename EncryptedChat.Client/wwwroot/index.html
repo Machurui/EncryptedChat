@@ -27,43 +27,10 @@
     <script src="js/flowbite-interop.js"></script>
     <script>
         function scrollToBottom(elementId) {
-            const endMarker = document.getElementById('messages-end');
-            if (endMarker) {
-                endMarker.scrollIntoView(false);
-                return;
-            }
             const container = document.getElementById(elementId);
             if (container) {
                 container.scrollTop = container.scrollHeight;
             }
-        }
-
-        // Auto-scroll when new messages are added
-        let messagesObserver = null;
-        function initAutoScroll(elementId) {
-            if (messagesObserver) {
-                messagesObserver.disconnect();
-            }
-            const container = document.getElementById(elementId);
-            if (!container) return;
-
-            messagesObserver = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    if (mutation.addedNodes.length > 0) {
-                        // Check if a message was added
-                        for (const node of mutation.addedNodes) {
-                            if (node.classList && node.classList.contains('message')) {
-                                container.scrollTop = container.scrollHeight;
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-
-            messagesObserver.observe(container, { childList: true, subtree: true });
-            // Initial scroll
-            container.scrollTop = container.scrollHeight;
         }
 
         function applyTheme(theme) {
