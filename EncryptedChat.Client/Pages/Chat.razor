@@ -3650,36 +3650,22 @@
         {
             await StopTypingIndicator();
 
-            // If we have an attachment, use REST API to get message ID
+            // If we have an attachment, use REST API
             if (selectedFile != null)
             {
-                var messageText = string.IsNullOrWhiteSpace(newMessageText) ? "" : newMessageText;
-                var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText.Length > 0 ? messageText : "📎");
+                var messageText = string.IsNullOrWhiteSpace(newMessageText) ? "📎" : newMessageText;
+                var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText);
 
                 if (result.Success && result.Value != null)
                 {
+                    // Message appears via "ReceiveMessage" broadcast from server
                     var messageId = result.Value.Id;
                     var fileName = selectedFile.Name;
                     var contentType = selectedFile.ContentType ?? "application/octet-stream";
 
-                    // Upload attachment
                     using var stream = selectedFile.OpenReadStream(maxAllowedSize: 26_214_400);
-                    var uploadResult = await AttachmentClient.UploadAsync(messageId, stream, fileName, contentType);
-
-                    // Add message to local list with attachment
-                    var messageWithAttachment = result.Value;
-                    if (uploadResult.Success && uploadResult.Value != null)
-                    {
-                        messageWithAttachment.Attachments = new List<AttachmentClient.AttachmentDTOPublic> { uploadResult.Value };
-                    }
-
-                    // Add to messages list
-                    if (!messages.Any(m => m.Id == messageWithAttachment.Id))
-                    {
-                        messages.Add(messageWithAttachment);
-                        teamMessages[selectedTeamId.Value] = messages;
-                        StateHasChanged();
-                    }
+                    await AttachmentClient.UploadAsync(messageId, stream, fileName, contentType);
+                    // Attachment appears via "AttachmentAdded" broadcast from server
 
                     selectedFile = null;
                 }
