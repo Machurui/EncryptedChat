@@ -157,6 +157,16 @@ public class AttachmentService(
         return true;
     }
 
+    public async Task<Guid?> GetTeamIdForMessageAsync(Guid messageId)
+    {
+        Message? message = await _context.Messages
+            .AsNoTracking()
+            .Where(m => m.Id == messageId)
+            .Select(m => new Message { Team = m.Team })
+            .FirstOrDefaultAsync();
+        return message?.Team?.Id;
+    }
+
     private Task<bool> IsMemberAsync(Guid teamId, string userId) =>
         _context.Members.AnyAsync(m => m.TeamId == teamId && m.UserId == userId);
 
