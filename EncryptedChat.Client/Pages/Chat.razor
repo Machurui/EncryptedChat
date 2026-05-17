@@ -3665,7 +3665,7 @@
             // If we have an attachment, use REST API
             if (selectedFile != null)
             {
-                var messageText = string.IsNullOrWhiteSpace(newMessageText) ? "📎" : newMessageText;
+                var messageText = newMessageText?.Trim() ?? "";
                 var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText);
 
                 if (result.Success && result.Value != null)
@@ -3689,20 +3689,11 @@
                 await hubConnection.InvokeAsync("SendMessageToTeam", selectedTeamId.Value, newMessageText);
                 newMessageText = string.Empty;
             }
-
-            // Scroll after message is sent
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(100);
-                await InvokeAsync(async () =>
-                {
-                    await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
-                });
-            });
         }
         finally
         {
             isSending = false;
+            await FocusComposerInput();
         }
     }
 
