@@ -187,6 +187,7 @@ builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IRecoveryService, RecoveryService>();
+builder.Services.AddScoped<IRealtimeService, RealtimeService>();
 
 // Auth service
 builder.Services.AddScoped<IAuthService, AuthService>();
