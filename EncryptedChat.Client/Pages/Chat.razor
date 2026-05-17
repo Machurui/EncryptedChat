@@ -3190,6 +3190,12 @@
                 }
 
                 await InvokeAsync(StateHasChanged);
+
+                if (message.TeamId == selectedTeamId)
+                {
+                    await Task.Delay(50);
+                    await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
+                }
             });
 
             hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>
