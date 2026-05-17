@@ -2769,6 +2769,7 @@
     {
         if (_shouldScrollToBottom)
         {
+            Console.WriteLine("[Scroll] OnAfterRenderAsync: scrolling now");
             _shouldScrollToBottom = false;
             await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
         }
@@ -3096,6 +3097,7 @@
             {
                 messages = (result.Value ?? []).OrderBy(m => m.Date).ToList();
                 teamMessages[selectedTeamId.Value] = messages;
+                Console.WriteLine($"[Scroll] LoadMessages: setting flag, messages count = {messages.Count}");
                 _shouldScrollToBottom = true;
                 StateHasChanged();
             }
@@ -3144,20 +3146,19 @@
                     return;
                 }
 
-                teamMessages[message.TeamId].Add(message);
-
+                // Add to cache (for non-current teams) or to messages (for current team)
                 if (message.TeamId == selectedTeamId)
                 {
                     Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
-                    if (!messages.Any(m => m.Id == message.Id))
-                    {
-                        messages.Add(message);
-                        _shouldScrollToBottom = true;
-                        await InvokeAsync(StateHasChanged);
-                    }
+                    messages.Add(message);
+                    Console.WriteLine("[Scroll] ReceiveMessage: setting flag");
+                    _shouldScrollToBottom = true;
+                    await InvokeAsync(StateHasChanged);
                 }
                 else
                 {
+                    teamMessages[message.TeamId].Add(message);
+
                     var pref = (currentNotificationPreference ?? "all").ToLowerInvariant().Trim();
                     var messageTeam = teams.FirstOrDefault(t => t.Id == message.TeamId);
                     var isDm = messageTeam?.IsDirect ?? false;
@@ -3186,9 +3187,9 @@
                         var text = message.Text?.Length > 50 ? message.Text[..50] + "..." : message.Text;
                         await JS.InvokeVoidAsync("showNotification", notifTitle, text ?? "New message");
                     }
-                }
 
-                await InvokeAsync(StateHasChanged);
+                    await InvokeAsync(StateHasChanged);
+                }
             });
 
             hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>

@@ -27,10 +27,20 @@
     <script src="js/flowbite-interop.js"></script>
     <script>
         function scrollToBottom(elementId) {
-            const container = document.getElementById(elementId);
-            if (container) {
-                container.scrollTop = container.scrollHeight;
-            }
+            const scroll = () => {
+                const container = document.getElementById(elementId);
+                if (container) container.scrollTop = container.scrollHeight;
+            };
+
+            // Scroll après render initial
+            requestAnimationFrame(() => {
+                requestAnimationFrame(scroll);
+            });
+
+            // Re-scroll après chargement des images (100ms, 300ms, 500ms)
+            setTimeout(scroll, 100);
+            setTimeout(scroll, 300);
+            setTimeout(scroll, 500);
         }
 
         function applyTheme(theme) {
