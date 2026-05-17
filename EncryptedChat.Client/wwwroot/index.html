@@ -27,6 +27,11 @@
     <script src="js/flowbite-interop.js"></script>
     <script>
         function scrollToBottom(elementId) {
+            const endMarker = document.getElementById('messages-end');
+            if (endMarker) {
+                endMarker.scrollIntoView({ behavior: 'instant', block: 'end' });
+                return;
+            }
             const container = document.getElementById(elementId);
             if (container) {
                 container.scrollTop = container.scrollHeight;
