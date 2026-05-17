@@ -13,9 +13,10 @@ public class UserClient
     }
 
     // DTO match API
-    public record UserDTOPublic(string Id, string Name, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null);
-    public record UserProfileDTO(string Id, string Name, string Email, int Level, string NameColor, string? ProfileImageUrl);
-    public record UserUpdateDTO(string? Name, string? Email, string? NameColor, string? ProfileImageUrl);
+    public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null, string Status = "online", string? StatusMessage = null);
+    public record UserProfileDTO(string Id, string Name, string? Handle, string Email, int Level, string NameColor, string? ProfileImageUrl, string Status = "online", string? StatusMessage = null, string Theme = "dark", bool ReadReceipts = true, bool TypingIndicators = true, string NotificationPreference = "all");
+    public record UserUpdateDTO(string? Name = null, string? Handle = null, string? Email = null, string? NameColor = null, string? ProfileImageUrl = null, string? Status = null, string? StatusMessage = null, string? Theme = null, bool? ReadReceipts = null, bool? TypingIndicators = null, string? NotificationPreference = null);
+    public record AvatarUploadResult(string Url, UserProfileDTO Profile);
 
     public class Result
     {
@@ -124,6 +125,73 @@ public class UserClient
         {
             return Result<List<UserDTOPublic>>.Fail("Unexpected error while fetching users.");
         }
+    }
+
+    // ---------- Update Status ----------
+    public async Task<Result<UserProfileDTO>> UpdateStatusAsync(string status, string? statusMessage)
+    {
+        return await UpdateProfileAsync(new UserUpdateDTO(Status: status, StatusMessage: statusMessage));
+    }
+
+    // ---------- Upload Avatar ----------
+    public async Task<Result<AvatarUploadResult>> UploadAvatarAsync(Stream fileStream, string fileName, string contentType)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var streamContent = new StreamContent(fileStream);
+            streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            content.Add(streamContent, "file", fileName);
+
+            var res = await _http.PostAsync("api/user/me/avatar", content);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<AvatarUploadResult>.Fail(ParseMessage(body) ?? "Failed to upload avatar.");
+
+            var result = JsonSerializer.Deserialize<AvatarUploadResult>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (result == null)
+                return Result<AvatarUploadResult>.Fail("Invalid response.");
+
+            return Result<AvatarUploadResult>.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return Result<AvatarUploadResult>.Fail($"Upload error: {ex.Message}");
+        }
+    }
+
+    // ---------- Delete Avatar ----------
+    public async Task<Result<UserProfileDTO>> DeleteAvatarAsync()
+    {
+        try
+        {
+            var res = await _http.DeleteAsync("api/user/me/avatar");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<UserProfileDTO>.Fail(ParseMessage(body) ?? "Failed to remove avatar.");
+
+            var profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (profile == null)
+                return Result<UserProfileDTO>.Fail("Invalid response.");
+
+            return Result<UserProfileDTO>.Ok(profile);
+        }
+        catch (Exception)
+        {
+            return Result<UserProfileDTO>.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Update Theme ----------
+    public async Task<Result<UserProfileDTO>> UpdateThemeAsync(string theme)
+    {
+        return await UpdateProfileAsync(new UserUpdateDTO(Theme: theme));
     }
 
     // ---------- Search Users ----------

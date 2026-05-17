@@ -64,11 +64,26 @@ public class TeamService : ITeamService
 
         string slug = await CreateUniqueSlugAsync(trimmedName);
 
+        string glyph = string.IsNullOrWhiteSpace(newTeam.Glyph) ? "◆" : newTeam.Glyph.Trim();
+        if (!Team.ValidGlyphs.Contains(glyph))
+            glyph = "◆";
+
+        string color = string.IsNullOrWhiteSpace(newTeam.Color) ? Team.ValidColors[0] : newTeam.Color.Trim();
+        if (!Team.ValidColors.Contains(color))
+            color = Team.ValidColors[0];
+
+        string messageLifetime = string.IsNullOrWhiteSpace(newTeam.MessageLifetime) ? "off" : newTeam.MessageLifetime.Trim().ToLowerInvariant();
+        if (!Team.ValidMessageLifetimes.Contains(messageLifetime))
+            messageLifetime = "off";
+
         Team team = new()
         {
             Name = trimmedName,
             Slug = slug,
             Secret = Guid.NewGuid().ToString("N"),
+            Glyph = glyph,
+            Color = color,
+            MessageLifetime = messageLifetime,
             CreatedAt = DateTime.UtcNow,
             ModifiedAt = DateTime.UtcNow,
         };
@@ -373,6 +388,205 @@ public class TeamService : ITeamService
         return true;
     }
 
+    public async Task<TeamDTOPublic?> UpdatePartialAsync(Guid id, TeamUpdateDTO dto, string actorId)
+    {
+        if (string.IsNullOrWhiteSpace(actorId))
+            return null;
+
+        if (!await IsAdminAsync(actorId, id))
+            return null;
+
+        Team? team = await _context.Teams
+            .Include(t => t.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (team is null)
+            return null;
+
+        bool hasChanges = false;
+
+        if (!string.IsNullOrWhiteSpace(dto.Name))
+        {
+            string trimmedName = dto.Name.Trim();
+            if (trimmedName.Length >= 1 && trimmedName.Length <= 100)
+            {
+                team.Name = trimmedName;
+                team.Slug = await CreateUniqueSlugAsync(trimmedName, id);
+                hasChanges = true;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Glyph))
+        {
+            string glyph = dto.Glyph.Trim();
+            if (Team.ValidGlyphs.Contains(glyph))
+            {
+                team.Glyph = glyph;
+                hasChanges = true;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Color))
+        {
+            string color = dto.Color.Trim();
+            if (Team.ValidColors.Contains(color))
+            {
+                team.Color = color;
+                hasChanges = true;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.MessageLifetime))
+        {
+            string messageLifetime = dto.MessageLifetime.Trim().ToLowerInvariant();
+            if (Team.ValidMessageLifetimes.Contains(messageLifetime))
+            {
+                team.MessageLifetime = messageLifetime;
+                hasChanges = true;
+            }
+        }
+
+        if (!hasChanges)
+            return null;
+
+        team.ModifiedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return ItemToDTO(team);
+    }
+
+    public async Task<IReadOnlyList<string>> GetMemberUserIdsAsync(Guid teamId)
+    {
+        return await _context.Members
+            .AsNoTracking()
+            .Where(m => m.TeamId == teamId)
+            .Select(m => m.UserId)
+            .ToListAsync();
+    }
+
+    public async Task<TeamDTOPublic?> GetOrCreateDirectMessageAsync(string userId, string friendId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(friendId))
+            return null;
+
+        if (userId == friendId)
+            return null;
+
+        // Check if both users exist
+        var user = await _context.Users.FindAsync(userId);
+        var friend = await _context.Users.FindAsync(friendId);
+        if (user == null || friend == null)
+            return null;
+
+        // Find existing DM between these two users
+        var existingDm = await _context.Teams
+            .Include(t => t.Members)
+            .ThenInclude(m => m.User)
+            .Where(t => t.IsDirect && t.Members.Count == 2)
+            .Where(t => t.Members.Any(m => m.UserId == userId) && t.Members.Any(m => m.UserId == friendId))
+            .FirstOrDefaultAsync();
+
+        if (existingDm != null)
+            return ItemToDTO(existingDm);
+
+        // Create new DM
+        var dmName = $"{user.Name} & {friend.Name}";
+        var dm = new Team
+        {
+            Id = Guid.NewGuid(),
+            Name = dmName,
+            Slug = $"dm-{Guid.NewGuid():N}",
+            Secret = Guid.NewGuid().ToString("N"),
+            IsDirect = true,
+            Glyph = "💬",
+            Color = "oklch(0.65 0.16 165)",
+            MessageLifetime = "off",
+            CreatedAt = DateTime.UtcNow,
+            ModifiedAt = DateTime.UtcNow
+        };
+
+        _context.Teams.Add(dm);
+
+        _context.Members.Add(new Member
+        {
+            Id = Guid.NewGuid(),
+            TeamId = dm.Id,
+            UserId = userId,
+            Role = Member.MemberRole
+        });
+
+        _context.Members.Add(new Member
+        {
+            Id = Guid.NewGuid(),
+            TeamId = dm.Id,
+            UserId = friendId,
+            Role = Member.MemberRole
+        });
+
+        await _context.SaveChangesAsync();
+
+        // Reload with members
+        var created = await _context.Teams
+            .Include(t => t.Members)
+            .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == dm.Id);
+
+        return created != null ? ItemToDTO(created) : null;
+    }
+
+    public async Task<(TeamDTOPublic? Dm, bool IsNew)> GetOrCreateDirectMessageWithStatusAsync(string userId, string friendId)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(friendId))
+            return (null, false);
+
+        if (userId == friendId)
+            return (null, false);
+
+        var user = await _context.Users.FindAsync(userId);
+        var friend = await _context.Users.FindAsync(friendId);
+        if (user == null || friend == null)
+            return (null, false);
+
+        // Find existing DM
+        var existingDm = await _context.Teams
+            .Include(t => t.Members)
+            .ThenInclude(m => m.User)
+            .Where(t => t.IsDirect && t.Members.Count == 2)
+            .Where(t => t.Members.Any(m => m.UserId == userId) && t.Members.Any(m => m.UserId == friendId))
+            .FirstOrDefaultAsync();
+
+        if (existingDm != null)
+            return (ItemToDTO(existingDm), false);
+
+        // Create new DM
+        var dm = new Team
+        {
+            Id = Guid.NewGuid(),
+            Name = $"{user.Name} & {friend.Name}",
+            Slug = $"dm-{Guid.NewGuid():N}",
+            Secret = Guid.NewGuid().ToString("N"),
+            IsDirect = true,
+            Glyph = "💬",
+            Color = "oklch(0.65 0.16 165)",
+            MessageLifetime = "off",
+            CreatedAt = DateTime.UtcNow,
+            ModifiedAt = DateTime.UtcNow
+        };
+
+        _context.Teams.Add(dm);
+        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = dm.Id, UserId = userId, Role = Member.MemberRole });
+        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = dm.Id, UserId = friendId, Role = Member.MemberRole });
+        await _context.SaveChangesAsync();
+
+        var created = await _context.Teams
+            .Include(t => t.Members)
+            .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(t => t.Id == dm.Id);
+
+        return (created != null ? ItemToDTO(created) : null, true);
+    }
+
     private bool TeamExists(Guid id)
     {
         return _context.Teams.Any(e => e.Id == id);
@@ -384,7 +598,10 @@ public class TeamService : ITeamService
         {
             Id = user.Id,
             Name = user.Name,
-            Level = user.Level
+            Handle = user.Handle,
+            Level = user.Level,
+            NameColor = user.NameColor,
+            ProfileImageUrl = user.ProfileImageUrl
         };
 
         static MemberDTOPublic MapMember(Member member) => new()
@@ -398,6 +615,10 @@ public class TeamService : ITeamService
             Id = team.Id,
             Name = team.Name,
             Slug = team.Slug,
+            Glyph = team.Glyph,
+            Color = team.Color,
+            MessageLifetime = team.MessageLifetime,
+            IsDirect = team.IsDirect,
             Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)]
         };
     }

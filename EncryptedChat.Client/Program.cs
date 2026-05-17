@@ -38,6 +38,7 @@ builder.Services.AddScoped<ChatClient>();
 
 builder.Services.AddScoped<AttachmentClient>();
 builder.Services.AddScoped<FriendClient>();
+builder.Services.AddScoped<SecurityClient>();
 
 // Flowbite Import
 builder.Services.AddScoped<IFlowbiteService, FlowbiteService>();

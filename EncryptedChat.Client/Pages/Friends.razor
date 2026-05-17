@@ -1,151 +1,485 @@
-@page "/Friends"
+@page "/friends"
+@layout EmptyLayout
 @attribute [Authorize]
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
 @using EncryptedChat.Client.Services
+@using EncryptedChat.Client.Pages.Components
 
 @inject AuthenticationStateProvider AuthStateProvider
 @inject FriendClient FriendClient
 @inject NavigationManager Navigation
 
-<section>
-    <div class="relative grid place-items-center px-6 py-10 mx-auto min-h-[60svh] md:min-h-[65svh] lg:min-h-[70svh]">
-        <div class="flex flex-col items-center w-full sm:max-w-md md:mt-0">
-            <div class="liquid-glass-wrapper rounded-3xl shadow-2xl w-full"
-                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05); box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;">
+<div class="app-background"></div>
 
-                <div class="liquid-glass-effect" aria-hidden="true"></div>
-                <div class="liquid-glass-tint" aria-hidden="true"></div>
-                <div class="liquid-glass-shine" aria-hidden="true"></div>
-
-                <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
-                    <h1 class="flex justify-center text-xl font-bold leading-tight tracking-tight text-white md:text-2xl">
-                        Friends
-                    </h1>
-
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <p class="text-sm text-red-400">@errorMessage</p>
-                    }
-
-                    @if (!string.IsNullOrEmpty(successMessage))
-                    {
-                        <p class="text-sm text-green-400">@successMessage</p>
-                    }
-
-                    <!-- Add Friend Section -->
-                    <div class="space-y-2">
-                        <label class="block text-sm font-medium text-gray-200">Add Friend</label>
-                        <div class="flex gap-2">
-                            <input type="text" placeholder="Search by name or email..."
-                                class="flex-1 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-white text-sm"
-                                @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
-                        </div>
-
-                        @if (searchResults.Any())
-                        {
-                            <div class="max-h-32 overflow-y-auto bg-black/30 rounded-lg border border-white/10">
-                                @foreach (var user in searchResults)
-                                {
-                                    <button type="button"
-                                        class="w-full text-left px-3 py-2 hover:bg-white/10 text-sm text-gray-200 flex justify-between items-center cursor-pointer"
-                                        @onclick="() => SendFriendRequest(user.Id)">
-                                        <span>@user.Name</span>
-                                        <span class="text-xs text-blue-400">+ Send Request</span>
-                                    </button>
-                                }
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Pending Requests -->
-                    @if (pendingRequests.Any())
-                    {
-                        <div class="space-y-2">
-                            <label class="block text-sm font-medium text-gray-200">Pending Requests</label>
-                            <div class="max-h-40 overflow-y-auto space-y-1">
-                                @foreach (var req in pendingRequests)
-                                {
-                                    <div class="flex justify-between items-center px-3 py-2 bg-black/20 rounded-lg">
-                                        <div>
-                                            <span class="text-sm text-white">@req.Name</span>
-                                            <span class="ml-2 text-xs @(req.IsIncoming ? "text-yellow-400" : "text-gray-400")">
-                                                @(req.IsIncoming ? "wants to be your friend" : "request sent")
-                                            </span>
-                                        </div>
-                                        @if (req.IsIncoming)
-                                        {
-                                            <div class="flex gap-2">
-                                                <button type="button"
-                                                    class="text-xs text-green-400 hover:text-green-300 cursor-pointer"
-                                                    @onclick="() => AcceptRequest(req.RequestId)">
-                                                    Accept
-                                                </button>
-                                                <button type="button"
-                                                    class="text-xs text-red-400 hover:text-red-300 cursor-pointer"
-                                                    @onclick="() => RejectRequest(req.RequestId)">
-                                                    Reject
-                                                </button>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
-
-                    <!-- Friends List -->
-                    <div class="space-y-2">
-                        <label class="block text-sm font-medium text-gray-200">Your Friends (@friends.Count)</label>
-                        @if (isLoading)
-                        {
-                            <p class="text-xs text-gray-400">Loading...</p>
-                        }
-                        else if (!friends.Any())
-                        {
-                            <p class="text-xs text-gray-400 italic">No friends yet. Search and send a request above.</p>
-                        }
-                        else
-                        {
-                            <div class="space-y-1" style="max-height: 35vh; overflow-y: auto;">
-                                @foreach (var friend in friends)
-                                {
-                                    <div class="flex justify-between items-center px-3 py-2 bg-black/20 rounded-lg">
-                                        <div>
-                                            <span class="text-sm text-white">@friend.Name</span>
-                                            <span class="ml-2 text-xs text-gray-400">
-                                                Level @friend.Level
-                                            </span>
-                                        </div>
-                                        <button type="button"
-                                            class="text-xs text-red-400 hover:text-red-300 cursor-pointer"
-                                            @onclick="() => RemoveFriend(friend.UserId)">
-                                            Remove
-                                        </button>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
+<div class="friends-page">
+    <GlassPanel Radius="24" Style="width: 100%; max-width: 480px; height: 100%; max-height: 640px; display: flex; flex-direction: column;">
+        <!-- Header -->
+        <div class="friends-header">
+            <div class="friends-header-left">
+                <a href="/chat" class="back-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                </a>
+                <div>
+                    <div class="friends-title">Friends</div>
+                    <div class="friends-stats">@friends.Count total · @friends.Count(f => f.Status == "online") online</div>
                 </div>
             </div>
+            <IconButton Title="Add friend" OnClick="() => showAddModal = true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+            </IconButton>
         </div>
-    </div>
-</section>
+
+        <!-- Search -->
+        <div class="friends-search">
+            <GlassInput @bind-Value="searchQuery" Placeholder="Search friends..." Style="background: rgba(0,0,0,0.18);">
+                <Icon>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                </Icon>
+            </GlassInput>
+        </div>
+
+        <!-- Tabs -->
+        <div class="friends-tabs">
+            <button class="friends-tab @(activeTab == "all" ? "active" : "")" @onclick='() => activeTab = "all"'>
+                All
+            </button>
+            <button class="friends-tab @(activeTab == "online" ? "active" : "")" @onclick='() => activeTab = "online"'>
+                Online
+            </button>
+            <button class="friends-tab @(activeTab == "requests" ? "active" : "")" @onclick='() => activeTab = "requests"'>
+                Requests
+                @if (incomingRequests.Any())
+                {
+                    <span class="tab-badge">@incomingRequests.Count</span>
+                }
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="friends-content">
+            @if (isLoading)
+            {
+                <div class="loading-state">Loading...</div>
+            }
+            else if (activeTab == "requests")
+            {
+                @if (incomingRequests.Any())
+                {
+                    <div class="section-label">Incoming · @incomingRequests.Count</div>
+                    @foreach (var req in incomingRequests)
+                    {
+                        <div class="request-card">
+                            <div class="request-header">
+                                <Avatar Name="@req.Name" Size="32" />
+                                <div class="request-info">
+                                    <div class="request-name">@req.Name</div>
+                                    <div class="request-meta">
+                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
+                                        </svg>
+                                        by handle
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="request-actions">
+                                <GlassButton Primary="true" Size="sm" Style="flex: 1;" OnClick="() => AcceptRequest(req.RequestId)">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                    Accept
+                                </GlassButton>
+                                <GlassButton Size="sm" Style="flex: 1;" OnClick="() => RejectRequest(req.RequestId)">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                    Decline
+                                </GlassButton>
+                            </div>
+                        </div>
+                    }
+                }
+
+                @if (outgoingRequests.Any())
+                {
+                    <div class="section-label" style="margin-top: 14px;">Sent · @outgoingRequests.Count</div>
+                    @foreach (var req in outgoingRequests)
+                    {
+                        <div class="sent-request">
+                            <Avatar Name="@req.Name" Size="28" />
+                            <div class="sent-info">
+                                <div class="sent-name">@req.Name</div>
+                                <div class="sent-status">Pending</div>
+                            </div>
+                            <GlassButton Size="sm" OnClick="() => CancelRequest(req.RequestId)">Cancel</GlassButton>
+                        </div>
+                    }
+                }
+
+                @if (!incomingRequests.Any() && !outgoingRequests.Any())
+                {
+                    <div class="empty-state">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="8.5" cy="7" r="4"/>
+                            <line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
+                        </svg>
+                        <div class="empty-title">No pending requests</div>
+                        <div class="empty-desc">Friend requests will appear here</div>
+                    </div>
+                }
+            }
+            else
+            {
+                @foreach (var friend in filteredFriends)
+                {
+                    <div class="friend-row">
+                        <Avatar Name="@friend.Name" Size="32" />
+                        <div class="friend-info">
+                            <div class="friend-name">@friend.Name</div>
+                            <div class="friend-status">
+                                <span class="status-dot @GetDisplayStatus(friend.Status)"></span>
+                                @if (!string.IsNullOrEmpty(friend.StatusMessage))
+                                {
+                                    @friend.StatusMessage
+                                }
+                                else
+                                {
+                                    @GetStatusLabel(friend.Status)
+                                }
+                            </div>
+                        </div>
+                        <IconButton Title="Message" Size="28">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </IconButton>
+                        <IconButton Title="Remove" Size="28" OnClick="() => RemoveFriend(friend.UserId)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                            </svg>
+                        </IconButton>
+                    </div>
+                }
+
+                @if (!filteredFriends.Any())
+                {
+                    <div class="empty-state">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                        </svg>
+                        <div class="empty-title">@(activeTab == "online" ? "No friends online" : "No friends yet")</div>
+                        <div class="empty-desc">@(activeTab == "online" ? "Your online friends will appear here" : "Add friends to start chatting")</div>
+                    </div>
+                }
+            }
+        </div>
+    </GlassPanel>
+</div>
+
+<AddFriendModal IsOpen="@showAddModal" OnClose="() => showAddModal = false" OnRequestSent="HandleRequestSent" />
+
+<style>
+    .friends-page {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+    }
+
+    .friends-header {
+        padding: 18px 18px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .friends-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .back-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        color: rgba(255,255,255,0.60);
+        text-decoration: none;
+        transition: all 0.15s;
+    }
+
+    .back-btn:hover {
+        background: rgba(255,255,255,0.08);
+        color: white;
+    }
+
+    .friends-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.01em;
+    }
+
+    .friends-stats {
+        font-size: 10.5px;
+        color: rgba(255,255,255,0.55);
+        margin-top: 2px;
+    }
+
+    .friends-search {
+        padding: 0 14px 10px;
+    }
+
+    .friends-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 14px 10px;
+    }
+
+    .friends-tab {
+        flex: 1;
+        padding: 6px 0;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        background: transparent;
+        border: 0.5px solid rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.65);
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        transition: all 0.15s;
+    }
+
+    .friends-tab:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .friends-tab.active {
+        background: rgba(255,255,255,0.12);
+        border-color: rgba(255,255,255,0.18);
+        color: white;
+    }
+
+    .tab-badge {
+        font-size: 9px;
+        font-weight: 700;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        min-width: 14px;
+        text-align: center;
+    }
+
+    .friends-content {
+        flex: 1;
+        overflow: auto;
+        padding: 0 10px 14px;
+    }
+
+    .section-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.45);
+        padding: 4px 12px 6px;
+    }
+
+    .friend-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        margin-bottom: 1px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .friend-row:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .friend-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .friend-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .friend-status {
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.30);
+    }
+
+    .status-dot.online {
+        background: var(--status-online);
+        box-shadow: 0 0 6px var(--status-online);
+    }
+
+    .status-dot.away {
+        background: var(--status-away);
+    }
+
+    .status-dot.busy {
+        background: var(--status-busy);
+        box-shadow: 0 0 6px var(--status-busy);
+    }
+
+    .status-dot.invisible,
+    .status-dot.offline {
+        background: rgba(255,255,255,0.30);
+    }
+
+    .request-card {
+        padding: 10px 12px;
+        border-radius: 14px;
+        margin-bottom: 6px;
+        background: rgba(255,255,255,0.05);
+        border: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .request-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .request-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .request-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .request-meta {
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .request-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .sent-request {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        margin-bottom: 1px;
+        opacity: 0.85;
+    }
+
+    .sent-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .sent-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .sent-status {
+        font-size: 10px;
+        color: rgba(255,255,255,0.50);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: rgba(255,255,255,0.45);
+    }
+
+    .empty-state svg {
+        margin: 0 auto 10px;
+        opacity: 0.5;
+    }
+
+    .empty-title {
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .empty-desc {
+        font-size: 11px;
+        margin-top: 4px;
+    }
+
+    .loading-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: rgba(255,255,255,0.50);
+    }
+</style>
 
 @code {
     private string? _userId;
-    private string? errorMessage;
-    private string? successMessage;
     private bool isLoading;
-
+    private bool showAddModal;
     private string searchQuery = string.Empty;
-    private List<FriendClient.UserDTO> searchResults = new();
-    private List<FriendClient.FriendDTO> friends = new();
-    private List<FriendClient.FriendRequestDTO> pendingRequests = new();
+    private string activeTab = "all";
 
-    private System.Timers.Timer? searchDebounceTimer;
+    private List<FriendClient.FriendDTO> friends = new();
+    private List<FriendClient.FriendRequestDTO> incomingRequests = new();
+    private List<FriendClient.FriendRequestDTO> outgoingRequests = new();
+
+    private IEnumerable<FriendClient.FriendDTO> filteredFriends => friends
+        .Where(f =>
+        {
+            if (!string.IsNullOrWhiteSpace(searchQuery) &&
+                !f.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (activeTab == "online")
+                return f.Status == "online";
+            return true;
+        });
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,7 +488,7 @@
 
         if (user?.Identity is null || !user.Identity.IsAuthenticated)
         {
-            Navigation.NavigateTo("/Login");
+            Navigation.NavigateTo("/login");
             return;
         }
 
@@ -165,7 +499,6 @@
     private async Task LoadDataAsync()
     {
         isLoading = true;
-        errorMessage = null;
 
         try
         {
@@ -175,7 +508,11 @@
 
             var requestsResult = await FriendClient.GetPendingRequestsAsync();
             if (requestsResult.Success)
-                pendingRequests = requestsResult.Value ?? [];
+            {
+                var allRequests = requestsResult.Value ?? [];
+                incomingRequests = allRequests.Where(r => r.IsIncoming).ToList();
+                outgoingRequests = allRequests.Where(r => !r.IsIncoming).ToList();
+            }
         }
         finally
         {
@@ -183,103 +520,51 @@
         }
     }
 
-    private void HandleSearchKeyUp(KeyboardEventArgs e)
+    private async Task HandleRequestSent()
     {
-        searchDebounceTimer?.Stop();
-        searchDebounceTimer?.Dispose();
-
-        searchDebounceTimer = new System.Timers.Timer(300);
-        searchDebounceTimer.Elapsed += async (s, args) =>
-        {
-            searchDebounceTimer?.Stop();
-            await InvokeAsync(async () =>
-            {
-                await SearchUsers();
-                StateHasChanged();
-            });
-        };
-        searchDebounceTimer.AutoReset = false;
-        searchDebounceTimer.Start();
-    }
-
-    private async Task SearchUsers()
-    {
-        if (string.IsNullOrWhiteSpace(searchQuery) || searchQuery.Length < 2)
-        {
-            searchResults.Clear();
-            return;
-        }
-
-        var result = await FriendClient.SearchUsersToAddAsync(searchQuery);
-        if (result.Success && result.Value != null)
-        {
-            searchResults = result.Value;
-        }
-        else
-        {
-            searchResults.Clear();
-        }
-    }
-
-    private async Task SendFriendRequest(string userId)
-    {
-        errorMessage = null;
-        successMessage = null;
-
-        var result = await FriendClient.SendRequestAsync(userId);
-        if (result.Success)
-        {
-            successMessage = "Friend request sent!";
-            searchQuery = string.Empty;
-            searchResults.Clear();
-            await LoadDataAsync();
-        }
-        else
-        {
-            errorMessage = result.ErrorMessage;
-        }
+        await LoadDataAsync();
     }
 
     private async Task AcceptRequest(Guid requestId)
     {
-        errorMessage = null;
         var result = await FriendClient.AcceptRequestAsync(requestId);
         if (result.Success)
-        {
-            successMessage = "Friend request accepted!";
             await LoadDataAsync();
-        }
-        else
-        {
-            errorMessage = result.ErrorMessage;
-        }
     }
 
     private async Task RejectRequest(Guid requestId)
     {
-        errorMessage = null;
         var result = await FriendClient.RejectRequestAsync(requestId);
         if (result.Success)
-        {
             await LoadDataAsync();
-        }
-        else
-        {
-            errorMessage = result.ErrorMessage;
-        }
+    }
+
+    private async Task CancelRequest(Guid requestId)
+    {
+        var result = await FriendClient.RejectRequestAsync(requestId);
+        if (result.Success)
+            await LoadDataAsync();
     }
 
     private async Task RemoveFriend(string friendId)
     {
-        errorMessage = null;
         var result = await FriendClient.RemoveFriendAsync(friendId);
         if (result.Success)
-        {
             await LoadDataAsync();
-        }
-        else
-        {
-            errorMessage = result.ErrorMessage;
-        }
     }
+
+    private string GetDisplayStatus(string status) => status switch
+    {
+        "invisible" => "offline",
+        _ => status
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        "online" => "Online now",
+        "away" => "Away",
+        "busy" => "Do not disturb",
+        "invisible" or "offline" => "Offline",
+        _ => "Offline"
+    };
 }

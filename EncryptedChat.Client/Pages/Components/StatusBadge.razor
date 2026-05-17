@@ -1,0 +1,84 @@
+@namespace EncryptedChat.Client.Pages.Components
+
+<div class="status-badge @SizeClass">
+    <span class="status-badge-dot @Status"></span>
+    <span class="status-badge-text">@DisplayText</span>
+</div>
+
+<style>
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .status-badge-dot {
+        flex: 0 0 auto;
+        border-radius: 50%;
+    }
+
+    .status-badge.sm .status-badge-dot {
+        width: 6px;
+        height: 6px;
+    }
+
+    .status-badge.lg .status-badge-dot {
+        width: 7px;
+        height: 7px;
+    }
+
+    .status-badge-dot.online {
+        background: var(--status-online);
+        box-shadow: 0 0 6px var(--status-online);
+    }
+
+    .status-badge-dot.away {
+        background: var(--status-away);
+    }
+
+    .status-badge-dot.busy {
+        background: var(--status-busy);
+        box-shadow: 0 0 6px var(--status-busy);
+    }
+
+    .status-badge-dot.invisible,
+    .status-badge-dot.offline {
+        background: var(--status-invisible);
+    }
+
+    .status-badge-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: rgba(255,255,255,0.65);
+    }
+
+    .status-badge.sm .status-badge-text {
+        font-size: 10.5px;
+    }
+
+    .status-badge.lg .status-badge-text {
+        font-size: 12px;
+    }
+</style>
+
+@code {
+    [Parameter] public string Status { get; set; } = "online";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string Size { get; set; } = "sm";
+
+    private string SizeClass => Size == "lg" ? "lg" : "sm";
+
+    private string DisplayText => !string.IsNullOrEmpty(Message) ? Message : StatusLabel;
+
+    private string StatusLabel => Status switch
+    {
+        "online" => "Online",
+        "away" => "Away",
+        "busy" => "Do not disturb",
+        "invisible" => "Invisible",
+        _ => "Offline"
+    };
+}

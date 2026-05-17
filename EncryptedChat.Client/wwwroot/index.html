@@ -21,15 +21,74 @@
         <div class="loading-progress-text"></div>
     </div>
 
+    <script src="js/app-interop.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     <script src="js/flowbite-interop.js"></script>
     <script>
         function scrollToBottom(elementId) {
-            const el = document.getElementById(elementId);
-            if (el) {
-                el.scrollTop = el.scrollHeight;
+            const container = document.getElementById(elementId);
+            if (container) {
+                container.scrollTop = container.scrollHeight;
             }
+        }
+
+        // Auto-scroll when new messages are added
+        let messagesObserver = null;
+        function initAutoScroll(elementId) {
+            if (messagesObserver) {
+                messagesObserver.disconnect();
+            }
+            const container = document.getElementById(elementId);
+            if (!container) return;
+
+            messagesObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.addedNodes.length > 0) {
+                        // Check if a message was added
+                        for (const node of mutation.addedNodes) {
+                            if (node.classList && node.classList.contains('message')) {
+                                container.scrollTop = container.scrollHeight;
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+
+            messagesObserver.observe(container, { childList: true, subtree: true });
+            // Initial scroll
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function applyTheme(theme) {
+            if (theme === 'auto') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+        }
+
+        async function showNotification(title, body) {
+            if (!('Notification' in window)) return;
+
+            if (Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+
+            if (Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: '/favicon.png',
+                    tag: 'encrypted-chat-message'
+                });
+            }
+        }
+
+        // Request notification permission on load
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
         }
     </script>
 </body>

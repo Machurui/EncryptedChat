@@ -21,6 +21,9 @@ public class ChatClient
     {
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public string? Handle { get; set; }
+        public string NameColor { get; set; } = "#FFFFFF";
+        public string? ProfileImageUrl { get; set; }
     }
 
     public ChatClient(HttpClient http)
@@ -55,17 +58,16 @@ public class ChatClient
         return Result<List<MessageDTOPublic>>.Ok(msgs);
     }
 
-    // Optional: REST send via POST api/Message (even though SignalR will mainly be used)
-    private class MessageDTO
+    // POST api/Message - create message via REST (returns message with ID for attachments)
+    private class MessageCreateDTO
     {
         public string Text { get; set; } = string.Empty;
-        public string Sender { get; set; } = string.Empty;
         public Guid Team { get; set; }
     }
 
-    public async Task<Result<MessageDTOPublic>> SendMessageRestAsync(string senderId, Guid teamId, string text)
+    public async Task<Result<MessageDTOPublic>> CreateMessageAsync(Guid teamId, string text)
     {
-        var dto = new MessageDTO { Text = text, Sender = senderId, Team = teamId };
+        var dto = new MessageCreateDTO { Text = text, Team = teamId };
         var json = JsonSerializer.Serialize(dto);
 
         var req = new HttpRequestMessage(HttpMethod.Post, "api/Message")

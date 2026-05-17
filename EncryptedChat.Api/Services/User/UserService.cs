@@ -3,13 +3,15 @@ using EncryptedChat.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 
 namespace EncryptedChat.Services;
 
-public class UserService(EncryptedChatContext context, UserManager<User> userManager) : IUserService
+public class UserService(EncryptedChatContext context, UserManager<User> userManager, ICryptoService crypto) : IUserService
 {
     private readonly EncryptedChatContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
+    private readonly ICryptoService _crypto = crypto;
 
     public async Task<UserProfileDTO?> GetOwnProfileAsync(string id)
     {
@@ -24,10 +26,18 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             Id = user.Id,
             Name = user.Name,
+            Handle = user.Handle,
             Email = user.Email ?? string.Empty,
             Level = user.Level,
             NameColor = user.NameColor,
-            ProfileImageUrl = user.ProfileImageUrl
+            ProfileImageUrl = user.ProfileImageUrl,
+            Status = user.Status,
+            StatusMessage = user.StatusMessage,
+            Theme = user.Theme,
+            ReadReceipts = user.ReadReceipts,
+            TypingIndicators = user.TypingIndicators,
+            NotificationPreference = user.NotificationPreference,
+            LastSeenAt = user.LastSeenAt
         };
     }
 
@@ -40,7 +50,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             User? self = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
             if (self == null) return null;
-            return new UserDTOPublic { Id = self.Id, Name = self.Name, Level = self.Level, NameColor = self.NameColor, ProfileImageUrl = self.ProfileImageUrl };
+            return new UserDTOPublic { Id = self.Id, Name = self.Name, Handle = self.Handle, Level = self.Level, NameColor = self.NameColor, ProfileImageUrl = self.ProfileImageUrl, Status = self.Status, StatusMessage = self.StatusMessage };
         }
 
         bool areTeammates = await _context.Members
@@ -63,9 +73,12 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             Id = user.Id,
             Name = user.Name,
+            Handle = user.Handle,
             Level = user.Level,
             NameColor = user.NameColor,
-            ProfileImageUrl = user.ProfileImageUrl
+            ProfileImageUrl = user.ProfileImageUrl,
+            Status = user.Status,
+            StatusMessage = user.StatusMessage
         };
     }
 
@@ -84,20 +97,67 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         if (!userExists)
             return [];
 
-        List<UserTeamDTO> teams = await _context.Members
+        var userTeams = await _context.Members
             .AsNoTracking()
+            .Include(m => m.Team)
             .Where(m => m.UserId == userId && m.Team != null)
-            .OrderBy(m => m.Team!.Name)
+            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Team.Secret, m.Role })
+            .ToListAsync();
+
+        var teamIds = userTeams.Select(t => t.Id).ToList();
+
+        var lastMessages = await _context.Messages
+            .AsNoTracking()
+            .Include(m => m.Sender)
+            .Include(m => m.Team)
+            .Where(m => m.Team != null && teamIds.Contains(m.Team.Id))
+            .GroupBy(m => m.Team!.Id)
+            .Select(g => g.OrderByDescending(m => m.Date).FirstOrDefault())
+            .ToListAsync();
+
+        var lastMsgDict = lastMessages
+            .Where(m => m != null)
+            .ToDictionary(m => m!.Team!.Id, m => m!);
+
+        List<UserTeamDTO> teams = userTeams.Select(t => new UserTeamDTO
+        {
+            Id = t.Id,
+            Name = t.Name,
+            Slug = t.Slug,
+            Role = t.Role,
+            Glyph = t.Glyph,
+            Color = t.Color,
+            MessageLifetime = t.MessageLifetime,
+            IsDirect = t.IsDirect
+        }).ToList();
+
+        foreach (var team in teams)
+        {
+            var userTeam = userTeams.First(t => t.Id == team.Id);
+            if (lastMsgDict.TryGetValue(team.Id, out var lastMsg) && lastMsg != null)
+            {
+                team.LastMessageTime = lastMsg.Date;
+                team.LastMessageSenderName = lastMsg.Sender?.Name;
+
+                try
+                {
+                    string plaintext = _crypto.Decrypt(lastMsg.EncryptedText, lastMsg.Iv, userTeam.Secret);
+                    string preview = plaintext.Replace("\n", " ").Trim();
+                    if (preview.Length > 50) preview = preview[..50] + "...";
+                    team.LastMessagePreview = preview;
+                }
+                catch (CryptographicException)
+                {
+                    team.LastMessagePreview = "[Encrypted]";
+                }
+            }
+        }
+
+        teams = teams
+            .OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(m => new UserTeamDTO
-            {
-                Id = m.Team!.Id,
-                Name = m.Team.Name,
-                Slug = m.Team.Slug,
-                Role = m.Role
-            })
-            .ToListAsync();
+            .ToList();
 
         return teams;
     }
@@ -118,6 +178,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .AsNoTracking()
             .Where(u => u.Id != requesterId &&
                         (u.Name.ToLower().Contains(normalizedQuery) ||
+                         (u.Handle != null && u.Handle.ToLower().Contains(normalizedQuery)) ||
                          (u.Email != null && u.Email.ToLower().Contains(normalizedQuery))))
             .OrderBy(u => u.Name)
             .Take(limit)
@@ -125,9 +186,12 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             {
                 Id = u.Id,
                 Name = u.Name,
+                Handle = u.Handle,
                 Level = u.Level,
                 NameColor = u.NameColor,
-                ProfileImageUrl = u.ProfileImageUrl
+                ProfileImageUrl = u.ProfileImageUrl,
+                Status = u.Status,
+                StatusMessage = u.StatusMessage
             })
             .ToListAsync();
 
@@ -143,11 +207,15 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
         string? name = string.IsNullOrWhiteSpace(dto.Name) ? null : dto.Name.Trim();
+        string? handle = string.IsNullOrWhiteSpace(dto.Handle) ? null : dto.Handle.Trim().ToLowerInvariant();
         string? email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
         string? nameColor = string.IsNullOrWhiteSpace(dto.NameColor) ? null : dto.NameColor.Trim();
         string? profileImageUrl = dto.ProfileImageUrl?.Trim();
+        string? status = string.IsNullOrWhiteSpace(dto.Status) ? null : dto.Status.Trim().ToLowerInvariant();
+        string? statusMessage = dto.StatusMessage;
+        string? theme = string.IsNullOrWhiteSpace(dto.Theme) ? null : dto.Theme.Trim().ToLowerInvariant();
 
-        if (name == null && email == null && nameColor == null && profileImageUrl == null)
+        if (name == null && handle == null && email == null && nameColor == null && profileImageUrl == null && status == null && statusMessage == null && theme == null && !dto.ReadReceipts.HasValue && !dto.TypingIndicators.HasValue && string.IsNullOrWhiteSpace(dto.NotificationPreference))
             return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
         User? user = await _userManager.FindByIdAsync(id);
@@ -164,6 +232,21 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
                 return new UserUpdateResult(UserOperationStatus.Conflict);
 
             user.Name = name;
+        }
+
+        if (handle != null)
+        {
+            if (handle.Length < 3 || handle.Length > 32)
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(handle, @"^[a-zA-Z0-9_]+$"))
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+
+            bool handleExists = await _context.Users.AnyAsync(u => u.Handle == handle && u.Id != id);
+            if (handleExists)
+                return new UserUpdateResult(UserOperationStatus.Conflict);
+
+            user.Handle = handle;
         }
 
         if (email != null)
@@ -202,6 +285,48 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             user.ProfileImageUrl = string.IsNullOrEmpty(profileImageUrl) ? null : profileImageUrl;
         }
 
+        if (status != null)
+        {
+            string[] validStatuses = ["online", "away", "busy", "invisible"];
+            if (!validStatuses.Contains(status))
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+            user.Status = status;
+        }
+
+        if (statusMessage != null)
+        {
+            if (statusMessage.Length > 100)
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+            user.StatusMessage = string.IsNullOrWhiteSpace(statusMessage) ? null : statusMessage.Trim();
+        }
+
+        if (theme != null)
+        {
+            string[] validThemes = ["dark", "light", "auto"];
+            if (!validThemes.Contains(theme))
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+            user.Theme = theme;
+        }
+
+        if (dto.ReadReceipts.HasValue)
+        {
+            user.ReadReceipts = dto.ReadReceipts.Value;
+        }
+
+        if (dto.TypingIndicators.HasValue)
+        {
+            user.TypingIndicators = dto.TypingIndicators.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.NotificationPreference))
+        {
+            string[] validPreferences = ["all", "mentions", "none"];
+            string pref = dto.NotificationPreference.Trim().ToLowerInvariant();
+            if (!validPreferences.Contains(pref))
+                return new UserUpdateResult(UserOperationStatus.ValidationFailed);
+            user.NotificationPreference = pref;
+        }
+
         IdentityResult updateResult;
         try
         {
@@ -222,10 +347,17 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         {
             Id = user.Id,
             Name = user.Name,
+            Handle = user.Handle,
             Email = user.Email ?? string.Empty,
             Level = user.Level,
             NameColor = user.NameColor,
-            ProfileImageUrl = user.ProfileImageUrl
+            ProfileImageUrl = user.ProfileImageUrl,
+            Status = user.Status,
+            StatusMessage = user.StatusMessage,
+            Theme = user.Theme,
+            ReadReceipts = user.ReadReceipts,
+            TypingIndicators = user.TypingIndicators,
+            NotificationPreference = user.NotificationPreference
         });
     }
 
@@ -249,5 +381,12 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         return result.Succeeded
             ? new UserDeleteResult(UserOperationStatus.Success)
             : new UserDeleteResult(UserOperationStatus.ValidationFailed);
+    }
+
+    public async Task UpdateLastSeenAsync(string userId)
+    {
+        await _context.Database.ExecuteSqlRawAsync(
+            "UPDATE AspNetUsers SET LastSeenAt = {0} WHERE Id = {1}",
+            DateTime.UtcNow, userId);
     }
 }

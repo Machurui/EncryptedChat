@@ -10,6 +10,7 @@ public interface IUserService
     Task<IReadOnlyList<UserDTOPublic>> SearchUsersAsync(string query, string requesterId, int limit = 10);
     Task<UserUpdateResult> UpdateAsync(string id, string requesterId, UserUpdateDTO dto);
     Task<UserDeleteResult> DeleteAsync(string id, string requesterId);
+    Task UpdateLastSeenAsync(string userId);
 }
 
 public enum UserOperationStatus

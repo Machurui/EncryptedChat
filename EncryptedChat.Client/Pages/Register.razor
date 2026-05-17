@@ -1,95 +1,133 @@
 @page "/register"
+@layout EmptyLayout
 @inject EncryptedChat.Client.Services.AuthClient Auth
 @inject NavigationManager Nav
 
 @using System.ComponentModel.DataAnnotations
+@using EncryptedChat.Client.Pages.Components
 
-<section>
-    <div class="relative grid place-items-center px-6 py-10 mx-auto min-h-[60svh] md:min-h-[65svh] lg:min-h-[70svh]">
-        <div class="flex flex-col items-center w-full sm:max-w-md md:mt-0">
-            <div class="liquid-glass-wrapper rounded-3xl shadow-2xl w-full"
-                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05); box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;">
+<div class="app-background"></div>
 
-                <!-- Glass layers -->
-                <div class="liquid-glass-effect" aria-hidden="true"></div>
-                <div class="liquid-glass-tint" aria-hidden="true"></div>
-                <div class="liquid-glass-shine" aria-hidden="true"></div>
+<div style="min-height: 100vh; display: grid; place-items: center; padding: 24px;">
+    <GlassPanel Radius="28" Style="width: 100%; max-width: 420px;">
+        <div style="padding: 34px 36px 8px; text-align: center;">
+            <!-- Shield Icon -->
+            <div style="width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 16px;
+                        background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));
+                        display: grid; place-items: center;
+                        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.40), 0 12px 36px var(--accent-glow);">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+            </div>
 
-                <!-- Content -->
-                <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
-                    <h1
-                        class="flex justify-center text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
-                        Create a new account
-                    </h1>
-
-                    <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister" class="space-y-4 md:space-y-6">
-                        <DataAnnotationsValidator />
-                        <ValidationSummary class="text-red-300" />
-
-                        @if (!string.IsNullOrWhiteSpace(errorMessage))
-                        {
-                            <div class="text-red-300 whitespace-pre-line">
-                                @errorMessage
-                            </div>
-                        }
-
-                        <div>
-                            <label for="email" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                                Your email
-                            </label>
-                            <InputText id="email" @bind-Value="registerModel.Email" type="email"
-                                placeholder="name@company.com"
-                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
-                        </div>
-
-                        <div>
-                            <label for="password" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                                Password
-                            </label>
-                            <InputText id="password" @bind-Value="registerModel.Password" type="password"
-                                placeholder="••••••••"
-                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
-                        </div>
-
-                        <div>
-                            <label for="confirm-password" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                                Confirm Password
-                            </label>
-                            <InputText id="confirm-password" @bind-Value="registerModel.ConfirmPassword" type="password"
-                                placeholder="••••••••"
-                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
-                        </div>
-
-                        <div>
-                            <label for="name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                                Full Name
-                            </label>
-                            <InputText id="name" @bind-Value="registerModel.Name" type="text"
-                                placeholder="Your name"
-                                class="w-full block bg-black/30 font-mono text-sm text-green-300 rounded-lg p-4 border-none" />
-                        </div>
-
-                        <button type="submit" class="glass-button-primary w-full justify-center">
-                            Sign up
-                        </button>
-
-                        <p class="text-sm font-light text-gray-600 dark:text-gray-400">
-                            Already have an account?
-                            <NavLink href="/login"
-                                class="font-medium text-primary-600 hover:underline dark:text-primary-400">
-                                Sign in
-                            </NavLink>
-                        </p>
-                    </EditForm>
-                </div>
+            <div style="font-size: 22px; font-weight: 700; color: white; letter-spacing: -0.02em;">
+                Create your identity
+            </div>
+            <div style="font-size: 13px; color: rgba(255,255,255,0.60); margin-top: 6px; line-height: 1.5;">
+                Your private key never leaves this device.
             </div>
         </div>
-    </div>
-</section>
+
+        <div style="padding: 20px 36px 28px;">
+            <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister" style="display: flex; flex-direction: column; gap: 12px;">
+                <DataAnnotationsValidator/>
+
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div style="padding: 10px 12px; background: rgba(220,60,60,0.15); border: 0.5px solid rgba(220,60,60,0.30);
+                                border-radius: 10px; font-size: 12px; color: oklch(0.78 0.14 25);">
+                        @errorMessage
+                    </div>
+                }
+
+                <!-- Display Name Field -->
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                        Display name
+                    </label>
+                    <div class="glass-input">
+                        <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        <InputText @bind-Value="registerModel.Name" placeholder="François Serra" />
+                    </div>
+                </div>
+
+                <!-- Email Field -->
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                        Email
+                    </label>
+                    <div class="glass-input">
+                        <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
+                        </svg>
+                        <InputText @bind-Value="registerModel.Email" type="email" placeholder="you@workspace.app" />
+                    </div>
+                </div>
+
+                <!-- Password Field -->
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                        Password
+                    </label>
+                    <div class="glass-input">
+                        <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        <InputText @bind-Value="registerModel.Password" type="password" placeholder="••••••••••" />
+                    </div>
+                </div>
+
+                <!-- Confirm Password Field -->
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                        Confirm password
+                    </label>
+                    <div class="glass-input">
+                        <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        <InputText @bind-Value="registerModel.ConfirmPassword" type="password" placeholder="••••••••••" />
+                    </div>
+                </div>
+
+                <!-- Encryption Banner -->
+                <div class="encryption-banner" style="margin-top: 4px;">
+                    <svg class="encryption-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                    <div>
+                        <div class="encryption-banner-title">Your encryption keys will be generated</div>
+                        <div class="encryption-banner-text">Save your recovery phrase — losing it means losing access to past messages.</div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="glass-btn glass-btn-primary glass-btn-lg" style="margin-top: 6px; width: 100%;" disabled="@isLoading">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                    @(isLoading ? "Creating account..." : "Create account")
+                </button>
+
+                <!-- Sign In Link -->
+                <div style="text-align: center; font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 6px;">
+                    Already have an account?
+                    <NavLink href="/login" class="link-btn" style="font-weight: 600; margin-left: 4px;">
+                        Sign in
+                    </NavLink>
+                </div>
+            </EditForm>
+        </div>
+    </GlassPanel>
+</div>
 
 @code {
     private RegisterModel registerModel = new();
     private string? errorMessage;
+    private bool isLoading;
 
     private async Task HandleRegister()
     {
@@ -99,27 +137,40 @@
             return;
         }
 
-        var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Name);
+        isLoading = true;
+        errorMessage = null;
 
-        if (result.Success)
-            Nav.NavigateTo("/login");
+        try
+        {
+            var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Name);
 
-        else
-            errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
+            if (result.Success)
+                Nav.NavigateTo("/login");
+            else
+                errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     public class RegisterModel
     {
-        [Required, EmailAddress]
+        [Required(ErrorMessage = "Name is required")]
+        [MinLength(2, ErrorMessage = "Name must be at least 2 characters")]
+        [MaxLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email")]
         public string Email { get; set; } = string.Empty;
 
-        [Required, MinLength(6)]
+        [Required(ErrorMessage = "Password is required")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
         public string Password { get; set; } = string.Empty;
 
-        [Required, MinLength(6)]
+        [Required(ErrorMessage = "Please confirm your password")]
         public string ConfirmPassword { get; set; } = string.Empty;
-
-        [Required, MinLength(2), MaxLength(100)]
-        public string Name { get; set; } = string.Empty;
     }
 }

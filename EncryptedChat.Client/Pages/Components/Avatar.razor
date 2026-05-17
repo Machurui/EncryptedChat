@@ -1,0 +1,31 @@
+@namespace EncryptedChat.Client.Pages.Components
+
+<div class="avatar" style="width: @(Size)px; height: @(Size)px; font-size: @(Size)px;">
+    @if (!string.IsNullOrEmpty(ImageUrl))
+    {
+        <img src="@ImageUrl" alt="@Name" />
+    }
+    else
+    {
+        <div class="avatar-fallback" style="background: linear-gradient(135deg, @Color, oklch(0.45 0.16 225));">
+            @Initials
+        </div>
+    }
+    @if (ShowStatus)
+    {
+        <span class="avatar-status @Status"></span>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? ImageUrl { get; set; }
+    [Parameter] public int Size { get; set; } = 32;
+    [Parameter] public string Status { get; set; } = "offline";
+    [Parameter] public bool ShowStatus { get; set; } = false;
+    [Parameter] public string Color { get; set; } = "var(--accent)";
+
+    private string Initials => string.IsNullOrEmpty(Name)
+        ? "?"
+        : string.Join("", Name.Split(' ').Take(2).Select(s => s.Length > 0 ? s[0].ToString().ToUpper() : ""));
+}

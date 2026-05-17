@@ -1,0 +1,21 @@
+@namespace EncryptedChat.Client.Pages.Components
+
+<div class="glass-panel @(NoDistort ? "no-distort" : "") @Class" style="--glass-radius: @(Radius)px; @Style">
+    <div class="glass-backdrop" aria-hidden="true"></div>
+    <div class="glass-tint" style="@TintStyle" aria-hidden="true"></div>
+    <div class="glass-shine" aria-hidden="true"></div>
+    <div class="glass-content">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public int Radius { get; set; } = 20;
+    [Parameter] public string Class { get; set; } = "";
+    [Parameter] public string Style { get; set; } = "";
+    [Parameter] public string? Tint { get; set; }
+    [Parameter] public bool NoDistort { get; set; } = false;
+
+    private string TintStyle => Tint != null ? $"background: {Tint};" : "";
+}

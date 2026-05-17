@@ -7,9 +7,9 @@ public class FriendClient(HttpClient http)
 {
     private readonly HttpClient _http = http;
 
-    public record FriendDTO(string UserId, string Name, int Level, DateTime FriendsSince);
-    public record FriendRequestDTO(Guid RequestId, string UserId, string Name, int Level, DateTime SentAt, bool IsIncoming);
-    public record UserDTO(string Id, string Name, int Level);
+    public record FriendDTO(string UserId, string Name, string? Handle, int Level, string NameColor, string? ProfileImageUrl, DateTime FriendsSince, string Status = "offline", string? StatusMessage = null, DateTime? LastSeenAt = null);
+    public record FriendRequestDTO(Guid RequestId, string UserId, string Name, string? Handle, int Level, string NameColor, string? ProfileImageUrl, DateTime SentAt, bool IsIncoming);
+    public record UserDTO(string Id, string Name, string? Handle, int Level, string NameColor, string? ProfileImageUrl);
 
     public class Result
     {

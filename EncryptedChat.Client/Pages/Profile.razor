@@ -1,138 +1,149 @@
-@page "/Profile"
+@page "/profile"
+@layout EmptyLayout
 @attribute [Authorize]
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
 @using EncryptedChat.Client.Services
+@using EncryptedChat.Client.Pages.Components
 
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserClient UserClient
 @inject NavigationManager Navigation
 
-<section>
-    <div class="relative grid place-items-center px-6 py-10 mx-auto min-h-[60svh] md:min-h-[65svh] lg:min-h-[70svh]">
-        <div class="flex flex-col items-center w-full sm:max-w-md md:mt-0">
-            <div class="liquid-glass-wrapper rounded-3xl shadow-2xl w-full"
-                style="border-radius: 20px; background-color: rgba(255, 255, 255, 0.05); box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;">
+<div class="app-background"></div>
 
-                <div class="liquid-glass-effect" aria-hidden="true"></div>
-                <div class="liquid-glass-tint" aria-hidden="true"></div>
-                <div class="liquid-glass-shine" aria-hidden="true"></div>
-
-                <div class="liquid-glass-content p-6 space-y-4 md:space-y-6 sm:p-8">
-                    <h1 class="flex justify-center text-xl font-bold leading-tight tracking-tight text-white md:text-2xl">
-                        My Profile
-                    </h1>
-
-                    @if (isLoading)
-                    {
-                        <p class="text-sm text-gray-400 text-center">Loading...</p>
-                    }
-                    else if (profile != null)
-                    {
-                        @if (!string.IsNullOrEmpty(errorMessage))
-                        {
-                            <p class="text-sm text-red-400">@errorMessage</p>
-                        }
-
-                        @if (!string.IsNullOrEmpty(successMessage))
-                        {
-                            <p class="text-sm text-green-400">@successMessage</p>
-                        }
-
-                        <!-- Profile Picture -->
-                        <div class="flex flex-col items-center space-y-3">
-                            <div class="relative">
-                                @if (!string.IsNullOrEmpty(profileImageUrl))
-                                {
-                                    <img src="@profileImageUrl" alt="Profile"
-                                        class="w-24 h-24 rounded-full object-cover border-2"
-                                        style="border-color: @nameColor;" />
-                                }
-                                else
-                                {
-                                    <div class="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold border-2"
-                                        style="background-color: @nameColor; border-color: @nameColor; color: white;">
-                                        @(profile.Name.Length > 0 ? profile.Name[0].ToString().ToUpper() : "?")
-                                    </div>
-                                }
-                            </div>
-
-                            <!-- Level Badge -->
-                            <div class="px-3 py-1 rounded-full bg-gradient-to-r from-blue-500/50 to-purple-500/50 border border-white/20">
-                                <span class="text-sm font-semibold text-white">Level @profile.Level</span>
-                            </div>
-                        </div>
-
-                        <!-- Preview Name -->
-                        <div class="text-center">
-                            <span class="text-lg font-semibold" style="color: @nameColor;">@name</span>
-                        </div>
-
-                        <!-- Form -->
-                        <div class="space-y-4">
-                            <!-- Name -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-200 mb-1">Name</label>
-                                <input type="text"
-                                    class="w-full rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-white"
-                                    @bind="name" @bind:event="oninput" maxlength="100" />
-                            </div>
-
-                            <!-- Name Color -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-200 mb-1">Name Color</label>
-                                <div class="flex gap-2 items-center">
-                                    <input type="color"
-                                        class="w-12 h-10 rounded-lg cursor-pointer border border-white/10"
-                                        @bind="nameColor" @bind:event="oninput" />
-                                    <input type="text"
-                                        class="flex-1 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-white uppercase"
-                                        @bind="nameColor" @bind:event="oninput" maxlength="7" placeholder="#FFFFFF" />
-                                </div>
-                                <!-- Color Presets -->
-                                <div class="flex gap-2 mt-2 flex-wrap">
-                                    @foreach (var color in colorPresets)
-                                    {
-                                        <button type="button"
-                                            class="w-8 h-8 rounded-full border-2 cursor-pointer transition hover:scale-110"
-                                            style="background-color: @color; border-color: @(nameColor == color ? "white" : "transparent");"
-                                            @onclick="() => nameColor = color">
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Profile Image URL -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-200 mb-1">Profile Image URL</label>
-                                <input type="url"
-                                    class="w-full rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-white text-sm"
-                                    @bind="profileImageUrl" @bind:event="oninput"
-                                    placeholder="https://example.com/image.png" maxlength="500" />
-                            </div>
-
-                            <!-- Email (read-only display) -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-200 mb-1">Email</label>
-                                <div class="w-full rounded-lg px-3 py-2 bg-black/20 border border-white/5 text-gray-400 text-sm">
-                                    @profile.Email
-                                </div>
-                            </div>
-
-                            <!-- Save Button -->
-                            <button type="button"
-                                class="glass-button-primary w-full justify-center cursor-pointer"
-                                @onclick="SaveProfile" disabled="@isSaving">
-                                @(isSaving ? "Saving..." : "Save Changes")
-                            </button>
-                        </div>
-                    }
-                </div>
+<div style="min-height: 100vh; display: grid; place-items: center; padding: 24px;">
+    <GlassPanel Radius="28" Style="width: 100%; max-width: 440px;">
+        <div style="padding: 24px 36px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                <a href="/chat" style="color: rgba(255,255,255,0.60); text-decoration: none; display: flex; align-items: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                </a>
+                <div style="font-size: 20px; font-weight: 700; color: white;">Edit Profile</div>
             </div>
+
+            @if (isLoading)
+            {
+                <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.50);">Loading...</div>
+            }
+            else if (profile != null)
+            {
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="padding: 10px 12px; background: rgba(220,60,60,0.15); border: 0.5px solid rgba(220,60,60,0.30);
+                                border-radius: 10px; font-size: 12px; color: oklch(0.78 0.14 25); margin-bottom: 16px;">
+                        @errorMessage
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div style="padding: 10px 12px; background: rgba(16,185,129,0.15); border: 0.5px solid rgba(16,185,129,0.30);
+                                border-radius: 10px; font-size: 12px; color: oklch(0.78 0.14 165); margin-bottom: 16px;">
+                        @successMessage
+                    </div>
+                }
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 24px;">
+                    <div style="position: relative; margin-bottom: 12px;">
+                        @if (!string.IsNullOrEmpty(profileImageUrl))
+                        {
+                            <img src="@profileImageUrl" alt="Profile"
+                                 style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+                                        border: 3px solid @nameColor;" />
+                        }
+                        else
+                        {
+                            <div style="width: 80px; height: 80px; border-radius: 50%;
+                                        display: grid; place-items: center;
+                                        font-size: 28px; font-weight: 700; color: white;
+                                        background: linear-gradient(135deg, @nameColor, oklch(0.45 0.16 225));
+                                        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.40);">
+                                @(name.Length > 0 ? name[0].ToString().ToUpper() : "?")
+                            </div>
+                        }
+                    </div>
+
+                    <div class="glass-chip" style="background: linear-gradient(135deg, rgba(59,130,246,0.3), rgba(147,51,234,0.3));">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        Level @profile.Level
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">Display name</label>
+                        <div class="glass-input">
+                            <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <input type="text" @bind="name" @bind:event="oninput" maxlength="100" placeholder="Your name" />
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">Name color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" @bind="nameColor" @bind:event="oninput"
+                                   style="width: 44px; height: 38px; border-radius: 10px; border: 0.5px solid rgba(255,255,255,0.20);
+                                          cursor: pointer; background: transparent;" />
+                            <div class="glass-input" style="flex: 1;">
+                                <input type="text" @bind="nameColor" @bind:event="oninput" maxlength="7"
+                                       placeholder="#FFFFFF" style="text-transform: uppercase;" />
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+                            @foreach (var color in colorPresets)
+                            {
+                                <button type="button"
+                                        style="width: 28px; height: 28px; border-radius: 50%;
+                                               background-color: @color; cursor: pointer;
+                                               border: 2px solid @(nameColor.ToUpper() == color.ToUpper() ? "white" : "transparent");
+                                               transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
+                                        @onclick="() => nameColor = color">
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">Profile image URL</label>
+                        <div class="glass-input">
+                            <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <input type="url" @bind="profileImageUrl" @bind:event="oninput"
+                                   placeholder="https://example.com/image.png" maxlength="500" />
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">Email</label>
+                        <div style="padding: 11px 12px; border-radius: 12px;
+                                    background: rgba(255,255,255,0.03); border: 0.5px solid rgba(255,255,255,0.10);
+                                    font-size: 14px; color: rgba(255,255,255,0.50);">
+                            @profile.Email
+                        </div>
+                    </div>
+
+                    <button type="button" class="glass-btn glass-btn-primary glass-btn-lg" style="width: 100%; margin-top: 8px;"
+                            @onclick="SaveProfile" disabled="@isSaving">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        @(isSaving ? "Saving..." : "Save Changes")
+                    </button>
+                </div>
+            }
         </div>
-    </div>
-</section>
+    </GlassPanel>
+</div>
 
 @code {
     private UserClient.UserProfileDTO? profile;
@@ -158,7 +169,7 @@
 
         if (user?.Identity is null || !user.Identity.IsAuthenticated)
         {
-            Navigation.NavigateTo("/Login");
+            Navigation.NavigateTo("/login");
             return;
         }
 
@@ -232,7 +243,7 @@
                 name = profile.Name;
                 nameColor = profile.NameColor;
                 profileImageUrl = profile.ProfileImageUrl;
-                successMessage = "Profile updated successfully!";
+                successMessage = "Profile updated!";
             }
             else
             {

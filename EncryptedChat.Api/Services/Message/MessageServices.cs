@@ -249,7 +249,10 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
             Sender = new MessageSenderDTO
             {
                 Id = message.Sender?.Id ?? string.Empty,
-                Name = message.Sender?.Name ?? string.Empty
+                Name = message.Sender?.Name ?? string.Empty,
+                Handle = message.Sender?.Handle,
+                NameColor = message.Sender?.NameColor ?? "#FFFFFF",
+                ProfileImageUrl = message.Sender?.ProfileImageUrl
             },
             TeamId = message.Team?.Id ?? Guid.Empty,
             Date = message.Date,

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -159,6 +160,7 @@ builder.Services.AddRateLimiter(options =>
 
 // SignalR
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, SignalRUserIdProvider>();
 
 // ===== CORS =====
 var allowedOrigins = new[]
@@ -183,6 +185,8 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
+builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddScoped<IRecoveryService, RecoveryService>();
 
 // Auth service
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -200,6 +204,8 @@ builder.Services.AddSingleton<MimeTypeValidator>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
+
+builder.Services.AddHostedService<MessageCleanupService>();
 
 var app = builder.Build();
 

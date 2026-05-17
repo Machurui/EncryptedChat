@@ -77,7 +77,7 @@ public class AuthControllerTests
         LoginResult loginResult = LoginResult.Success("access-token", DateTime.UtcNow.AddMinutes(15), "refresh-token");
 
         mockAuthService
-            .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
+            .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(loginResult);
 
         AuthController controller = CreateControllerWithHttpContext(mockAuthService);
@@ -98,7 +98,7 @@ public class AuthControllerTests
         };
 
         mockAuthService
-            .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>()))
+            .Setup(s => s.LoginAsync(It.IsAny<LoginDTO>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(LoginResult.Fail("Invalid credentials"));
 
         AuthController controller = CreateControllerWithHttpContext(mockAuthService);
@@ -131,7 +131,7 @@ public class AuthControllerTests
         LoginResult loginResult = LoginResult.Success("new-access-token", DateTime.UtcNow.AddMinutes(15), "new-refresh-token");
 
         mockAuthService
-            .Setup(s => s.RefreshAsync("valid-refresh-token"))
+            .Setup(s => s.RefreshAsync("valid-refresh-token", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(loginResult);
 
         AuthController controller = CreateControllerWithHttpContext(mockAuthService);
@@ -148,7 +148,7 @@ public class AuthControllerTests
         AuthController.RefreshRequest request = new("invalid-refresh-token");
 
         mockAuthService
-            .Setup(s => s.RefreshAsync("invalid-refresh-token"))
+            .Setup(s => s.RefreshAsync("invalid-refresh-token", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(LoginResult.Fail("Invalid refresh token"));
 
         AuthController controller = CreateControllerWithHttpContext(mockAuthService);

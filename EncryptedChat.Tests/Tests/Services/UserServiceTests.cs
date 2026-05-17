@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace EncryptedChat.Tests;
 
@@ -16,6 +17,7 @@ public class UserServiceTests : IDisposable
     private readonly EncryptedChatContext _context;
     private readonly UserManager<User> _userManager;
     private readonly UserService _service;
+    private readonly Mock<ICryptoService> _cryptoMock;
 
     public UserServiceTests()
     {
@@ -25,7 +27,10 @@ public class UserServiceTests : IDisposable
 
         _context = new EncryptedChatContext(options);
         _userManager = CreateUserManager(_context);
-        _service = new UserService(_context, _userManager);
+        _cryptoMock = new Mock<ICryptoService>();
+        _cryptoMock.Setup(c => c.Decrypt(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns("Test message");
+        _service = new UserService(_context, _userManager, _cryptoMock.Object);
     }
 
     public void Dispose()

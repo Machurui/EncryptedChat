@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using EncryptedChat.Controllers;
+using EncryptedChat.Hubs;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Moq;
 
 namespace EncryptedChat.Tests;
@@ -12,16 +14,23 @@ namespace EncryptedChat.Tests;
 public class TeamControllerTests
 {
     private readonly Mock<ITeamService> _mockTeamService;
+    private readonly Mock<IHubContext<ChatHub>> _mockHubContext;
     private readonly string _userId = Guid.NewGuid().ToString();
 
     public TeamControllerTests()
     {
         _mockTeamService = new Mock<ITeamService>();
+        _mockHubContext = new Mock<IHubContext<ChatHub>>();
+
+        var mockClients = new Mock<IHubClients>();
+        var mockClientProxy = new Mock<IClientProxy>();
+        mockClients.Setup(c => c.Users(It.IsAny<IReadOnlyList<string>>())).Returns(mockClientProxy.Object);
+        _mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
     }
 
     private TeamController CreateController(string? userId = null)
     {
-        TeamController controller = new(_mockTeamService.Object);
+        TeamController controller = new(_mockTeamService.Object, _mockHubContext.Object);
         List<Claim> claims = [];
 
         if (userId != null)
@@ -66,6 +75,9 @@ public class TeamControllerTests
         _mockTeamService
             .Setup(s => s.CreateAsync(It.IsAny<TeamDTO>(), _userId))
             .ReturnsAsync(expectedTeam);
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId });
 
         TeamController controller = CreateController(_userId);
         IActionResult? result = await controller.PostTeam(teamDto);
@@ -122,6 +134,9 @@ public class TeamControllerTests
         _mockTeamService
             .Setup(s => s.CreateAsync(It.IsAny<TeamDTO>(), _userId))
             .ReturnsAsync(new TeamDTOPublic { Id = teamId, Name = "Test Team", Slug = "test-team" });
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId, otherAdminId });
 
         TeamController controller = CreateController(_userId);
         await controller.PostTeam(teamDto);
@@ -147,19 +162,23 @@ public class TeamControllerTests
     #region PatchTeam
 
     [Fact]
-    public async Task PatchTeam_ReturnsNoContent_WhenSuccessful()
+    public async Task PatchTeam_ReturnsOk_WhenSuccessful()
     {
         Guid teamId = Guid.NewGuid();
         TeamUpdateDTO dto = new() { Name = "New Name" };
+        TeamDTOPublic updatedTeam = new() { Id = teamId, Name = "New Name", Slug = "new-name" };
 
         _mockTeamService
-            .Setup(s => s.UpdateNameAsync(teamId, "New Name", _userId))
-            .ReturnsAsync(new TeamDTOPublic { Id = teamId, Name = "New Name", Slug = "new-name" });
+            .Setup(s => s.UpdatePartialAsync(teamId, It.IsAny<TeamUpdateDTO>(), _userId))
+            .ReturnsAsync(updatedTeam);
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId });
 
         TeamController controller = CreateController(_userId);
         IActionResult result = await controller.PatchTeam(teamId, dto);
 
-        result.Should().BeOfType<NoContentResult>();
+        result.Should().BeOfType<OkObjectResult>();
     }
 
     [Fact]
@@ -177,7 +196,7 @@ public class TeamControllerTests
         Guid teamId = Guid.NewGuid();
 
         _mockTeamService
-            .Setup(s => s.UpdateNameAsync(teamId, It.IsAny<string>(), _userId))
+            .Setup(s => s.UpdatePartialAsync(teamId, It.IsAny<TeamUpdateDTO>(), _userId))
             .ReturnsAsync((TeamDTOPublic?)null);
 
         TeamController controller = CreateController(_userId);
@@ -195,6 +214,9 @@ public class TeamControllerTests
     {
         Guid teamId = Guid.NewGuid();
 
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId });
         _mockTeamService
             .Setup(s => s.DeleteAsync(teamId, _userId))
             .ReturnsAsync(new TeamDTOPublic { Id = teamId, Name = "Deleted", Slug = "deleted" });
@@ -220,6 +242,9 @@ public class TeamControllerTests
         Guid teamId = Guid.NewGuid();
 
         _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId });
+        _mockTeamService
             .Setup(s => s.DeleteAsync(teamId, _userId))
             .ReturnsAsync((TeamDTOPublic?)null);
 
@@ -242,6 +267,12 @@ public class TeamControllerTests
         _mockTeamService
             .Setup(s => s.AddMemberAsync(teamId, newMemberId, _userId))
             .ReturnsAsync(true);
+        _mockTeamService
+            .Setup(s => s.GetByIdAsync(teamId))
+            .ReturnsAsync(new TeamDTOPublic { Id = teamId, Name = "Team", Slug = "team" });
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId, newMemberId });
 
         TeamController controller = CreateController(_userId);
         IActionResult result = await controller.AddMember(teamId, new MemberActionDTO(newMemberId));
@@ -284,6 +315,9 @@ public class TeamControllerTests
         string memberId = Guid.NewGuid().ToString();
 
         _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId, memberId });
+        _mockTeamService
             .Setup(s => s.RemoveMemberAsync(teamId, memberId, _userId))
             .ReturnsAsync(true);
 
@@ -319,6 +353,9 @@ public class TeamControllerTests
         Guid teamId = Guid.NewGuid();
         string memberId = Guid.NewGuid().ToString();
 
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId, memberId });
         _mockTeamService
             .Setup(s => s.RemoveMemberAsync(teamId, memberId, _userId))
             .ReturnsAsync(false);

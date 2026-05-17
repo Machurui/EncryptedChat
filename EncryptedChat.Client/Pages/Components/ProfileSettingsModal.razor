@@ -1,0 +1,2050 @@
+@namespace EncryptedChat.Client.Pages.Components
+@inject UserClient UserClient
+@inject SecurityClient _securityClient
+@inject IJSRuntime JS
+
+@{
+    const string ApiBaseUrl = "https://localhost:7294";
+    string? GetFullImageUrl(string? url) => string.IsNullOrEmpty(url) ? null : (url.StartsWith("http") ? url : $"{ApiBaseUrl}{url}");
+}
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div @onclick:stopPropagation="true">
+            <GlassPanel Radius="24" Style="width: 760px; max-height: 90vh; display: flex; flex-direction: column;">
+                <!-- Header -->
+                <div class="profile-modal-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        @if (securityView != null)
+                        {
+                            <button class="back-btn" @onclick='() => { securityView = null; recoveryRevealed = false; recoveryPhrase = null; recoveryPassword = ""; }'>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"/>
+                                </svg>
+                            </button>
+                        }
+                        <div>
+                            <div class="profile-modal-label">@(securityView != null ? "Security & keys" : "Account")</div>
+                            <div class="profile-modal-title">@GetModalTitle()</div>
+                        </div>
+                    </div>
+                    <IconButton Title="Close" OnClick="Close">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </IconButton>
+                </div>
+
+                <!-- Body -->
+                <div class="profile-modal-body">
+                    @if (securityView != null)
+                    {
+                        <!-- Full-width security subview (no tabs) -->
+                        <div class="profile-modal-content-full">
+                            @if (securityView == "password")
+                            {
+                                <div class="profile-section">
+                                    <div class="encryption-banner">
+                                        <svg class="encryption-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                                        </svg>
+                                        <div>
+                                            <div class="encryption-banner-title">Your password protects your local keys</div>
+                                            <div class="encryption-banner-text">Changing it re-encrypts your private keys. Make sure your recovery phrase is saved before continuing.</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="profile-field">
+                                        <label class="profile-field-label">Current password</label>
+                                        <GlassInput Type="password" @bind-Value="currentPassword" Placeholder="Enter your current password" />
+                                    </div>
+
+                                    <div class="profile-field">
+                                        <div class="field-header-with-status">
+                                            <label class="profile-field-label">New password</label>
+                                            @if (!string.IsNullOrEmpty(newPassword))
+                                            {
+                                                <span class="password-strength @GetPasswordStrengthClass()">@GetPasswordStrengthLabel()</span>
+                                            }
+                                        </div>
+                                        <GlassInput Type="password" @bind-Value="newPassword" Placeholder="At least 12 characters" />
+                                        @if (!string.IsNullOrEmpty(newPassword))
+                                        {
+                                            <div class="password-strength-bar">
+                                                @for (int i = 0; i < 4; i++)
+                                                {
+                                                    <div class="strength-segment @(i < GetPasswordScore() ? "active" : "") @GetPasswordStrengthClass()"></div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="profile-field">
+                                        <div class="field-header-with-status">
+                                            <label class="profile-field-label">Confirm new password</label>
+                                            @if (!string.IsNullOrEmpty(confirmPassword))
+                                            {
+                                                @if (newPassword == confirmPassword)
+                                                {
+                                                    <span class="password-match">
+                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <polyline points="20 6 9 17 4 12"/>
+                                                        </svg>
+                                                        Match
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="password-mismatch">Doesn't match</span>
+                                                }
+                                            }
+                                        </div>
+                                        <GlassInput Type="password" @bind-Value="confirmPassword" Placeholder="Re-enter new password" />
+                                    </div>
+
+                                    <div class="info-box">
+                                        <div style="font-weight: 600; color: white; margin-bottom: 4px; font-size: 12px;">Strong password tips</div>
+                                        Use a passphrase of 4 or more random words, or a 16+ character mix. Avoid reusing passwords from other accounts.
+                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(passwordError))
+                                    {
+                                        <div class="error-box">@passwordError</div>
+                                    }
+
+                                    <div class="security-actions">
+                                        <GlassButton OnClick='() => securityView = null'>Cancel</GlassButton>
+                                        <GlassButton Primary="true" OnClick="HandleChangePassword" Disabled="@(!CanChangePassword())">
+                                            @if (isChangingPassword)
+                                            {
+                                                <span>Updating...</span>
+                                            }
+                                            else
+                                            {
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+                                                    <polyline points="20 6 9 17 4 12"/>
+                                                </svg>
+                                                <span>Update password</span>
+                                            }
+                                        </GlassButton>
+                                    </div>
+                                </div>
+                            }
+                            else if (securityView == "recovery")
+                            {
+                                <div class="profile-section">
+                                    @if (!recoveryRevealed)
+                                    {
+                                        <div class="warning-banner">
+                                            <svg class="warning-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                            </svg>
+                                            <div>
+                                                <div class="warning-banner-title">Anyone with these 12 words can read your messages</div>
+                                                <div class="warning-banner-text">Make sure no one is watching your screen. Don't take a screenshot — write them down or store them in a password manager.</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="recovery-hidden-box">
+                                            <div class="recovery-icon-box">
+                                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
+                                                </svg>
+                                            </div>
+                                            <div class="recovery-hidden-title">Your phrase is hidden</div>
+                                            <div class="recovery-hidden-text">Enter your password to reveal the 12 words.</div>
+
+                                            <div style="width: 100%; max-width: 280px;">
+                                                <GlassInput Type="password" @bind-Value="recoveryPassword" Placeholder="Enter your password" />
+                                            </div>
+
+                                            @if (!string.IsNullOrEmpty(recoveryError))
+                                            {
+                                                <div class="error-text">@recoveryError</div>
+                                            }
+
+                                            <GlassButton Primary="true" OnClick="HandleRevealRecovery" Disabled="@(string.IsNullOrEmpty(recoveryPassword) || isLoadingRecovery)">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                                                    <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
+                                                </svg>
+                                                @(isLoadingRecovery ? "Loading..." : "Reveal recovery phrase")
+                                            </GlassButton>
+                                        </div>
+
+                                        <div class="security-actions">
+                                            <GlassButton OnClick='() => { securityView = null; recoveryPassword = ""; }'>Close</GlassButton>
+                                        </div>
+                                    }
+                                    else if (recoveryPhrase != null)
+                                    {
+                                        <div class="recovery-info-row">
+                                            <div style="font-size: 11.5px; color: rgba(255,255,255,0.65);">Write these 12 words in order. They're case-insensitive.</div>
+                                            <button class="hide-btn" @onclick='() => { recoveryRevealed = false; recoveryPhrase = null; }'>Hide</button>
+                                        </div>
+
+                                        <div class="recovery-grid">
+                                            @for (int i = 0; i < recoveryPhrase.Count; i++)
+                                            {
+                                                var index = i;
+                                                <div class="recovery-word">
+                                                    <span class="recovery-word-num">@(index + 1)</span>
+                                                    @recoveryPhrase[index]
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="recovery-actions">
+                                            <GlassButton OnClick="CopyRecoveryPhrase" Style="flex: 1;">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                                                </svg>
+                                                Copy to clipboard
+                                            </GlassButton>
+                                        </div>
+
+                                        <button class="recovery-confirm-btn @(recoveryConfirmed ? "confirmed" : "")" @onclick="() => recoveryConfirmed = !recoveryConfirmed">
+                                            <span class="recovery-checkbox @(recoveryConfirmed ? "checked" : "")">
+                                                @if (recoveryConfirmed)
+                                                {
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                                        <polyline points="20 6 9 17 4 12"/>
+                                                    </svg>
+                                                }
+                                            </span>
+                                            I've written down my recovery phrase in a safe place.
+                                        </button>
+
+                                        <div class="security-actions">
+                                            <GlassButton Primary="true" OnClick='() => { securityView = null; recoveryRevealed = false; recoveryPhrase = null; recoveryPassword = ""; }' Disabled="@(!recoveryConfirmed)">
+                                                Done
+                                            </GlassButton>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else if (securityView == "sessions")
+                            {
+                                <div class="profile-section">
+                                    <div class="sessions-header">
+                                        <div style="font-size: 11.5px; color: rgba(255,255,255,0.65);">
+                                            You're signed in on @sessions.Count device@(sessions.Count == 1 ? "" : "s"). Revoking a session ends it immediately.
+                                        </div>
+                                        @if (sessions.Count > 1)
+                                        {
+                                            <button class="signout-others-btn" @onclick="HandleSignOutOthers">Sign out all other devices</button>
+                                        }
+                                    </div>
+
+                                    <div class="sessions-list">
+                                        @foreach (var session in sessions)
+                                        {
+                                            <div class="session-row @(session.IsCurrent ? "current" : "") @(IsSessionStale(session) ? "stale" : "")">
+                                                <div class="session-icon">
+                                                    @if (session.DeviceKind == "mobile")
+                                                    {
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+                                                        </svg>
+                                                    }
+                                                    else
+                                                    {
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                        </svg>
+                                                    }
+                                                </div>
+                                                <div class="session-info">
+                                                    <div class="session-device">
+                                                        <span>@session.DeviceInfo</span>
+                                                        @if (session.IsCurrent)
+                                                        {
+                                                            <span class="session-badge current">This device</span>
+                                                        }
+                                                        @if (IsSessionStale(session))
+                                                        {
+                                                            <span class="session-badge stale">Inactive</span>
+                                                        }
+                                                    </div>
+                                                    <div class="session-meta">
+                                                        <span>@(session.Location ?? "Unknown")</span>
+                                                        <span>·</span>
+                                                        <span class="session-ip">@(session.IpAddress ?? "—")</span>
+                                                        <span>·</span>
+                                                        <span class="@(session.IsCurrent ? "session-active" : "")">@GetSessionLastActive(session)</span>
+                                                    </div>
+                                                </div>
+                                                @if (!session.IsCurrent)
+                                                {
+                                                    <button class="revoke-btn" @onclick="() => HandleRevokeSession(session.Id)">Revoke</button>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="info-box">
+                                        See an unfamiliar device? Revoke it immediately and change your password. We'll notify each device when its session ends.
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Normal view with sidebar tabs -->
+                        <div class="profile-modal-tabs">
+                            <button class="profile-tab @(activeTab == "profile" ? "active" : "")" @onclick='() => activeTab = "profile"'>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
+                                </svg>
+                                <span>Profile</span>
+                            </button>
+                            <button class="profile-tab @(activeTab == "status" ? "active" : "")" @onclick='() => activeTab = "status"'>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+                                </svg>
+                                <span>Status</span>
+                            </button>
+                            <button class="profile-tab @(activeTab == "privacy" ? "active" : "")" @onclick='() => activeTab = "privacy"'>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                                <span>Privacy</span>
+                            </button>
+                            <button class="profile-tab @(activeTab == "security" ? "active" : "")" @onclick="OpenSecurityTab">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
+                                </svg>
+                                <span>Security & keys</span>
+                            </button>
+                        </div>
+
+                        <div class="profile-modal-content">
+                            @if (activeTab == "profile")
+                        {
+                            <div class="profile-section">
+                                <!-- Avatar -->
+                                <div class="profile-avatar-section">
+                                    <div class="profile-avatar-large">
+                                        @if (!string.IsNullOrEmpty(ProfileImageUrl))
+                                        {
+                                            <img src="@GetFullImageUrl(ProfileImageUrl)" alt="@Name" class="avatar-image" />
+                                        }
+                                        else
+                                        {
+                                            <div class="avatar-placeholder" style="background: linear-gradient(135deg, @GetAvatarGradient(Name));">
+                                                @GetInitials(Name)
+                                            </div>
+                                        }
+                                        <div class="avatar-status-dot @Status"></div>
+                                    </div>
+                                    <div class="profile-avatar-actions">
+                                        <label class="upload-btn">
+                                            <InputFile OnChange="HandleAvatarUpload" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;" />
+                                            <span class="glass-btn glass-btn-sm">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+                                                </svg>
+                                                @(isUploadingAvatar ? "Uploading..." : "Upload photo")
+                                            </span>
+                                        </label>
+                                        @if (!string.IsNullOrEmpty(ProfileImageUrl))
+                                        {
+                                            <button class="link-btn" style="font-size: 11px; color: rgba(255,255,255,0.55);" @onclick="RemoveAvatar" disabled="@isUploadingAvatar">Remove</button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Name fields -->
+                                <div class="profile-fields-grid">
+                                    <div class="profile-field">
+                                        <label class="profile-field-label">Display name</label>
+                                        <GlassInput @bind-Value="Name" Placeholder="Your name" />
+                                    </div>
+                                    <div class="profile-field">
+                                        <label class="profile-field-label">Handle</label>
+                                        <GlassInput @bind-Value="Handle" Placeholder="your_handle">
+                                            <Icon>
+                                                <span style="color: rgba(255,255,255,0.5);">@@</span>
+                                            </Icon>
+                                        </GlassInput>
+                                    </div>
+                                </div>
+
+                                <div class="profile-field">
+                                    <label class="profile-field-label">Name color</label>
+                                    <div class="color-input-wrapper">
+                                        <input type="color" class="color-input-native" value="@NameColor" @onchange="OnColorChange" />
+                                        <div class="color-preview" style="background: @NameColor;"></div>
+                                        <input type="text" class="color-hex-input" value="@NameColor" @onchange="OnHexChange" maxlength="7" />
+                                    </div>
+                                </div>
+
+                                <div class="divider"></div>
+
+                                <div class="profile-field">
+                                    <label class="profile-field-label">Theme</label>
+                                    <div class="theme-options">
+                                        @foreach (var themeOption in themeOptions)
+                                        {
+                                            var isSelected = Theme == themeOption.Key;
+                                            <button class="theme-option @(isSelected ? "selected" : "")" @onclick="() => Theme = themeOption.Key">
+                                                <span class="theme-icon">@themeOption.Value.Icon</span>
+                                                <span class="theme-label">@themeOption.Value.Label</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else if (activeTab == "status")
+                        {
+                            <div class="profile-section">
+                                <div class="profile-field">
+                                    <label class="profile-field-label">Availability</label>
+                                    <div class="status-options">
+                                        @foreach (var preset in statusPresets)
+                                        {
+                                            var isSelected = Status == preset.Key;
+                                            <button class="status-option @(isSelected ? "selected" : "")"
+                                                    style="@(isSelected ? $"background: {GetStatusDimColor(preset.Key)};" : "")"
+                                                    @onclick="() => Status = preset.Key">
+                                                <span class="status-option-dot @preset.Key"></span>
+                                                <span class="status-option-label">@preset.Value</span>
+                                                @if (isSelected)
+                                                {
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <polyline points="20 6 9 17 4 12"/>
+                                                    </svg>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="profile-field">
+                                    <label class="profile-field-label">Custom status message</label>
+                                    <GlassInput @bind-Value="StatusMessage" Placeholder="What are you up to?" />
+                                </div>
+
+                                <div class="info-box">
+                                    Your status is visible to your friends and team members. It is end-to-end encrypted and never logged on our servers.
+                                </div>
+                            </div>
+                        }
+                        else if (activeTab == "privacy")
+                        {
+                            <div class="profile-section" style="gap: 4px;">
+                                <!-- Typing indicators toggle -->
+                                <div class="toggle-row">
+                                    <div class="toggle-row-info">
+                                        <div class="toggle-row-label">Typing indicators</div>
+                                        <div class="toggle-row-desc">Show when you're typing in a conversation.</div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked="@localTypingIndicators" @onchange="e => ToggleTypingIndicators((bool)e.Value!)" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+
+                                <div class="divider" style="margin: 8px 0;"></div>
+
+                                <!-- Notifications -->
+                                <div class="notification-section">
+                                    <div class="notification-header">Notifications</div>
+                                    <div class="notification-desc">Choose when EncryptedChat alerts you.</div>
+                                    <div class="notification-options">
+                                        <button class="notification-option @(localNotificationPreference == "all" ? "selected" : "")" @onclick='() => SelectNotificationPreference("all")'>
+                                            <span class="notification-radio @(localNotificationPreference == "all" ? "selected" : "")">
+                                                @if (localNotificationPreference == "all") { <span class="notification-radio-dot"></span> }
+                                            </span>
+                                            <span>Every message</span>
+                                        </button>
+                                        <button class="notification-option @(localNotificationPreference == "mentions" ? "selected" : "")" @onclick='() => SelectNotificationPreference("mentions")'>
+                                            <span class="notification-radio @(localNotificationPreference == "mentions" ? "selected" : "")">
+                                                @if (localNotificationPreference == "mentions") { <span class="notification-radio-dot"></span> }
+                                            </span>
+                                            <span>Only @@mentions and DMs</span>
+                                        </button>
+                                        <button class="notification-option @(localNotificationPreference == "none" ? "selected" : "")" @onclick='() => SelectNotificationPreference("none")'>
+                                            <span class="notification-radio @(localNotificationPreference == "none" ? "selected" : "")">
+                                                @if (localNotificationPreference == "none") { <span class="notification-radio-dot"></span> }
+                                            </span>
+                                            <span>Nothing — I'll check manually</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else if (activeTab == "security")
+                        {
+                            <div class="profile-section">
+                                <!-- E2EE Banner -->
+                                <div class="encryption-banner">
+                                    <svg class="encryption-banner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    </svg>
+                                    <div>
+                                        <div class="encryption-banner-title">End-to-end encryption active</div>
+                                        <div class="encryption-banner-text">Your messages are end-to-end encrypted. Only you and the recipients can read them.</div>
+                                    </div>
+                                </div>
+
+                                <div class="security-row">
+                                    <div class="security-row-info">
+                                        <div class="security-row-label">Recovery phrase</div>
+                                        <div class="security-row-value">@GetRecoveryInfoText()</div>
+                                    </div>
+                                    <GlassButton Size="sm" OnClick='() => securityView = "recovery"'>View</GlassButton>
+                                </div>
+
+                                <div class="security-row">
+                                    <div class="security-row-info">
+                                        <div class="security-row-label">Active sessions</div>
+                                        <div class="security-row-value">@GetSessionsInfoText()</div>
+                                    </div>
+                                    <GlassButton Size="sm" OnClick='() => OpenSessionsView()'>Manage</GlassButton>
+                                </div>
+
+                                <div class="security-row">
+                                    <div class="security-row-info">
+                                        <div class="security-row-label">Password</div>
+                                        <div class="security-row-value">@GetPasswordInfoText()</div>
+                                    </div>
+                                    <GlassButton Size="sm" OnClick='() => securityView = "password"'>Change</GlassButton>
+                                </div>
+
+                                <button class="signout-all-btn" @onclick="HandleSignOutEverywhere">Sign out everywhere</button>
+                            </div>
+                        }
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer -->
+                @if (securityView == null)
+                {
+                    <div class="profile-modal-footer">
+                        <GlassButton OnClick="Close">Cancel</GlassButton>
+                        <GlassButton Primary="true" OnClick="Save">Save changes</GlassButton>
+                    </div>
+                }
+            </GlassPanel>
+        </div>
+    </div>
+}
+
+<style>
+    .profile-modal-header {
+        padding: 20px 26px 18px;
+        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .profile-modal-label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+    }
+
+    .profile-modal-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.015em;
+        margin-top: 2px;
+    }
+
+    .profile-modal-body {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+    }
+
+    .profile-modal-tabs {
+        width: 200px;
+        flex: 0 0 200px;
+        border-right: 0.5px solid rgba(255,255,255,0.10);
+        padding: 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .profile-tab {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        background: transparent;
+        border: 0.5px solid transparent;
+        color: rgba(255,255,255,0.65);
+        font-size: 12.5px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .profile-tab:hover {
+        background: rgba(255,255,255,0.04);
+    }
+
+    .profile-tab.active {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.14);
+        color: white;
+        font-weight: 600;
+    }
+
+    .profile-tab span {
+        flex: 1;
+    }
+
+    .profile-modal-content {
+        flex: 1;
+        padding: 22px 26px;
+        overflow: auto;
+        min-width: 0;
+    }
+
+    .profile-modal-content-full {
+        flex: 1;
+        padding: 22px 26px;
+        overflow: auto;
+        min-width: 0;
+    }
+
+    .profile-section {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .profile-avatar-section {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .profile-avatar-large {
+        position: relative;
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        overflow: visible;
+    }
+
+    .profile-avatar-large .avatar-image {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .profile-avatar-large .avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: 700;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    .profile-avatar-large .avatar-status-dot {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 3px solid #1a1a1a;
+        background: #9ca3af;
+    }
+
+    .profile-avatar-large .avatar-status-dot.online {
+        background: #34d399;
+        box-shadow: 0 0 8px #34d399;
+    }
+
+    .profile-avatar-large .avatar-status-dot.away {
+        background: #fbbf24;
+    }
+
+    .profile-avatar-large .avatar-status-dot.busy {
+        background: #f87171;
+        box-shadow: 0 0 8px #f87171;
+    }
+
+    .profile-avatar-large .avatar-status-dot.invisible,
+    .profile-avatar-large .avatar-status-dot.offline {
+        background: #9ca3af;
+    }
+
+    .profile-avatar-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .upload-btn {
+        cursor: pointer;
+        display: inline-block;
+    }
+
+    .upload-btn .glass-btn-sm {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.14);
+        color: white;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .upload-btn:hover .glass-btn-sm {
+        background: rgba(255,255,255,0.12);
+    }
+
+    .profile-fields-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .profile-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .profile-field-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.75);
+        letter-spacing: 0.01em;
+    }
+
+    .color-input-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.07);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+    }
+
+    .color-input-native {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        background: transparent;
+    }
+
+    .color-input-native::-webkit-color-swatch-wrapper {
+        padding: 0;
+    }
+
+    .color-input-native::-webkit-color-swatch {
+        border: 2px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+    }
+
+    .color-preview {
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.2);
+        flex-shrink: 0;
+    }
+
+    .color-hex-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: white;
+        font-family: ui-monospace, SF Mono, Menlo, monospace;
+        font-size: 13px;
+        text-transform: uppercase;
+        outline: none;
+    }
+
+    .color-hex-input::placeholder {
+        color: rgba(255,255,255,0.4);
+    }
+
+    .status-options {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .status-option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 14px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+        color: white;
+        font-size: 13px;
+        font-family: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .status-option:hover:not(.selected) {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .status-option.selected {
+        border-color: rgba(255,255,255,0.18);
+    }
+
+    .status-option-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .status-option-dot.online {
+        background: var(--status-online);
+        box-shadow: 0 0 10px var(--status-online);
+    }
+
+    .status-option-dot.away {
+        background: var(--status-away);
+    }
+
+    .status-option-dot.busy {
+        background: var(--status-busy);
+        box-shadow: 0 0 10px var(--status-busy);
+    }
+
+    .status-option-dot.invisible {
+        background: var(--status-invisible);
+    }
+
+    .status-option-label {
+        flex: 1;
+        font-weight: 500;
+    }
+
+    .status-option.selected .status-option-label {
+        font-weight: 600;
+    }
+
+    .info-box {
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.65);
+        line-height: 1.5;
+    }
+
+    .security-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+    }
+
+    .security-row-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .security-row-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .security-row-value {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        margin-top: 2px;
+        font-family: ui-monospace, SF Mono, Menlo, monospace;
+    }
+
+    .divider {
+        height: 1px;
+        background: rgba(255,255,255,0.08);
+        margin: 16px 0;
+    }
+
+    .danger-zone {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .danger-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.50);
+    }
+
+    .profile-modal-footer {
+        padding: 14px 22px;
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .theme-options {
+        display: flex;
+        gap: 8px;
+    }
+
+    .theme-option {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 14px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.04);
+        color: rgba(255,255,255,0.7);
+        font-family: inherit;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .theme-option:hover {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.18);
+    }
+
+    .theme-option.selected {
+        background: rgba(52, 211, 153, 0.12);
+        border-color: rgba(52, 211, 153, 0.4);
+        color: white;
+    }
+
+    .theme-icon {
+        font-size: 20px;
+    }
+
+    .theme-label {
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    /* Privacy tab styles */
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 4px;
+    }
+
+    .toggle-row-info {
+        flex: 1;
+    }
+
+    .toggle-row-label {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .toggle-row-desc {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.55);
+        margin-top: 2px;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 40px;
+        height: 22px;
+        flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: rgba(255,255,255,0.15);
+        border-radius: 22px;
+        transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        left: 3px;
+        bottom: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.2s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+        background: oklch(0.65 0.16 165);
+    }
+
+    .toggle-switch input:checked + .toggle-slider::before {
+        transform: translateX(18px);
+    }
+
+    .notification-section {
+        margin-top: 4px;
+    }
+
+    .notification-header {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        margin-bottom: 4px;
+    }
+
+    .notification-desc {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.55);
+        margin-bottom: 10px;
+    }
+
+    .notification-options {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .notification-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+        color: white;
+        font-size: 12.5px;
+        font-family: inherit;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+    .notification-option:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .notification-option.selected {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.16);
+    }
+
+    .notification-radio {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255,255,255,0.30);
+        display: grid;
+        place-items: center;
+        transition: all 0.15s;
+    }
+
+    .notification-radio.selected {
+        border-color: transparent;
+        background: oklch(0.65 0.16 165);
+        box-shadow: 0 0 0 3px rgba(100, 200, 170, 0.30);
+    }
+
+    .notification-radio-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: white;
+    }
+
+    .encryption-banner {
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: rgba(16,185,129,0.08);
+        border: 0.5px solid rgba(16,185,129,0.25);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .encryption-banner-icon {
+        color: oklch(0.78 0.14 165);
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .encryption-banner-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .encryption-banner-text {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.65);
+        margin-top: 6px;
+        line-height: 1.5;
+    }
+
+    .warning-banner {
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: rgba(220,140,40,0.08);
+        border: 0.5px solid rgba(220,140,40,0.30);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .warning-banner-icon {
+        color: oklch(0.78 0.16 75);
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .warning-banner-title {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .warning-banner-text {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.65);
+        margin-top: 6px;
+        line-height: 1.5;
+    }
+
+    .security-back-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .back-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        color: white;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+    }
+
+    .back-btn:hover {
+        background: rgba(255,255,255,0.10);
+    }
+
+    .security-subview-label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+    }
+
+    .security-subview-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.015em;
+        margin-top: 2px;
+    }
+
+    .field-header-with-status {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .password-strength {
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+
+    .password-strength.weak { color: oklch(0.68 0.18 30); }
+    .password-strength.okay { color: oklch(0.75 0.16 70); }
+    .password-strength.good { color: oklch(0.74 0.14 145); }
+    .password-strength.strong { color: oklch(0.74 0.14 165); }
+
+    .password-strength-bar {
+        display: flex;
+        gap: 3px;
+        margin-top: 6px;
+    }
+
+    .strength-segment {
+        flex: 1;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255,255,255,0.08);
+    }
+
+    .strength-segment.active.weak { background: oklch(0.68 0.18 30); }
+    .strength-segment.active.okay { background: oklch(0.75 0.16 70); }
+    .strength-segment.active.good { background: oklch(0.74 0.14 145); }
+    .strength-segment.active.strong { background: oklch(0.74 0.14 165); }
+
+    .password-match {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: oklch(0.78 0.14 165);
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    .password-mismatch {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: oklch(0.70 0.18 30);
+    }
+
+    .security-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .error-box {
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(220,40,40,0.10);
+        border: 0.5px solid rgba(220,40,40,0.30);
+        font-size: 12px;
+        color: oklch(0.78 0.16 28);
+    }
+
+    .error-text {
+        font-size: 12px;
+        color: oklch(0.78 0.16 28);
+        margin-top: 8px;
+    }
+
+    .recovery-hidden-box {
+        padding: 40px 20px;
+        border-radius: 14px;
+        background: rgba(0,0,0,0.30);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .recovery-icon-box {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.15);
+        display: grid;
+        place-items: center;
+        color: rgba(255,255,255,0.55);
+    }
+
+    .recovery-hidden-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .recovery-hidden-text {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.60);
+        text-align: center;
+        max-width: 360px;
+        line-height: 1.5;
+    }
+
+    .recovery-info-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .hide-btn {
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        color: rgba(255,255,255,0.85);
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .hide-btn:hover {
+        background: rgba(255,255,255,0.10);
+    }
+
+    .recovery-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 18px;
+        border-radius: 14px;
+        background: rgba(0,0,0,0.30);
+        border: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .recovery-word {
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        font-family: ui-monospace, SF Mono, Menlo, monospace;
+        font-size: 13px;
+        color: white;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+    }
+
+    .recovery-word-num {
+        font-size: 10px;
+        color: rgba(255,255,255,0.40);
+        min-width: 14px;
+    }
+
+    .recovery-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .recovery-confirm-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        cursor: pointer;
+        font-family: inherit;
+        color: white;
+        font-size: 12px;
+        text-align: left;
+    }
+
+    .recovery-confirm-btn.confirmed {
+        background: rgba(16,185,129,0.10);
+        border-color: rgba(255,255,255,0.18);
+    }
+
+    .recovery-checkbox {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1.5px solid rgba(255,255,255,0.30);
+        background: transparent;
+        display: grid;
+        place-items: center;
+    }
+
+    .recovery-checkbox.checked {
+        border-color: transparent;
+        background: oklch(0.65 0.16 165);
+    }
+
+    .sessions-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .signout-others-btn {
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        background: rgba(220,40,40,0.10);
+        border: 0.5px solid rgba(220,40,40,0.30);
+        color: oklch(0.78 0.16 28);
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+
+    .signout-others-btn:hover {
+        background: rgba(220,40,40,0.15);
+    }
+
+    .signout-all-btn {
+        margin-top: 6px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: rgba(220,40,40,0.10);
+        border: 0.5px solid rgba(220,40,40,0.30);
+        color: oklch(0.72 0.18 28);
+        font-size: 12.5px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        align-self: flex-start;
+    }
+
+    .signout-all-btn:hover {
+        background: rgba(220,40,40,0.15);
+    }
+
+    .sessions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .session-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+    }
+
+    .session-row.current {
+        background: rgba(52, 211, 153, 0.08);
+        border-color: rgba(255,255,255,0.18);
+    }
+
+    .session-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        display: grid;
+        place-items: center;
+        color: rgba(255,255,255,0.70);
+    }
+
+    .session-row.current .session-icon {
+        color: oklch(0.78 0.14 165);
+    }
+
+    .session-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .session-device {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .session-badge {
+        font-size: 9.5px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .session-badge.current {
+        background: rgba(16,185,129,0.18);
+        color: oklch(0.82 0.12 165);
+        border: 0.5px solid rgba(16,185,129,0.35);
+    }
+
+    .session-badge.stale {
+        background: rgba(220,140,40,0.15);
+        color: oklch(0.80 0.14 75);
+        border: 0.5px solid rgba(220,140,40,0.30);
+    }
+
+    .session-meta {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        margin-top: 3px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .session-ip {
+        font-family: ui-monospace, SF Mono, Menlo, monospace;
+    }
+
+    .session-active {
+        color: oklch(0.78 0.14 165);
+    }
+
+    .revoke-btn {
+        padding: 7px 12px;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.14);
+        color: rgba(255,255,255,0.85);
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .revoke-btn:hover {
+        background: rgba(255,255,255,0.10);
+    }
+
+    @@media (max-width: 768px) {
+        .profile-modal-tabs {
+            display: none;
+        }
+
+        .profile-fields-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .recovery-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnLogout { get; set; }
+
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string UserName { get => Name; set => Name = value; }
+    [Parameter] public EventCallback<string> NameChanged { get; set; }
+
+    [Parameter] public string? Handle { get; set; }
+    [Parameter] public EventCallback<string?> HandleChanged { get; set; }
+
+    [Parameter] public string Email { get; set; } = "";
+    [Parameter] public string UserEmail { get => Email; set => Email = value; }
+    [Parameter] public string NameColor { get; set; } = "#FFFFFF";
+    [Parameter] public EventCallback<string> NameColorChanged { get; set; }
+
+    [Parameter] public string? ProfileImageUrl { get; set; }
+    [Parameter] public EventCallback<string?> ProfileImageUrlChanged { get; set; }
+
+    [Parameter] public string Status { get; set; } = "online";
+    [Parameter] public EventCallback<string> StatusChanged { get; set; }
+
+    [Parameter] public string? StatusMessage { get; set; }
+    [Parameter] public EventCallback<string?> StatusMessageChanged { get; set; }
+
+    [Parameter] public string Theme { get; set; } = "dark";
+    [Parameter] public EventCallback<string> ThemeChanged { get; set; }
+
+    [Parameter] public bool ReadReceipts { get; set; } = true;
+    [Parameter] public EventCallback<bool> ReadReceiptsChanged { get; set; }
+
+    [Parameter] public bool TypingIndicators { get; set; } = true;
+    [Parameter] public EventCallback<bool> TypingIndicatorsChanged { get; set; }
+
+    [Parameter] public string NotificationPreference { get; set; } = "all";
+    [Parameter] public EventCallback<string> NotificationPreferenceChanged { get; set; }
+
+    private string activeTab = "profile";
+    private bool isUploadingAvatar;
+
+    // Security state
+    private string? securityView;
+    private DateTime? passwordChangedAt;
+    private DateTime? recoveryLastViewed;
+    private List<SecurityClient.SessionInfo> sessions = new();
+
+    // Password change state
+    private string currentPassword = "";
+    private string newPassword = "";
+    private string confirmPassword = "";
+    private string? passwordError;
+    private bool isChangingPassword;
+
+    // Recovery phrase state
+    private string recoveryPassword = "";
+    private List<string>? recoveryPhrase;
+    private bool recoveryRevealed;
+    private bool recoveryConfirmed;
+    private string? recoveryError;
+    private bool isLoadingRecovery;
+
+    private bool localReadReceipts;
+    private bool localTypingIndicators;
+    private string localNotificationPreference = "all";
+    private bool privacyInitialized;
+    private bool securityInfoLoaded;
+
+    private readonly Dictionary<string, string> statusPresets = new()
+    {
+        { "online", "Online" },
+        { "away", "Away" },
+        { "busy", "Do not disturb" },
+        { "invisible", "Invisible" }
+    };
+
+    private readonly Dictionary<string, (string Icon, string Label)> themeOptions = new()
+    {
+        { "dark", ("🌙", "Dark") },
+        { "light", ("☀️", "Light") },
+        { "auto", ("💻", "System") }
+    };
+
+    private string GetStatusDimColor(string status) => status switch
+    {
+        "online" => "var(--status-online-dim)",
+        "away" => "var(--status-away-dim)",
+        "busy" => "var(--status-busy-dim)",
+        "invisible" => "var(--status-invisible-dim)",
+        _ => "transparent"
+    };
+
+    private string GetModalTitle()
+    {
+        if (securityView == "password") return "Change password";
+        if (securityView == "recovery") return "Recovery phrase";
+        if (securityView == "sessions") return "Active sessions";
+        return "Profile & preferences";
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private string GetAvatarGradient(string name)
+    {
+        var hash = name?.GetHashCode() ?? 0;
+        var hue1 = Math.Abs(hash % 360);
+        var hue2 = (hue1 + 40) % 360;
+        return $"oklch(0.65 0.15 {hue1}), oklch(0.45 0.12 {hue2})";
+    }
+
+    private void OnColorChange(ChangeEventArgs e)
+    {
+        if (e.Value is string color && !string.IsNullOrEmpty(color))
+        {
+            NameColor = color.ToUpperInvariant();
+        }
+    }
+
+    private void OnHexChange(ChangeEventArgs e)
+    {
+        if (e.Value is string hex && System.Text.RegularExpressions.Regex.IsMatch(hex, @"^#[0-9A-Fa-f]{6}$"))
+        {
+            NameColor = hex.ToUpperInvariant();
+        }
+    }
+
+    private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            return; // File too large
+        }
+
+        var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
+        if (!allowedTypes.Contains(file.ContentType.ToLowerInvariant()))
+        {
+            return; // Invalid file type
+        }
+
+        isUploadingAvatar = true;
+        StateHasChanged();
+        try
+        {
+            using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            var result = await UserClient.UploadAvatarAsync(stream, file.Name, file.ContentType);
+            if (result.Success && result.Value != null)
+            {
+                ProfileImageUrl = result.Value.Url;
+                await ProfileImageUrlChanged.InvokeAsync(ProfileImageUrl);
+            }
+        }
+        finally
+        {
+            isUploadingAvatar = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveAvatar()
+    {
+        isUploadingAvatar = true;
+        try
+        {
+            var result = await UserClient.DeleteAvatarAsync();
+            if (result.Success)
+            {
+                ProfileImageUrl = null;
+                await ProfileImageUrlChanged.InvokeAsync(null);
+            }
+        }
+        finally
+        {
+            isUploadingAvatar = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task Save()
+    {
+        await NameChanged.InvokeAsync(Name);
+        await HandleChanged.InvokeAsync(Handle);
+        await NameColorChanged.InvokeAsync(NameColor);
+        await StatusChanged.InvokeAsync(Status);
+        await StatusMessageChanged.InvokeAsync(StatusMessage);
+        await ThemeChanged.InvokeAsync(Theme);
+        await ReadReceiptsChanged.InvokeAsync(localReadReceipts);
+        await TypingIndicatorsChanged.InvokeAsync(localTypingIndicators);
+        await NotificationPreferenceChanged.InvokeAsync(localNotificationPreference);
+        await OnSave.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private void ToggleReadReceipts(bool value)
+    {
+        localReadReceipts = value;
+    }
+
+    private void ToggleTypingIndicators(bool value)
+    {
+        localTypingIndicators = value;
+    }
+
+    private void SelectNotificationPreference(string preference)
+    {
+        localNotificationPreference = preference;
+    }
+
+    private async Task HandleLogout()
+    {
+        await OnClose.InvokeAsync();
+        await OnLogout.InvokeAsync();
+    }
+
+    private async Task OpenSecurityTab()
+    {
+        activeTab = "security";
+        if (!securityInfoLoaded)
+        {
+            securityInfoLoaded = true;
+            await LoadSecurityInfo();
+        }
+    }
+
+    // Lifecycle
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && !privacyInitialized)
+        {
+            localReadReceipts = ReadReceipts;
+            localTypingIndicators = TypingIndicators;
+            localNotificationPreference = NotificationPreference;
+            privacyInitialized = true;
+        }
+        else if (!IsOpen)
+        {
+            privacyInitialized = false;
+            securityInfoLoaded = false;
+        }
+
+        if (IsOpen && activeTab == "security" && !securityInfoLoaded)
+        {
+            securityInfoLoaded = true;
+            await LoadSecurityInfo();
+        }
+    }
+
+    private async Task LoadSecurityInfo()
+    {
+        var passwordTask = _securityClient.GetPasswordInfoAsync();
+        var recoveryTask = _securityClient.GetRecoveryInfoAsync();
+        var sessionsTask = _securityClient.GetSessionsAsync();
+
+        await Task.WhenAll(passwordTask, recoveryTask, sessionsTask);
+
+        if (passwordTask.Result.Success)
+            passwordChangedAt = passwordTask.Result.Value?.ChangedAt;
+
+        if (recoveryTask.Result.Success)
+            recoveryLastViewed = recoveryTask.Result.Value?.LastViewed;
+
+        if (sessionsTask.Result.Success && sessionsTask.Result.Value != null)
+            sessions = sessionsTask.Result.Value.Sessions;
+    }
+
+    private string GetPasswordInfoText()
+    {
+        if (!passwordChangedAt.HasValue)
+            return "Never changed";
+
+        var days = (DateTime.UtcNow - passwordChangedAt.Value).Days;
+
+        if (days == 0)
+            return "Changed today";
+        if (days == 1)
+            return "Changed yesterday";
+        if (days < 7)
+            return $"Changed {days} days ago";
+        if (days < 30)
+            return $"Changed {days / 7} weeks ago";
+        return $"Changed {days} days ago";
+    }
+
+    private string GetRecoveryInfoText()
+    {
+        if (!recoveryLastViewed.HasValue)
+            return "12 words · never viewed";
+
+        var days = (DateTime.UtcNow - recoveryLastViewed.Value).Days;
+        return days switch
+        {
+            0 => "12 words · viewed today",
+            1 => "12 words · viewed yesterday",
+            _ => $"12 words · last viewed {days} days ago"
+        };
+    }
+
+    private string GetSessionsInfoText()
+    {
+        if (sessions.Count == 0)
+            return "Loading...";
+
+        var webCount = sessions.Count(s => s.DeviceKind == "web");
+        var mobileCount = sessions.Count(s => s.DeviceKind == "mobile");
+
+        var parts = new List<string>();
+        if (webCount > 0) parts.Add($"{webCount} web");
+        if (mobileCount > 0) parts.Add($"{mobileCount} mobile");
+
+        return $"{sessions.Count} device{(sessions.Count == 1 ? "" : "s")} · {string.Join(", ", parts)}";
+    }
+
+    private int GetPasswordScore()
+    {
+        if (string.IsNullOrEmpty(newPassword)) return 0;
+        return Math.Min(4, newPassword.Length / 4);
+    }
+
+    private string GetPasswordStrengthLabel()
+    {
+        var score = GetPasswordScore();
+        return score switch
+        {
+            0 => "Too short",
+            1 => "Weak",
+            2 => "Okay",
+            3 => "Good",
+            _ => "Strong"
+        };
+    }
+
+    private string GetPasswordStrengthClass()
+    {
+        var score = GetPasswordScore();
+        return score switch
+        {
+            1 => "weak",
+            2 => "okay",
+            3 => "good",
+            _ => "strong"
+        };
+    }
+
+    private bool CanChangePassword()
+    {
+        return !string.IsNullOrEmpty(currentPassword) &&
+               newPassword.Length >= 12 &&
+               newPassword == confirmPassword &&
+               !isChangingPassword;
+    }
+
+    private async Task HandleChangePassword()
+    {
+        if (!CanChangePassword()) return;
+
+        isChangingPassword = true;
+        passwordError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await _securityClient.ChangePasswordAsync(currentPassword, newPassword, confirmPassword);
+            if (result.Success)
+            {
+                currentPassword = "";
+                newPassword = "";
+                confirmPassword = "";
+                passwordChangedAt = DateTime.UtcNow;
+                securityView = null;
+            }
+            else
+            {
+                passwordError = result.Error ?? "Failed to change password";
+            }
+        }
+        finally
+        {
+            isChangingPassword = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleRevealRecovery()
+    {
+        if (string.IsNullOrEmpty(recoveryPassword)) return;
+
+        isLoadingRecovery = true;
+        recoveryError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await _securityClient.GetRecoveryPhraseAsync(recoveryPassword);
+            if (result.Success && result.Value != null)
+            {
+                recoveryPhrase = result.Value.Words;
+                recoveryRevealed = true;
+                recoveryLastViewed = DateTime.UtcNow;
+            }
+            else
+            {
+                recoveryError = result.Error ?? "Invalid password";
+            }
+        }
+        finally
+        {
+            isLoadingRecovery = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyRecoveryPhrase()
+    {
+        if (recoveryPhrase == null) return;
+        var text = string.Join(" ", recoveryPhrase);
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch
+        {
+            // Fallback for older browsers - silently fail
+        }
+    }
+
+    private async Task OpenSessionsView()
+    {
+        securityView = "sessions";
+        var result = await _securityClient.GetSessionsAsync();
+        if (result.Success && result.Value != null)
+        {
+            sessions = result.Value.Sessions;
+        }
+    }
+
+    private string GetSessionLastActive(SecurityClient.SessionInfo session)
+    {
+        if (session.IsCurrent)
+            return "Active now";
+
+        var minutes = (DateTime.UtcNow - session.LastActiveAt).TotalMinutes;
+
+        if (minutes < 1)
+            return "Active now";
+        if (minutes < 60)
+            return $"{(int)minutes} minutes ago";
+        if (minutes < 1440)
+            return $"{(int)(minutes / 60)} hours ago";
+        return $"{(int)(minutes / 1440)} days ago";
+    }
+
+    private bool IsSessionStale(SecurityClient.SessionInfo session)
+    {
+        return (DateTime.UtcNow - session.LastActiveAt).TotalDays > 7;
+    }
+
+    private async Task HandleRevokeSession(Guid sessionId)
+    {
+        var result = await _securityClient.RevokeSessionAsync(sessionId);
+        if (result.Success)
+        {
+            sessions = sessions.Where(s => s.Id != sessionId).ToList();
+        }
+    }
+
+    private async Task HandleSignOutOthers()
+    {
+        var result = await _securityClient.RevokeAllOtherSessionsAsync();
+        if (result.Success)
+        {
+            sessions = sessions.Where(s => s.IsCurrent).ToList();
+        }
+    }
+
+    private async Task HandleSignOutEverywhere()
+    {
+        await HandleSignOutOthers();
+        await HandleLogout();
+    }
+}
