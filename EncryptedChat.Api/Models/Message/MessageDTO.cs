@@ -4,7 +4,6 @@ using System.ComponentModel.DataAnnotations;
 // Utilisé lors de création et MAJ
 public class MessageDTO
 {
-    [Required]
     public string? Text { get; set; } = string.Empty;
 
     [Required]
