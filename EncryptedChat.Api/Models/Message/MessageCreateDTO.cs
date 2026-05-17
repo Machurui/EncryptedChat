@@ -4,7 +4,6 @@ namespace EncryptedChat.Models;
 
 public class MessageCreateDTO
 {
-    [Required]
     [MaxLength(4000)]
     public string Text { get; set; } = string.Empty;
 
