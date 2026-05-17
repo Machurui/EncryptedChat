@@ -339,7 +339,7 @@ public class MessageServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_ReturnsNull_WhenTextIsEmpty()
+    public async Task CreateAsync_SucceedsWithEmptyText_ForImageOnlyMessages()
     {
         User user = await CreateUser("user-1");
         Team team = await CreateTeam();
@@ -353,11 +353,12 @@ public class MessageServiceTests : IDisposable
 
         MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
-        result.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.Text.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task CreateAsync_ReturnsNull_WhenTextIsWhitespace()
+    public async Task CreateAsync_SucceedsWithWhitespaceText_ForImageOnlyMessages()
     {
         User user = await CreateUser("user-1");
         Team team = await CreateTeam();
@@ -371,7 +372,8 @@ public class MessageServiceTests : IDisposable
 
         MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
-        result.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.Text.Should().Be("   ");
     }
 
     [Fact]

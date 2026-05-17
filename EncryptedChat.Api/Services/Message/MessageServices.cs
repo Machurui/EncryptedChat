@@ -82,11 +82,9 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         if (!isMember)
             return null;
 
-        if (string.IsNullOrWhiteSpace(message?.Text))
-            return null;
-
-        (string encryptedText, string iv) = _crypto.Encrypt(message.Text, team.Secret);
-        string signature = _crypto.Sign(message.Text, sender.Secret);
+        string text = message?.Text ?? "";
+        (string encryptedText, string iv) = _crypto.Encrypt(text, team.Secret);
+        string signature = _crypto.Sign(text, sender.Secret);
 
         Message newMessage = new()
         {
