@@ -3099,7 +3099,7 @@
                 _shouldScrollToBottom = true;
                 StateHasChanged();
                 await Task.Delay(100);
-                await JS.InvokeVoidAsync("initAutoScroll", "messages-container");
+                await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
             }
         }
         finally
