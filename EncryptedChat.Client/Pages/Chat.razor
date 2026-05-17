@@ -3097,8 +3097,8 @@
                 messages = (result.Value ?? []).OrderBy(m => m.Date).ToList();
                 teamMessages[selectedTeamId.Value] = messages;
                 _shouldScrollToBottom = true;
-                StateHasChanged();
-                await Task.Delay(100);
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(200);
                 await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
             }
         }
