@@ -449,9 +449,12 @@
                                             <span class="message-time">@msg.Date.ToLocalTime().ToString("HH:mm")</span>
                                         </div>
                                     }
-                                    <div class="message-bubble @(isOwn ? "own" : "")">
-                                        @((MarkupString)RenderMessageContent(msg.Text ?? ""))
-                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(msg.Text))
+                                    {
+                                        <div class="message-bubble @(isOwn ? "own" : "")">
+                                            @((MarkupString)RenderMessageContent(msg.Text))
+                                        </div>
+                                    }
                                     @if (msg.Attachments?.Any() == true)
                                     {
                                         <div class="message-attachments">
