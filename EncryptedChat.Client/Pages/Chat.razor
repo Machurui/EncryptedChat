@@ -3193,7 +3193,7 @@
 
                 if (message.TeamId == selectedTeamId)
                 {
-                    await Task.Delay(50);
+                    await Task.Delay(100);
                     await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
                 }
             });
@@ -3212,7 +3212,8 @@
                         message.Attachments.Add(evt.Attachment);
                         await InvokeAsync(StateHasChanged);
 
-                        await Task.Delay(50);
+                        // Wait for image to render then scroll
+                        await Task.Delay(150);
                         await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
                     }
                 }
