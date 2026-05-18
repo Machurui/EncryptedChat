@@ -15,6 +15,7 @@
 @inject AttachmentClient AttachmentClient
 @inject AuthClient AuthClient
 @inject UserClient UserClient
+@inject PinnedMessageClient PinnedMessageClient
 @inject FriendClient FriendClient
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -2746,6 +2747,10 @@
     private bool showHeaderMoreMenu;
     private ElementReference headerSearchInputRef;
 
+    // Pinned messages
+    private bool showPinnedDropdown;
+    private List<PinnedMessageClient.PinnedMessageDTO> pinnedMessages = new();
+
     private IEnumerable<TeamClient.TeamDTOPublic> DirectMessages =>
         teams.Where(t => t.IsDirect).OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue);
 
@@ -3966,6 +3971,46 @@
     private void ToggleHeaderMoreMenu()
     {
         showHeaderMoreMenu = !showHeaderMoreMenu;
+    }
+
+    private async Task TogglePinnedDropdown()
+    {
+        showPinnedDropdown = !showPinnedDropdown;
+        showHeaderMoreMenu = false;
+
+        if (showPinnedDropdown && selectedTeamId.HasValue)
+        {
+            var result = await PinnedMessageClient.GetPinnedMessagesAsync(selectedTeamId.Value);
+            if (result.Success)
+                pinnedMessages = result.Value ?? [];
+        }
+    }
+
+    private async Task PinMessage(Guid messageId)
+    {
+        if (!selectedTeamId.HasValue) return;
+
+        var result = await PinnedMessageClient.PinMessageAsync(selectedTeamId.Value, messageId);
+        if (result.Success && result.Value != null)
+        {
+            pinnedMessages.Insert(0, result.Value);
+        }
+    }
+
+    private async Task UnpinMessage(Guid messageId)
+    {
+        if (!selectedTeamId.HasValue) return;
+
+        var result = await PinnedMessageClient.UnpinMessageAsync(selectedTeamId.Value, messageId);
+        if (result.Success)
+        {
+            pinnedMessages.RemoveAll(p => p.MessageId == messageId);
+        }
+    }
+
+    private void ClosePinnedDropdown()
+    {
+        showPinnedDropdown = false;
     }
 
     private void OpenTeamManageModal()
