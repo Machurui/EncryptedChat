@@ -543,9 +543,9 @@
                     }
                     else
                     {
-                        @foreach (var (msg, index) in messages.Select((m, i) => (m, i)))
+                        @foreach (var (msg, index) in FilteredMessages.Select((m, i) => (m, i)))
                         {
-                            var prevMsg = index > 0 ? messages[index - 1] : null;
+                            var prevMsg = index > 0 ? FilteredMessages.ElementAtOrDefault(index - 1) : null;
                             var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
                             var isOwn = msg.Sender?.Id == _userId;
 
@@ -605,6 +605,12 @@
                                         </div>
                                     }
                                 </div>
+                            </div>
+                        }
+                        @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery) && !FilteredMessages.Any())
+                        {
+                            <div class="no-search-results">
+                                No messages match your search.
                             </div>
                         }
                     }
@@ -2892,6 +2898,12 @@
         if (teamDetails?.Members == null) return 0;
         return teamDetails.Members.Count(m => IsStatusOnline(m.User?.Status));
     }
+
+    private IEnumerable<ChatClient.MessageDTOPublic> FilteredMessages =>
+        string.IsNullOrWhiteSpace(headerSearchQuery) || !headerSearchMode
+            ? messages
+            : messages.Where(m =>
+                m.Text?.Contains(headerSearchQuery, StringComparison.OrdinalIgnoreCase) == true);
 
     private string GetRelativeTimeFromDate(DateTime date)
     {
