@@ -184,6 +184,7 @@ builder.Services.AddCors(o => o.AddPolicy("Client", p => p
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddScoped<IPinnedMessageService, PinnedMessageService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IRecoveryService, RecoveryService>();
