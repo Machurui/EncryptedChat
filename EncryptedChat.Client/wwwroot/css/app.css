@@ -1033,6 +1033,312 @@ textarea:-webkit-autofill {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   Conversation Header
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.conversation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+}
+
+.conversation-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.team-glyph-lg {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+}
+
+.conversation-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.conversation-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+}
+
+.e2ee-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--status-online);
+    background: var(--status-online-dim);
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.conversation-meta {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 2px;
+}
+
+.conversation-header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.header-menu-container {
+    position: relative;
+}
+
+.header-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    min-width: 180px;
+    background: rgba(20, 25, 35, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 100;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,0.85);
+    font-size: 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s;
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+.dropdown-item.danger {
+    color: #ef4444;
+}
+
+.dropdown-item.danger:hover {
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.dropdown-divider {
+    height: 1px;
+    margin: 6px 0;
+    background: rgba(255,255,255,0.10);
+}
+
+/* Header search mode */
+.header-search-mode {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    padding: 4px 0;
+}
+
+.header-search-icon {
+    color: rgba(255,255,255,0.5);
+    flex-shrink: 0;
+}
+
+.header-search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.header-search-input::placeholder {
+    color: rgba(255,255,255,0.45);
+}
+
+.header-search-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    white-space: nowrap;
+}
+
+/* Pinned Messages Dropdown */
+.pinned-dropdown {
+    width: 320px;
+    max-height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+.pinned-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+}
+
+.pinned-header-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+}
+
+.pinned-count {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.55);
+}
+
+.pinned-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.pinned-empty {
+    padding: 28px 16px;
+    text-align: center;
+    color: rgba(255,255,255,0.55);
+    font-size: 12px;
+}
+
+.pinned-hint {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.40);
+    margin-top: 4px;
+}
+
+.pinned-item {
+    display: flex;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    transition: background 0.12s;
+}
+
+.pinned-item:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+.pinned-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.pinned-item-meta {
+    display: flex;
+    gap: 6px;
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.65);
+}
+
+.pinned-item-author {
+    font-weight: 600;
+    color: white;
+}
+
+.pinned-item-text {
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+    margin-top: 2px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pinned-unpin-btn {
+    width: 24px;
+    height: 24px;
+    color: rgba(255,255,255,0.55);
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.pinned-item:hover .pinned-unpin-btn {
+    opacity: 1;
+}
+
+.pin-indicator {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+/* Message Actions */
+.message-actions {
+    display: none;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.message:hover .message-actions {
+    display: flex;
+}
+
+.message-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.55);
+    cursor: pointer;
+    transition: all 0.12s;
+}
+
+.message-action-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: white;
+}
+
+/* Search Highlight */
+.search-highlight {
+    background: oklch(0.65 0.16 165 / 0.35);
+    color: white;
+    padding: 1px 3px;
+    border-radius: 3px;
+}
+
+.no-search-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    Message Bubble
    ══════════════════════════════════════════════════════════════════════════ */
 
