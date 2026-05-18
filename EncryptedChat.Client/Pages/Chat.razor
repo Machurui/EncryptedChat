@@ -356,41 +356,103 @@
             @* Conversation header *@
             <GlassPanel Radius="20" Class="conversation-header-panel">
                 <div class="conversation-header">
-                    <div class="conversation-header-left">
-                        @if (selectedTeam.IsDirect)
-                        {
-                            <div class="team-glyph team-glyph-lg dm-glyph">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                                </svg>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="team-glyph team-glyph-lg" style="background: linear-gradient(135deg, @selectedTeam.Color, @GetSecondaryColor(selectedTeam.Color));">
-                                @selectedTeam.Glyph
-                            </div>
-                        }
-                        <div>
-                            <div class="conversation-title">@(selectedTeam.IsDirect ? GetDmDisplayName(selectedTeam) : selectedTeam.Name)</div>
-                            <div class="conversation-meta">
-                                @if (teamDetails?.Members != null)
+                    @if (headerSearchMode)
+                    {
+                        <div class="header-search-mode">
+                            <svg class="header-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text"
+                                   class="header-search-input"
+                                   placeholder="Search in @(selectedTeam.IsDirect ? GetDmDisplayName(selectedTeam) : selectedTeam.Name)..."
+                                   @bind="headerSearchQuery"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleHeaderSearchKeyDown"
+                                   @ref="headerSearchInputRef" />
+                            <span class="header-search-hint">
+                                @if (!string.IsNullOrWhiteSpace(headerSearchQuery))
                                 {
-                                    <span>@teamDetails.Members.Count members</span>
+                                    @($"{GetSearchMatchCount()} matches")
                                 }
+                                else
+                                {
+                                    <text>Esc to close</text>
+                                }
+                            </span>
+                            <button class="icon-btn" @onclick="CloseHeaderSearch" title="Close search">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="conversation-header-left">
+                            @if (selectedTeam.IsDirect)
+                            {
+                                <div class="team-glyph team-glyph-lg dm-glyph">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                    </svg>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="team-glyph team-glyph-lg" style="background: linear-gradient(135deg, @selectedTeam.Color, @GetSecondaryColor(selectedTeam.Color));">
+                                    @selectedTeam.Glyph
+                                </div>
+                            }
+                            <div>
+                                <div class="conversation-title-row">
+                                    <span class="conversation-title">@(selectedTeam.IsDirect ? GetDmDisplayName(selectedTeam) : selectedTeam.Name)</span>
+                                    <span class="e2ee-badge" title="End-to-end encrypted">
+                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                                        </svg>
+                                        E2EE
+                                    </span>
+                                </div>
+                                <div class="conversation-meta">
+                                    @if (teamDetails?.Members != null)
+                                    {
+                                        <span>@teamDetails.Members.Count members · @GetOnlineMemberCount() online</span>
+                                    }
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="conversation-header-right">
-                        <button class="icon-btn" title="Search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
-                        <button class="icon-btn" title="More"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
-                        <button class="icon-btn mobile-members-toggle" @onclick="ToggleMembersRail" title="Members">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                                <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
-                            </svg>
-                        </button>
-                    </div>
+                        <div class="conversation-header-right">
+                            <button class="icon-btn" @onclick="OpenHeaderSearch" title="Search">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            </button>
+                            <div class="header-menu-container">
+                                <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                </button>
+                                @if (showHeaderMoreMenu)
+                                {
+                                    <div class="header-dropdown more-dropdown">
+                                        <button class="dropdown-item" @onclick="OpenTeamManageModal">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                                <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                            </svg>
+                                            <span>Manage team...</span>
+                                        </button>
+                                        <div class="dropdown-divider"></div>
+                                        <button class="dropdown-item danger" @onclick="LeaveTeamAction">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                                            </svg>
+                                            <span>Leave team...</span>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                            <button class="icon-btn mobile-members-toggle" @onclick="ToggleMembersRail" title="Members">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                </svg>
+                            </button>
+                        </div>
+                    }
                 </div>
             </GlassPanel>
 
@@ -2678,6 +2740,12 @@
 
     private bool showProfileModal;
 
+    // Header state
+    private bool headerSearchMode;
+    private string headerSearchQuery = "";
+    private bool showHeaderMoreMenu;
+    private ElementReference headerSearchInputRef;
+
     private IEnumerable<TeamClient.TeamDTOPublic> DirectMessages =>
         teams.Where(t => t.IsDirect).OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue);
 
@@ -2714,6 +2782,12 @@
         if (friendsTab == "online")
             filtered = filtered.Where(f => IsStatusOnline(f.Status));
         return filtered;
+    }
+
+    private int GetOnlineMemberCount()
+    {
+        if (teamDetails?.Members == null) return 0;
+        return teamDetails.Members.Count(m => IsStatusOnline(m.User?.Status));
     }
 
     private string GetRelativeTimeFromDate(DateTime date)
@@ -3859,6 +3933,68 @@
     }
 
     private void ToggleMembersRail() => showMembersRail = !showMembersRail;
+
+    // Header methods
+    private async Task OpenHeaderSearch()
+    {
+        headerSearchMode = true;
+        headerSearchQuery = "";
+        showHeaderMoreMenu = false;
+        await Task.Delay(50);
+        await headerSearchInputRef.FocusAsync();
+    }
+
+    private void CloseHeaderSearch()
+    {
+        headerSearchMode = false;
+        headerSearchQuery = "";
+    }
+
+    private void HandleHeaderSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseHeaderSearch();
+    }
+
+    private int GetSearchMatchCount()
+    {
+        if (string.IsNullOrWhiteSpace(headerSearchQuery) || !messages.Any())
+            return 0;
+        return messages.Count(m => m.Text?.Contains(headerSearchQuery, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private void ToggleHeaderMoreMenu()
+    {
+        showHeaderMoreMenu = !showHeaderMoreMenu;
+    }
+
+    private void OpenTeamManageModal()
+    {
+        showHeaderMoreMenu = false;
+        isMemberModalOpen = true;
+        memberError = null;
+    }
+
+    private async Task LeaveTeamAction()
+    {
+        showHeaderMoreMenu = false;
+        if (!selectedTeamId.HasValue || string.IsNullOrEmpty(_userId)) return;
+
+        var result = await TeamClient.RemoveMemberAsync(selectedTeamId.Value, _userId);
+        if (result.Success)
+        {
+            teams.RemoveAll(t => t.Id == selectedTeamId.Value);
+            teamMessages.Remove(selectedTeamId.Value);
+            var leftTeamId = selectedTeamId.Value;
+            selectedTeamId = null;
+            selectedTeam = null;
+            teamDetails = null;
+            messages.Clear();
+
+            if (teams.Any())
+                await SelectTeam(teams.First().Id);
+        }
+    }
 
     private void OpenMemberModal()
     {
