@@ -423,6 +423,62 @@
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             </button>
                             <div class="header-menu-container">
+                                <button class="icon-btn @(showPinnedDropdown ? "active" : "")" @onclick="TogglePinnedDropdown" title="Pinned messages">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                    </svg>
+                                    @if (pinnedMessages.Count > 0)
+                                    {
+                                        <span class="pin-indicator"></span>
+                                    }
+                                </button>
+                                @if (showPinnedDropdown)
+                                {
+                                    <div class="header-dropdown pinned-dropdown">
+                                        <div class="pinned-header">
+                                            <div class="pinned-header-title">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                                </svg>
+                                                Pinned in @(selectedTeam?.IsDirect == true ? GetDmDisplayName(selectedTeam) : selectedTeam?.Name)
+                                            </div>
+                                            <span class="pinned-count">@pinnedMessages.Count</span>
+                                        </div>
+                                        <div class="pinned-content">
+                                            @if (!pinnedMessages.Any())
+                                            {
+                                                <div class="pinned-empty">
+                                                    <div>No pinned messages yet.</div>
+                                                    <div class="pinned-hint">Hover any message and use the pin icon to pin it.</div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var pin in pinnedMessages)
+                                                {
+                                                    <div class="pinned-item">
+                                                        <Avatar Name="@pin.Message?.Sender?.Name" ImageUrl="@GetFullImageUrl(pin.Message?.Sender?.ProfileImageUrl)" Size="26" />
+                                                        <div class="pinned-item-content">
+                                                            <div class="pinned-item-meta">
+                                                                <span class="pinned-item-author">@pin.Message?.Sender?.Name</span>
+                                                                <span>·</span>
+                                                                <span>@pin.PinnedAt.ToLocalTime().ToString("MMM d")</span>
+                                                            </div>
+                                                            <div class="pinned-item-text">@pin.Message?.Text</div>
+                                                        </div>
+                                                        <button class="icon-btn pinned-unpin-btn" @onclick="() => UnpinMessage(pin.MessageId)" @onclick:stopPropagation="true" title="Unpin">
+                                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="header-menu-container">
                                 <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
                                 </button>
