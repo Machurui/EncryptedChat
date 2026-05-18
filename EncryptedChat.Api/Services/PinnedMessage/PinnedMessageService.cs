@@ -31,6 +31,7 @@ public class PinnedMessageService(
                 .ThenInclude(m => m.Attachments)
             .Include(p => p.PinnedBy)
             .OrderByDescending(p => p.PinnedAt)
+            .Take(50)
             .AsNoTracking()
             .ToListAsync();
 

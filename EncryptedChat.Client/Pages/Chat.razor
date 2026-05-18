@@ -3273,6 +3273,8 @@
             selectedTeamId = teamId;
             selectedTeam = teams.FirstOrDefault(t => t.Id == teamId);
             newMessageText = "";
+            showPinnedDropdown = false;
+            pinnedMessages = new();
 
             if (selectedTeam == null) return;
 
