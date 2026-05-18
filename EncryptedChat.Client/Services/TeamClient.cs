@@ -14,7 +14,7 @@ public class TeamClient
 
     // DTO match API
     public record TeamDTO(ICollection<string> Admins, ICollection<string> Members, string Name, string? Glyph = null, string? Color = null, string? MessageLifetime = null);
-    public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null);
+    public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null, string Status = "offline");
     public record TeamDTOPublic(
         Guid Id,
         string Name,

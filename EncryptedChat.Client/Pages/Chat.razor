@@ -2637,6 +2637,10 @@
     private HubConnection? hubConnection;
     private bool _signalRInitialized;
     private bool _shouldScrollToBottom;
+    private bool _isFirstLoad = true;
+    private record ScrollInfo(double Position, bool IsAtBottom);
+    private Dictionary<Guid, ScrollInfo> _teamScrollPositions = new();
+    private HashSet<Guid> _visitedTeams = new();
 
     // Unread tracking
     private Dictionary<Guid, int> unreadCounts = new();
@@ -3041,6 +3045,13 @@
         _isSelectingTeam = true;
         try
         {
+            // Save scroll info of current team before switching
+            if (selectedTeamId.HasValue)
+            {
+                var scrollInfo = await JS.InvokeAsync<ScrollInfo>("getScrollInfo", "messages-container");
+                _teamScrollPositions[selectedTeamId.Value] = scrollInfo;
+            }
+
             // Stop typing on previous team before switching
             if (isTyping && selectedTeamId.HasValue)
             {
@@ -3053,11 +3064,37 @@
 
             if (selectedTeam == null) return;
 
-            // Mark as read when selecting a team
+            // Check for unread BEFORE marking as read
+            var hadUnread = GetUnreadCount(teamId) > 0;
+            var isFirstVisit = !_visitedTeams.Contains(teamId);
+            _visitedTeams.Add(teamId);
             MarkTeamAsRead(teamId);
 
             await LoadTeamDetails();
-            await LoadMessages();
+
+            // Scroll to bottom on first visit, first load, or if unread
+            // Otherwise restore previous scroll position (or scroll to bottom if user was there)
+            var shouldScrollToBottom = _isFirstLoad || isFirstVisit || hadUnread;
+            double? restorePosition = null;
+
+            if (!shouldScrollToBottom && _teamScrollPositions.TryGetValue(teamId, out var savedInfo))
+            {
+                if (savedInfo.IsAtBottom)
+                {
+                    shouldScrollToBottom = true;
+                }
+                else
+                {
+                    restorePosition = savedInfo.Position;
+                }
+            }
+
+            await LoadMessages(scrollToBottom: shouldScrollToBottom);
+
+            if (restorePosition.HasValue)
+            {
+                await JS.InvokeVoidAsync("setScrollPosition", "messages-container", restorePosition.Value);
+            }
 
             // Only initialize SignalR once
             if (!_signalRInitialized)
@@ -3085,7 +3122,7 @@
         }
     }
 
-    private async Task LoadMessages()
+    private async Task LoadMessages(bool scrollToBottom = false)
     {
         if (!selectedTeamId.HasValue) return;
 
@@ -3097,8 +3134,13 @@
             {
                 messages = (result.Value ?? []).OrderBy(m => m.Date).ToList();
                 teamMessages[selectedTeamId.Value] = messages;
-                Console.WriteLine($"[Scroll] LoadMessages: setting flag, messages count = {messages.Count}");
-                _shouldScrollToBottom = true;
+
+                if (scrollToBottom)
+                {
+                    Console.WriteLine("[Scroll] LoadMessages: scrolling to bottom");
+                    _shouldScrollToBottom = true;
+                    _isFirstLoad = false;
+                }
                 StateHasChanged();
             }
         }
@@ -3697,10 +3739,11 @@
         }
     }
 
-    private void HandleFileSelected(InputFileChangeEventArgs e)
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
         selectedFile = e.File;
         StateHasChanged();
+        await FocusComposerInput();
     }
 
     private void RemoveAttachment()
@@ -3806,7 +3849,7 @@
 
     private async Task FocusComposerInput()
     {
-        await JS.InvokeVoidAsync("eval", "document.querySelector('.composer-input')?.focus()");
+        await JS.InvokeVoidAsync("focusComposerInput");
     }
 
     private void CloseAllPickers()
@@ -4003,6 +4046,15 @@
             var last = msgs.Last();
             var who = last.Sender?.Id == _userId ? "You" : (last.Sender?.Name?.Split(' ')[0] ?? "Someone");
             var text = (last.Text ?? "").Replace("\n", " ").Trim();
+
+            if (string.IsNullOrWhiteSpace(text) && last.Attachments?.Any() == true)
+            {
+                var att = last.Attachments.First();
+                var isImage = att.MimeType?.StartsWith("image/") == true;
+                text = isImage ? "a envoyé une photo" : "a envoyé un fichier";
+                return $"{who} {text}";
+            }
+
             if (text.Length > 30) text = text[..30] + "...";
             return $"{who}: {text}";
         }

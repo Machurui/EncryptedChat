@@ -43,6 +43,39 @@
             setTimeout(scroll, 500);
         }
 
+        function getScrollInfo(elementId) {
+            const container = document.getElementById(elementId);
+            if (!container) return { position: 0, isAtBottom: true };
+
+            const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+            return { position: container.scrollTop, isAtBottom: isAtBottom };
+        }
+
+        function setScrollPosition(elementId, position) {
+            const restore = () => {
+                const container = document.getElementById(elementId);
+                if (container) container.scrollTop = position;
+            };
+
+            // Restore after content renders
+            requestAnimationFrame(() => {
+                requestAnimationFrame(restore);
+            });
+            setTimeout(restore, 100);
+            setTimeout(restore, 300);
+            setTimeout(restore, 500);
+        }
+
+        function focusComposerInput() {
+            const focus = () => {
+                const input = document.querySelector('.composer-input');
+                if (input) input.focus();
+            };
+            requestAnimationFrame(focus);
+            setTimeout(focus, 50);
+            setTimeout(focus, 150);
+        }
+
         function applyTheme(theme) {
             if (theme === 'auto') {
                 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
