@@ -574,6 +574,13 @@
                                             @((MarkupString)RenderMessageContent(msg.Text))
                                         </div>
                                     }
+                                    <div class="message-actions">
+                                        <button class="message-action-btn" @onclick="() => PinMessage(msg.Id)" @onclick:stopPropagation="true" title="Pin message">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
                                     @if (msg.Attachments?.Any() == true)
                                     {
                                         <div class="message-attachments">
@@ -1894,6 +1901,41 @@
     .message-bubble.own {
         background: linear-gradient(135deg, var(--accent), oklch(0.40 0.16 135));
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px var(--accent-glow);
+    }
+
+    /* Pin / message actions */
+    .message-actions {
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+        margin-top: 2px;
+    }
+
+    .message:hover .message-actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .message-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        border: none;
+        background: rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.60);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+        padding: 0;
+    }
+
+    .message-action-btn:hover {
+        background: rgba(255,255,255,0.20);
+        color: rgba(255,255,255,0.95);
     }
 
     /* GIF in messages */
