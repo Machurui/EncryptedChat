@@ -4,6 +4,7 @@
 @attribute [Authorize]
 
 @using System.Security.Claims
+@using System.Text.RegularExpressions
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
 @using EncryptedChat.Client.Services
@@ -571,7 +572,14 @@
                                     @if (!string.IsNullOrWhiteSpace(msg.Text))
                                     {
                                         <div class="message-bubble @(isOwn ? "own" : "")">
-                                            @((MarkupString)RenderMessageContent(msg.Text))
+                                            @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
+                                            {
+                                                @((MarkupString)HighlightSearchTerm(msg.Text))
+                                            }
+                                            else
+                                            {
+                                                @((MarkupString)RenderMessageContent(msg.Text))
+                                            }
                                         </div>
                                     }
                                     <div class="message-actions">
@@ -2904,6 +2912,21 @@
             ? messages
             : messages.Where(m =>
                 m.Text?.Contains(headerSearchQuery, StringComparison.OrdinalIgnoreCase) == true);
+
+    private string HighlightSearchTerm(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(headerSearchQuery) || string.IsNullOrWhiteSpace(text))
+            return RenderMessageContent(text);
+
+        var rendered = RenderMessageContent(text);
+        var pattern = Regex.Escape(headerSearchQuery);
+        return Regex.Replace(
+            rendered,
+            $"({pattern})",
+            "<mark class=\"search-highlight\">$1</mark>",
+            RegexOptions.IgnoreCase
+        );
+    }
 
     private string GetRelativeTimeFromDate(DateTime date)
     {
