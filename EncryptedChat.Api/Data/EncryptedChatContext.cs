@@ -13,6 +13,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Session> Sessions => Set<Session>();
+    public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -92,6 +93,28 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
 
         modelBuilder.Entity<Session>()
             .HasIndex(s => new { s.UserId, s.IsRevoked });
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasOne(p => p.Team)
+            .WithMany()
+            .HasForeignKey(p => p.TeamId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasOne(p => p.Message)
+            .WithMany()
+            .HasForeignKey(p => p.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasOne(p => p.PinnedBy)
+            .WithMany()
+            .HasForeignKey(p => p.PinnedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasIndex(p => new { p.TeamId, p.MessageId })
+            .IsUnique();
 
         modelBuilder.Entity<IdentityRole>().HasData(
             new IdentityRole
