@@ -25,7 +25,7 @@
 
 <div class="app-background-static"></div>
 
-<div class="chat-floating-layout">
+<div class="chat-floating-layout @(mobileShowConversation ? "mobile-show-conversation" : "")">
     @* ── Sidebar (290px) ── *@
     <GlassPanel Radius="24" Class="chat-sidebar-panel">
         @* Header *@
@@ -424,6 +424,11 @@
                     else
                     {
                         <div class="conversation-header-left">
+                            <button class="icon-btn mobile-only" @onclick="BackToSidebarMobile" aria-label="Back to teams" title="Back">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"/>
+                                </svg>
+                            </button>
                             @if (selectedTeam.IsDirect)
                             {
                                 <div class="team-glyph team-glyph-lg dm-glyph">
@@ -457,6 +462,12 @@
                             </div>
                         </div>
                         <div class="conversation-header-right">
+                            <button class="icon-btn hide-desktop-up" @onclick="ToggleMembersDrawer" aria-label="Show members" title="Members">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                </svg>
+                            </button>
                             <button class="icon-btn" @onclick="OpenHeaderSearch" title="Search">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             </button>
@@ -843,7 +854,7 @@
     @* ── Members rail (230px) ── *@
     @if (selectedTeam != null)
     {
-        <GlassPanel Radius="24" Class="@($"members-rail-panel {(showMembersRail ? "show" : "")}")">
+        <GlassPanel Radius="24" Class="@($"members-rail-panel {(showMembersRail ? "show" : "")} {(mobileShowMembersDrawer ? "drawer-open" : "")}")">
             <div class="members-header">
                 <span class="section-label">Members</span>
                 <button class="icon-btn mobile-close" @onclick="() => showMembersRail = false">
@@ -901,7 +912,8 @@
 </div>
 
 @* ── Mobile sidebar overlay ── *@
-<div class="mobile-sidebar-overlay @(showMobileSidebar ? "show" : "")" @onclick="() => showMobileSidebar = false"></div>
+<div class="drawer-overlay @(mobileShowMembersDrawer ? "show" : "")"
+     @onclick="() => mobileShowMembersDrawer = false"></div>
 
 @* ── Team Manage Modal ── *@
 <TeamManageModal
@@ -2492,96 +2504,6 @@
         margin-bottom: 16px;
     }
 
-    .mobile-sidebar-overlay {
-        display: none;
-    }
-
-    /* ── Responsive ── */
-    @@media (max-width: 1024px) {
-        .members-rail-panel {
-            display: none;
-            position: fixed;
-            top: 18px;
-            right: 18px;
-            bottom: 18px;
-            z-index: 50;
-            box-shadow: -10px 0 40px rgba(0,0,0,0.3);
-        }
-
-        .members-rail-panel.show {
-            display: flex;
-        }
-
-        .mobile-members-toggle, .mobile-close {
-            display: inline-flex;
-        }
-    }
-
-    @@media (max-width: 768px) {
-        .chat-floating-layout {
-            padding: 12px;
-            gap: 10px;
-        }
-
-        .chat-sidebar-panel {
-            position: fixed;
-            top: 12px;
-            left: 12px;
-            bottom: 12px;
-            width: 280px;
-            z-index: 60;
-            transform: translateX(-110%);
-            transition: transform 0.3s ease;
-            box-shadow: 10px 0 40px rgba(0,0,0,0.3);
-        }
-
-        .chat-sidebar-panel.show {
-            transform: translateX(0);
-        }
-
-        .mobile-sidebar-overlay {
-            display: block;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 55;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-        }
-
-        .mobile-sidebar-overlay.show {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .conversation-column {
-            margin-left: 0;
-        }
-
-        .conversation-header-left .team-glyph-lg {
-            display: none;
-        }
-
-        .encryption-pill {
-            font-size: 10px;
-            padding: 5px 10px;
-        }
-
-        .messages-container {
-            padding: 12px 16px 8px;
-        }
-
-        .composer-wrapper {
-            padding: 10px 12px 12px;
-        }
-
-        .members-rail-panel {
-            top: 12px;
-            right: 12px;
-            bottom: 12px;
-        }
-    }
 
     /* ── Status Menu (uses modal-overlay for consistent styling) ── */
     .status-menu-overlay {
@@ -2756,6 +2678,98 @@
     .status-signout-btn:hover {
         background: rgba(220, 40, 40, 0.10);
     }
+
+    /* ─────────────── Chat Responsive Layout ─────────────── */
+
+    .drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 99;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    .drawer-overlay.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    @@media (min-width: 1024px) {
+        .drawer-overlay { display: none; }
+    }
+
+    /* ── Tablet (768 - 1023px) ── */
+    @@media (min-width: 768px) and (max-width: 1023px) {
+        .chat-sidebar-panel { width: 270px; }
+
+        .members-rail-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 280px;
+            z-index: 100;
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .members-rail-panel.drawer-open {
+            transform: translateX(0);
+        }
+    }
+
+    /* ── Mobile (max-width: 767px) ── */
+    @@media (max-width: 767px) {
+        .chat-floating-layout { padding: 0; gap: 0; }
+
+        .chat-sidebar-panel,
+        .conversation-column,
+        .members-rail-panel { border-radius: 0; }
+
+        .chat-floating-layout .chat-sidebar-panel { display: flex; flex: 1; }
+        .chat-floating-layout .conversation-column { display: none; }
+        .chat-floating-layout .members-rail-panel { display: none; }
+
+        .chat-floating-layout.mobile-show-conversation .chat-sidebar-panel { display: none; }
+        .chat-floating-layout.mobile-show-conversation .conversation-column {
+            display: flex;
+            flex: 1;
+        }
+
+        .chat-floating-layout.mobile-show-conversation .members-rail-panel.drawer-open {
+            display: flex;
+            position: fixed;
+            inset: 0 0 0 auto;
+            width: 85vw;
+            z-index: 100;
+            transform: translateX(0);
+            transition: transform 0.25s ease;
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-floating-layout.mobile-show-conversation .members-rail-panel:not(.drawer-open) {
+            display: none;
+        }
+
+        .composer-wrapper {
+            position: sticky;
+            bottom: 0;
+            background: inherit;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            z-index: 5;
+        }
+
+        .composer-input {
+            font-size: 16px;
+            min-height: var(--touch-target-min);
+        }
+
+        .composer .icon-btn {
+            min-width: var(--touch-target-min);
+            min-height: var(--touch-target-min);
+        }
+    }
 </style>
 
 @code {
@@ -2785,8 +2799,11 @@
     private string activeNav = "chats";
     private string searchQuery = string.Empty;
     private string friendSearchQuery = string.Empty;
-    private bool showMobileSidebar;
     private bool showMembersRail;
+
+    // Mobile navigation state
+    private bool mobileShowConversation;
+    private bool mobileShowMembersDrawer;
 
     // Status
     private bool showStatusMenu;
@@ -3229,6 +3246,17 @@
         }
     }
 
+    private void BackToSidebarMobile()
+    {
+        mobileShowConversation = false;
+        mobileShowMembersDrawer = false;
+    }
+
+    private void ToggleMembersDrawer()
+    {
+        mobileShowMembersDrawer = !mobileShowMembersDrawer;
+    }
+
     private async Task SelectStatus(string status)
     {
         currentStatus = status;
@@ -3392,6 +3420,8 @@
             selectedTeamId = teamId;
             selectedTeam = teams.FirstOrDefault(t => t.Id == teamId);
             newMessageText = "";
+            mobileShowConversation = true;
+            mobileShowMembersDrawer = false;
             showPinnedDropdown = false;
             pinnedMessages = new();
 
