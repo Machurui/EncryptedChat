@@ -5,9 +5,9 @@
 {
     <div class="modal-overlay" @onclick="Close">
         <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Style="width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column;">
+            <GlassPanel Radius="24" Class="modal-responsive team-manage-modal" Style="width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column;">
                 <!-- Header -->
-                <div class="team-modal-header">
+                <div class="team-modal-header modal-header">
                     <div class="team-modal-header-left">
                         <div class="team-glyph" style="width: 42px; height: 42px; font-size: 16px; background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));">
                             @GetTeamInitials(Team.Name)
@@ -48,7 +48,7 @@
                 </div>
 
                 <!-- Content -->
-                <div class="team-modal-content">
+                <div class="team-modal-content modal-body">
                     @if (activeTab == "members")
                     {
                         @if (!string.IsNullOrEmpty(errorMessage))
@@ -135,7 +135,7 @@
                 </div>
 
                 <!-- Footer -->
-                <div class="team-modal-footer">
+                <div class="team-modal-footer modal-footer">
                     <GlassButton OnClick="Close">Close</GlassButton>
                     @if (activeTab == "general" && IsAdmin)
                     {

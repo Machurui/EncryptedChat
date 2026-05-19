@@ -12,9 +12,9 @@
 {
     <div class="modal-overlay" @onclick="Close">
         <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Style="width: 760px; max-height: 90vh; display: flex; flex-direction: column;">
+            <GlassPanel Radius="24" Class="modal-responsive profile-settings-modal" Style="width: 760px; max-height: 90vh; display: flex; flex-direction: column;">
                 <!-- Header -->
-                <div class="profile-modal-header">
+                <div class="profile-modal-header modal-header">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         @if (securityView != null)
                         {
@@ -37,7 +37,7 @@
                 </div>
 
                 <!-- Body -->
-                <div class="profile-modal-body">
+                <div class="profile-modal-body modal-body">
                     @if (securityView != null)
                     {
                         <!-- Full-width security subview (no tabs) -->
@@ -524,7 +524,7 @@
                 <!-- Footer -->
                 @if (securityView == null)
                 {
-                    <div class="profile-modal-footer">
+                    <div class="profile-modal-footer modal-footer">
                         <GlassButton OnClick="Close">Cancel</GlassButton>
                         <GlassButton Primary="true" OnClick="Save">Save changes</GlassButton>
                     </div>
@@ -1540,16 +1540,33 @@
     }
 
     @@media (max-width: 768px) {
-        .profile-modal-tabs {
-            display: none;
-        }
-
         .profile-fields-grid {
             grid-template-columns: 1fr;
         }
 
         .recovery-grid {
             grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .profile-settings-modal .modal-body {
+            flex-direction: column;
+        }
+
+        .profile-modal-tabs {
+            width: 100%;
+            flex: 0 0 auto;
+            flex-direction: row;
+            flex-wrap: wrap;
+            border-right: none;
+            border-bottom: 0.5px solid rgba(255,255,255,0.10);
+            padding: 10px 10px 0;
+            overflow-x: auto;
+        }
+
+        .profile-tab {
+            flex: 0 0 auto;
         }
     }
 </style>

@@ -7,9 +7,9 @@
 {
     <div class="modal-overlay" @onclick="Close">
         <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="22" Style="width: 100%; max-width: 480px;">
+            <GlassPanel Radius="22" Class="modal-responsive add-friend-modal" Style="width: 100%; max-width: 480px;">
                 <!-- Header -->
-                <div class="add-friend-header">
+                <div class="add-friend-header modal-header">
                     <div class="add-friend-title">Add a friend</div>
                     <IconButton Title="Close" OnClick="Close">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -43,7 +43,7 @@
                 </div>
 
                 <!-- Content -->
-                <div class="add-friend-content">
+                <div class="add-friend-content modal-body">
                     @if (activeTab == "handle")
                     {
                         <GlassInput @bind-Value="handleInput" Placeholder="Search by name or email..." OnInput="HandleSearch">

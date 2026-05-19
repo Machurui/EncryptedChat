@@ -4,9 +4,9 @@
 {
     <div class="modal-overlay" @onclick="Close">
         <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Style="width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
+            <GlassPanel Radius="24" Class="modal-responsive new-team-modal" Style="width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
                 <!-- Header with team preview -->
-                <div class="new-team-header">
+                <div class="new-team-header modal-header">
                     <div class="new-team-header-left">
                         <div class="team-preview-glyph" style="background: linear-gradient(135deg, @selectedColor, @GetSecondaryColor(selectedColor));">
                             @selectedGlyph
@@ -46,7 +46,7 @@
                 </div>
 
                 <!-- Content -->
-                <div class="new-team-content">
+                <div class="new-team-content modal-body">
                     @if (step == 1)
                     {
                         <!-- Step 1: Identity -->
@@ -198,7 +198,7 @@
                 </div>
 
                 <!-- Footer -->
-                <div class="new-team-footer">
+                <div class="new-team-footer modal-footer">
                     @if (step > 1)
                     {
                         <GlassButton OnClick="PrevStep">Back</GlassButton>
