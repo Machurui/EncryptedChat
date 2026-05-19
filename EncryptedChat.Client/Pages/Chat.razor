@@ -347,30 +347,44 @@
 
         @* Profile dock *@
         <div class="profile-dock">
-            <button class="profile-dock-btn @(showStatusMenu ? "active" : "")" @onclick="ToggleStatusMenu">
-                <div class="profile-avatar-wrapper">
-                    <Avatar Name="@currentUserName" ImageUrl="@currentUserProfileImage" Size="32" />
-                    <span class="status-dot @currentStatus"></span>
-                </div>
-                <div class="profile-info">
-                    <div class="profile-name" style="color: @currentUserNameColor;">@currentUserName</div>
-                    <div class="profile-status-text @currentStatus">
-                        @if (!string.IsNullOrEmpty(currentStatusMessage))
-                        {
-                            @currentStatusMessage
-                        }
-                        else
-                        {
-                            @GetStatusLabel(currentStatus)
-                        }
+            @if (profileState == LoadState.Success)
+            {
+                <button class="profile-dock-btn @(showStatusMenu ? "active" : "")" @onclick="ToggleStatusMenu">
+                    <div class="profile-avatar-wrapper">
+                        <Avatar Name="@currentUserName" ImageUrl="@currentUserProfileImage" Size="32" />
+                        <span class="status-dot @currentStatus"></span>
+                    </div>
+                    <div class="profile-info">
+                        <div class="profile-name" style="color: @currentUserNameColor;">@currentUserName</div>
+                        <div class="profile-status-text @currentStatus">
+                            @if (!string.IsNullOrEmpty(currentStatusMessage))
+                            {
+                                @currentStatusMessage
+                            }
+                            else
+                            {
+                                @GetStatusLabel(currentStatus)
+                            }
+                        </div>
+                    </div>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="color: rgba(255,255,255,0.45); transform: @(showStatusMenu ? "rotate(180deg)" : "none"); transition: transform 0.15s;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+            }
+            else
+            {
+                <div class="profile-dock-btn" style="cursor: default;" aria-busy="true">
+                    <div class="profile-avatar-wrapper">
+                        <SkeletonBox Width="32px" Height="32px" BorderRadius="50%" />
+                    </div>
+                    <div class="profile-info">
+                        <SkeletonBox Width="80%" Height="12px" />
+                        <SkeletonBox Width="55%" Height="10px" CssClass="skeleton-mt-4" />
                     </div>
                 </div>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     style="color: rgba(255,255,255,0.45); transform: @(showStatusMenu ? "rotate(180deg)" : "none"); transition: transform 0.15s;">
-                    <polyline points="6 9 12 15 18 9"/>
-                </svg>
-            </button>
-
+            }
         </div>
     </GlassPanel>
 
@@ -2814,10 +2828,12 @@
     private LoadState friendsState = LoadState.Loading;
     private LoadState messagesState = LoadState.Loading;
     private LoadState membersState = LoadState.Loading;
+    private LoadState profileState = LoadState.Loading;
     private string? teamsError;
     private string? friendsError;
     private string? messagesError;
     private string? membersError;
+    private string? profileError;
 
     // File attachment
     private InputFile? fileInput;
@@ -3075,9 +3091,19 @@
 
     private async Task LoadUserStatus()
     {
-        var result = await UserClient.GetProfileAsync();
-        if (result.Success && result.Value != null)
+        if (string.IsNullOrEmpty(currentUserName)) profileState = LoadState.Loading;
+        profileError = null;
+
+        try
         {
+            var result = await UserClient.GetProfileAsync();
+            if (!result.Success || result.Value == null)
+            {
+                profileState = LoadState.Error;
+                profileError = result.ErrorMessage ?? "Failed to load profile.";
+                return;
+            }
+
             currentUserName = result.Value.Name;
             currentUserHandle = result.Value.Handle;
             currentUserProfileImage = GetFullImageUrl(result.Value.ProfileImageUrl);
@@ -3091,6 +3117,12 @@
             Console.WriteLine($"[Profile] Loaded NotificationPreference: '{currentNotificationPreference}'");
             editStatusMessage = currentStatusMessage ?? string.Empty;
             ApplyTheme(currentTheme);
+            profileState = LoadState.Success;
+        }
+        catch (Exception ex)
+        {
+            profileState = LoadState.Error;
+            profileError = ex.Message;
         }
     }
 

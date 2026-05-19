@@ -67,7 +67,12 @@
         <div class="friends-content">
             @if (isLoading)
             {
-                <div class="loading-state">Loading...</div>
+                <div aria-busy="true">
+                    @for (int i = 0; i < 5; i++)
+                    {
+                        <SkeletonFriendRow />
+                    }
+                </div>
             }
             else if (activeTab == "requests")
             {

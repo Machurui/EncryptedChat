@@ -27,7 +27,32 @@
 
             @if (isLoading)
             {
-                <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.50);">Loading...</div>
+                <div aria-busy="true" style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 8px;">
+                        <SkeletonBox Width="80px" Height="80px" BorderRadius="50%" />
+                        <SkeletonBox Width="80px" Height="20px" BorderRadius="999px" CssClass="skeleton-mt-4" />
+                    </div>
+                    <div>
+                        <SkeletonBox Width="90px" Height="11px" />
+                        <SkeletonBox Width="100%" Height="38px" BorderRadius="12px" CssClass="skeleton-mt-4" />
+                    </div>
+                    <div>
+                        <SkeletonBox Width="80px" Height="11px" />
+                        <div style="display: flex; gap: 10px; margin-top: 5px;">
+                            <SkeletonBox Width="44px" Height="38px" BorderRadius="10px" />
+                            <SkeletonBox Width="100%" Height="38px" BorderRadius="12px" />
+                        </div>
+                    </div>
+                    <div>
+                        <SkeletonBox Width="120px" Height="11px" />
+                        <SkeletonBox Width="100%" Height="38px" BorderRadius="12px" CssClass="skeleton-mt-4" />
+                    </div>
+                    <div>
+                        <SkeletonBox Width="50px" Height="11px" />
+                        <SkeletonBox Width="100%" Height="38px" BorderRadius="12px" CssClass="skeleton-mt-4" />
+                    </div>
+                    <SkeletonBox Width="100%" Height="44px" BorderRadius="12px" CssClass="skeleton-mt-4" />
+                </div>
             }
             else if (profile != null)
             {
