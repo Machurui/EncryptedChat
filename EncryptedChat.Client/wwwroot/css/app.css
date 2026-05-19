@@ -1749,12 +1749,20 @@ textarea:-webkit-autofill {
     padding: 8px 10px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 767px) {
+    .initial-splash-layout { padding: 0; gap: 0; }
+    .splash-sidebar {
+        width: 100% !important;
+        border-radius: 0 !important;
+        flex: 1;
+    }
+    .initial-splash-column { display: none; }
     .splash-members { display: none; }
 }
 
-@media (max-width: 768px) {
-    .splash-sidebar { display: none; }
+@media (min-width: 768px) and (max-width: 1023px) {
+    .splash-sidebar { width: 270px; }
+    .splash-members { display: none; }
 }
 
 /* ─────────────── Responsive Foundation ─────────────── */
@@ -1857,6 +1865,23 @@ a:focus-visible,
 
     .modal-overlay {
         background: rgba(0, 0, 0, 0.85);
+    }
+}
+
+/* ─────────────── Skeleton & States Responsive ─────────────── */
+
+@media (max-width: 767px) {
+    .skeleton-message > .skeleton-message-content > .skeleton {
+        max-width: 75vw;
+    }
+
+    .loading-state-error {
+        padding: 24px 16px;
+    }
+
+    .empty-section,
+    .no-messages {
+        padding: 32px 16px;
     }
 }
 
