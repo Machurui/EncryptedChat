@@ -1,0 +1,52 @@
+@switch (Status)
+{
+    case LoadState.Loading:
+        <div aria-busy="true">
+            @SkeletonTemplate
+        </div>
+        break;
+
+    case LoadState.Error:
+        @if (ErrorTemplate != null)
+        {
+            @ErrorTemplate
+        }
+        else
+        {
+            <div class="loading-state-error">
+                <svg class="loading-state-error-icon" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <div class="loading-state-error-message">
+                    @(string.IsNullOrWhiteSpace(ErrorMessage) ? "Something went wrong." : ErrorMessage)
+                </div>
+                @if (OnRetry.HasDelegate)
+                {
+                    <button class="loading-state-retry-btn" @onclick="OnRetry">Retry</button>
+                }
+            </div>
+        }
+        break;
+
+    case LoadState.Empty:
+        @EmptyTemplate
+        break;
+
+    case LoadState.Success:
+        @SuccessTemplate
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public LoadState Status { get; set; } = LoadState.Loading;
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    [Parameter, EditorRequired] public RenderFragment SkeletonTemplate { get; set; } = default!;
+    [Parameter, EditorRequired] public RenderFragment SuccessTemplate { get; set; } = default!;
+    [Parameter, EditorRequired] public RenderFragment EmptyTemplate { get; set; } = default!;
+    [Parameter] public RenderFragment? ErrorTemplate { get; set; }
+}
