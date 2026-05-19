@@ -2768,6 +2768,16 @@
     private bool isLoadingMessages;
     private bool isSending;
 
+    // Skeleton loader states
+    private LoadState teamsState = LoadState.Loading;
+    private LoadState friendsState = LoadState.Loading;
+    private LoadState messagesState = LoadState.Loading;
+    private LoadState membersState = LoadState.Loading;
+    private string? teamsError;
+    private string? friendsError;
+    private string? messagesError;
+    private string? membersError;
+
     // File attachment
     private InputFile? fileInput;
     private IBrowserFile? selectedFile;
@@ -2993,12 +3003,32 @@
 
     private async Task LoadTeams()
     {
-        if (string.IsNullOrEmpty(_userId)) return;
-
-        var result = await TeamClient.GetTeamsByUserAsync(_userId);
-        if (result.Success && result.Value != null)
+        if (string.IsNullOrEmpty(_userId))
         {
-            teams = result.Value;
+            teamsState = LoadState.Error;
+            teamsError = "User session not loaded.";
+            return;
+        }
+
+        if (!teams.Any()) teamsState = LoadState.Loading;
+        teamsError = null;
+
+        try
+        {
+            var result = await TeamClient.GetTeamsByUserAsync(_userId);
+            if (!result.Success)
+            {
+                teamsState = LoadState.Error;
+                teamsError = result.ErrorMessage ?? "Failed to load teams.";
+                return;
+            }
+            teams = result.Value ?? [];
+            teamsState = teams.Any() ? LoadState.Success : LoadState.Empty;
+        }
+        catch (Exception ex)
+        {
+            teamsState = LoadState.Error;
+            teamsError = ex.Message;
         }
     }
 
@@ -3032,16 +3062,32 @@
 
     private async Task LoadFriends()
     {
-        var friendsResult = await FriendClient.GetFriendsAsync();
-        if (friendsResult.Success)
-        {
-            friends = friendsResult.Value ?? [];
-        }
+        if (!friends.Any()) friendsState = LoadState.Loading;
+        friendsError = null;
 
-        var requestsResult = await FriendClient.GetPendingRequestsAsync();
-        if (requestsResult.Success)
+        try
         {
-            pendingRequests = requestsResult.Value ?? [];
+            var friendsResult = await FriendClient.GetFriendsAsync();
+            if (!friendsResult.Success)
+            {
+                friendsState = LoadState.Error;
+                friendsError = friendsResult.ErrorMessage ?? "Failed to load friends.";
+                return;
+            }
+            friends = friendsResult.Value ?? [];
+
+            var requestsResult = await FriendClient.GetPendingRequestsAsync();
+            if (requestsResult.Success)
+            {
+                pendingRequests = requestsResult.Value ?? [];
+            }
+
+            friendsState = friends.Any() ? LoadState.Success : LoadState.Empty;
+        }
+        catch (Exception ex)
+        {
+            friendsState = LoadState.Error;
+            friendsError = ex.Message;
         }
     }
 
@@ -3328,11 +3374,35 @@
     {
         if (!selectedTeamId.HasValue) return;
 
-        var result = await TeamClient.GetTeamDetailsAsync(selectedTeamId.Value);
-        if (result.Success && result.Value != null)
+        membersState = LoadState.Loading;
+        membersError = null;
+
+        try
         {
+            var result = await TeamClient.GetTeamDetailsAsync(selectedTeamId.Value);
+            if (!result.Success)
+            {
+                membersState = LoadState.Error;
+                membersError = result.ErrorMessage ?? "Failed to load team details.";
+                return;
+            }
+
+            if (result.Value == null)
+            {
+                membersState = LoadState.Empty;
+                return;
+            }
+
             teamDetails = result.Value;
             isAdmin = teamDetails.Members?.Any(m => m.User?.Id == _userId && m.Role == "Admin") ?? false;
+            membersState = (teamDetails.Members != null && teamDetails.Members.Any())
+                ? LoadState.Success
+                : LoadState.Empty;
+        }
+        catch (Exception ex)
+        {
+            membersState = LoadState.Error;
+            membersError = ex.Message;
         }
     }
 
@@ -3340,27 +3410,35 @@
     {
         if (!selectedTeamId.HasValue) return;
 
-        isLoadingMessages = true;
+        messagesState = LoadState.Loading;
+        messagesError = null;
+
         try
         {
             var result = await ChatClient.GetMessagesByTeamAsync(selectedTeamId.Value);
-            if (result.Success)
+            if (!result.Success)
             {
-                messages = (result.Value ?? []).OrderBy(m => m.Date).ToList();
-                teamMessages[selectedTeamId.Value] = messages;
-
-                if (scrollToBottom)
-                {
-                    Console.WriteLine("[Scroll] LoadMessages: scrolling to bottom");
-                    _shouldScrollToBottom = true;
-                    _isFirstLoad = false;
-                }
-                StateHasChanged();
+                messagesState = LoadState.Error;
+                messagesError = result.ErrorMessage ?? "Failed to load messages.";
+                return;
             }
+
+            messages = (result.Value ?? []).OrderBy(m => m.Date).ToList();
+            teamMessages[selectedTeamId.Value] = messages;
+            messagesState = messages.Any() ? LoadState.Success : LoadState.Empty;
+
+            if (scrollToBottom)
+            {
+                Console.WriteLine("[Scroll] LoadMessages: scrolling to bottom");
+                _shouldScrollToBottom = true;
+                _isFirstLoad = false;
+            }
+            StateHasChanged();
         }
-        finally
+        catch (Exception ex)
         {
-            isLoadingMessages = false;
+            messagesState = LoadState.Error;
+            messagesError = ex.Message;
         }
     }
 
