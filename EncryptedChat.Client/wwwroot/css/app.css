@@ -1811,3 +1811,52 @@ a:focus-visible,
     outline-offset: 2px;
 }
 
+/* ─────────────── Modal Responsive (fullscreen on mobile) ─────────────── */
+
+@media (max-width: 767px) {
+    .modal-responsive {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        max-width: none !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-responsive .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        min-height: 56px;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        background: inherit;
+    }
+
+    .modal-responsive .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 16px;
+    }
+
+    .modal-responsive .modal-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        padding: 12px 16px;
+        background: inherit;
+        border-top: 0.5px solid rgba(255, 255, 255, 0.10);
+    }
+
+    .modal-overlay {
+        background: rgba(0, 0, 0, 0.85);
+    }
+}
+
