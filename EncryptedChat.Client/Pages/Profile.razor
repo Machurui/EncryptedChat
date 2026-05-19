@@ -14,7 +14,7 @@
 <div class="app-background"></div>
 
 <div style="min-height: 100vh; display: grid; place-items: center; padding: 24px;">
-    <GlassPanel Radius="28" Style="width: 100%; max-width: 440px;">
+    <GlassPanel Radius="28" Class="profile-page-panel" Style="width: 100%; max-width: 440px;">
         <div style="padding: 24px 36px;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
                 <a href="/chat" style="color: rgba(255,255,255,0.60); text-decoration: none; display: flex; align-items: center;">
@@ -156,7 +156,7 @@
                         </div>
                     </div>
 
-                    <button type="button" class="glass-btn glass-btn-primary glass-btn-lg" style="width: 100%; margin-top: 8px;"
+                    <button type="button" class="glass-btn glass-btn-primary glass-btn-lg profile-save-btn" style="width: 100%; margin-top: 8px;"
                             @onclick="SaveProfile" disabled="@isSaving">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
@@ -169,6 +169,24 @@
         </div>
     </GlassPanel>
 </div>
+
+<style>
+    @@media (max-width: 767px) {
+        .profile-page-panel {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 100vh !important;
+            min-height: 100dvh !important;
+            border-radius: 0 !important;
+            padding: 24px 16px !important;
+        }
+        .profile-save-btn {
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
+        }
+    }
+</style>
 
 @code {
     private UserClient.UserProfileDTO? profile;

@@ -9,7 +9,7 @@
 <div class="app-background"></div>
 
 <div style="min-height: 100vh; display: grid; place-items: center; padding: 24px;">
-    <GlassPanel Radius="28" Style="width: 100%; max-width: 420px;">
+    <GlassPanel Radius="28" Class="auth-panel register-panel" Style="width: 100%; max-width: 420px;">
         <div style="padding: 34px 36px 8px; text-align: center;">
             <!-- Shield Icon -->
             <div style="width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 16px;
@@ -123,6 +123,20 @@
         </div>
     </GlassPanel>
 </div>
+
+<style>
+    @@media (max-width: 767px) {
+        .register-panel {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 100vh !important;
+            min-height: 100dvh !important;
+            border-radius: 0 !important;
+            padding: 60px 20px 24px !important;
+            justify-content: flex-start !important;
+        }
+    }
+</style>
 
 @code {
     private RegisterModel registerModel = new();
