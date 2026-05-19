@@ -764,7 +764,7 @@
                         </button>
 
                         @* Input *@
-                        <input type="text" class="composer-input" placeholder="Send an encrypted message..."
+                        <input id="composer-input" type="text" class="composer-input" placeholder="Send an encrypted message..."
                                @bind="newMessageText" @bind:event="oninput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
 
                         @* Emoji button *@
@@ -3067,6 +3067,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("setupMobileComposerScroll", "composer-input", "messages-container");
+        }
+
         if (_shouldScrollToBottom)
         {
             Console.WriteLine("[Scroll] OnAfterRenderAsync: scrolling now");
