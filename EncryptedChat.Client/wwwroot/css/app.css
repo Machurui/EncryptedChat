@@ -77,6 +77,9 @@
     /* ── Skeleton loaders ── */
     --skeleton-bg: rgba(255, 255, 255, 0.06);
     --skeleton-shimmer: rgba(255, 255, 255, 0.10);
+
+    /* ── Responsive ── */
+    --touch-target-min: 44px;
 }
 
 :root.theme-light {
@@ -97,6 +100,7 @@ body {
     background: var(--bg-secondary);
     color: var(--text-primary);
     min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* Remove default focus outlines (including Safari/macOS) */
@@ -1751,5 +1755,59 @@ textarea:-webkit-autofill {
 
 @media (max-width: 768px) {
     .splash-sidebar { display: none; }
+}
+
+/* ─────────────── Responsive Foundation ─────────────── */
+
+body { overflow-x: hidden; }
+* { -webkit-tap-highlight-color: transparent; }
+
+.hide-mobile { /* visible by default */ }
+.hide-tablet-down { /* visible by default */ }
+.hide-desktop-up { /* visible by default */ }
+.mobile-only { display: none; }
+
+@media (max-width: 767px) {
+    .hide-mobile { display: none !important; }
+    .mobile-only { display: inline-flex; }
+}
+
+@media (max-width: 1023px) {
+    .hide-tablet-down { display: none !important; }
+}
+
+@media (min-width: 1024px) {
+    .hide-desktop-up { display: none !important; }
+}
+
+@media (max-width: 1023px) {
+    .icon-btn,
+    .glass-btn,
+    .nav-tab,
+    .friends-tab,
+    .friend-dropdown-item,
+    .dropdown-item {
+        min-height: var(--touch-target-min);
+    }
+    .icon-btn,
+    .glass-btn {
+        min-width: var(--touch-target-min);
+    }
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    input[type="search"],
+    textarea {
+        font-size: 16px;
+    }
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
