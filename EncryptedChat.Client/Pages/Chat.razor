@@ -131,27 +131,42 @@
 
             @* Team list *@
             <div class="team-list">
-                @foreach (var team in FilteredTeams)
-                {
-                    var unreadCount = GetUnreadCount(team.Id);
-                    var hasUnread = unreadCount > 0;
-                    <button class="team-row @(team.Id == selectedTeamId ? "active" : "") @(hasUnread ? "unread" : "")" @onclick="() => SelectTeam(team.Id)">
-                        <div class="team-glyph" style="background: linear-gradient(135deg, @team.Color, @GetSecondaryColor(team.Color));">
-                            @team.Glyph
-                        </div>
-                        <div class="team-info">
-                            <div class="team-row-header">
-                                <span class="team-name @(hasUnread ? "bold" : "")">@team.Name</span>
-                                <span class="team-time">@GetLastActiveTime(team.Id)</span>
-                            </div>
-                            <div class="team-preview @(hasUnread ? "unread" : "")">@GetLastMessagePreview(team.Id)</div>
-                        </div>
-                        @if (hasUnread)
+                <LoadingState Status="@teamsState" ErrorMessage="@teamsError" OnRetry="LoadTeams">
+                    <SkeletonTemplate>
+                        @for (int i = 0; i < 5; i++)
                         {
-                            <span class="unread-badge">@unreadCount</span>
+                            <SkeletonTeamRow />
                         }
-                    </button>
-                }
+                    </SkeletonTemplate>
+                    <EmptyTemplate>
+                        <div class="empty-section">
+                            <div class="empty-text">No teams yet</div>
+                        </div>
+                    </EmptyTemplate>
+                    <SuccessTemplate>
+                        @foreach (var team in FilteredTeams)
+                        {
+                            var unreadCount = GetUnreadCount(team.Id);
+                            var hasUnread = unreadCount > 0;
+                            <button class="team-row @(team.Id == selectedTeamId ? "active" : "") @(hasUnread ? "unread" : "")" @onclick="() => SelectTeam(team.Id)">
+                                <div class="team-glyph" style="background: linear-gradient(135deg, @team.Color, @GetSecondaryColor(team.Color));">
+                                    @team.Glyph
+                                </div>
+                                <div class="team-info">
+                                    <div class="team-row-header">
+                                        <span class="team-name @(hasUnread ? "bold" : "")">@team.Name</span>
+                                        <span class="team-time">@GetLastActiveTime(team.Id)</span>
+                                    </div>
+                                    <div class="team-preview @(hasUnread ? "unread" : "")">@GetLastMessagePreview(team.Id)</div>
+                                </div>
+                                @if (hasUnread)
+                                {
+                                    <span class="unread-badge">@unreadCount</span>
+                                }
+                            </button>
+                        }
+                    </SuccessTemplate>
+                </LoadingState>
             </div>
         }
         else
@@ -251,73 +266,81 @@
                 else
                 {
                     @* All / Online friends list *@
-                    @foreach (var friend in GetFilteredFriendsByTab())
-                    {
-                        <div class="friend-row">
-                            <div class="friend-avatar-wrapper">
-                                <Avatar Name="@friend.Name" ImageUrl="@GetFullImageUrl(friend.ProfileImageUrl)" Size="32" />
-                                <span class="status-dot-small @GetFriendDisplayStatus(friend.Status)"></span>
-                            </div>
-                            <div class="friend-row-content">
-                                <div class="friend-row-name" style="color: @friend.NameColor;">@friend.Name</div>
-                                <div class="friend-row-meta">
-                                    <span class="friend-status-indicator @GetFriendDisplayStatus(friend.Status)"></span>
-                                    @if (IsStatusOnline(friend.Status))
-                                    {
-                                        @if (!string.IsNullOrEmpty(friend.StatusMessage))
-                                        {
-                                            <span>@friend.StatusMessage</span>
-                                        }
-                                        else
-                                        {
-                                            <span>@(friend.Status == "online" ? "Online" : friend.Status == "away" ? "Away" : "Do not disturb")</span>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <span>@(friend.LastSeenAt.HasValue ? GetRelativeTimeFromDate(friend.LastSeenAt.Value) : "Offline")</span>
-                                    }
-                                </div>
-                            </div>
-                            <button class="icon-btn" title="Message" @onclick="() => StartDirectMessage(friend.UserId)">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                                </svg>
-                            </button>
-                            <div class="friend-more-menu">
-                                <button class="icon-btn" title="More" @onclick="() => ToggleFriendMenu(friend.UserId)" @onclick:stopPropagation="true">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
-                                    </svg>
-                                </button>
-                                @if (openFriendMenuId == friend.UserId)
-                                {
-                                    <div class="friend-dropdown">
-                                        <button class="friend-dropdown-item danger" @onclick="() => RemoveFriend(friend.UserId)" @onclick:stopPropagation="true">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/>
-                                            </svg>
-                                            Remove friend
-                                        </button>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
-                    @if (!GetFilteredFriendsByTab().Any())
-                    {
-                        <div class="empty-section">
-                            @if (friends.Count == 0)
+                    <LoadingState Status="@friendsState" ErrorMessage="@friendsError" OnRetry="LoadFriends">
+                        <SkeletonTemplate>
+                            @for (int i = 0; i < 4; i++)
                             {
+                                <SkeletonFriendRow />
+                            }
+                        </SkeletonTemplate>
+                        <EmptyTemplate>
+                            <div class="empty-section">
                                 <div class="empty-text">No friends yet</div>
                                 <button class="glass-btn glass-btn-sm" style="margin-top: 10px;" @onclick="OpenAddFriendModal">Add friends</button>
-                            }
-                            else
+                            </div>
+                        </EmptyTemplate>
+                        <SuccessTemplate>
+                            @foreach (var friend in GetFilteredFriendsByTab())
                             {
-                                <div class="empty-text">No results</div>
+                                <div class="friend-row">
+                                    <div class="friend-avatar-wrapper">
+                                        <Avatar Name="@friend.Name" ImageUrl="@GetFullImageUrl(friend.ProfileImageUrl)" Size="32" />
+                                        <span class="status-dot-small @GetFriendDisplayStatus(friend.Status)"></span>
+                                    </div>
+                                    <div class="friend-row-content">
+                                        <div class="friend-row-name" style="color: @friend.NameColor;">@friend.Name</div>
+                                        <div class="friend-row-meta">
+                                            <span class="friend-status-indicator @GetFriendDisplayStatus(friend.Status)"></span>
+                                            @if (IsStatusOnline(friend.Status))
+                                            {
+                                                @if (!string.IsNullOrEmpty(friend.StatusMessage))
+                                                {
+                                                    <span>@friend.StatusMessage</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>@(friend.Status == "online" ? "Online" : friend.Status == "away" ? "Away" : "Do not disturb")</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span>@(friend.LastSeenAt.HasValue ? GetRelativeTimeFromDate(friend.LastSeenAt.Value) : "Offline")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <button class="icon-btn" title="Message" @onclick="() => StartDirectMessage(friend.UserId)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                        </svg>
+                                    </button>
+                                    <div class="friend-more-menu">
+                                        <button class="icon-btn" title="More" @onclick="() => ToggleFriendMenu(friend.UserId)" @onclick:stopPropagation="true">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                                            </svg>
+                                        </button>
+                                        @if (openFriendMenuId == friend.UserId)
+                                        {
+                                            <div class="friend-dropdown">
+                                                <button class="friend-dropdown-item danger" @onclick="() => RemoveFriend(friend.UserId)" @onclick:stopPropagation="true">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/>
+                                                    </svg>
+                                                    Remove friend
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
                             }
-                        </div>
-                    }
+                            @if (!GetFilteredFriendsByTab().Any())
+                            {
+                                <div class="empty-section">
+                                    <div class="empty-text">No results</div>
+                                </div>
+                            }
+                        </SuccessTemplate>
+                    </LoadingState>
                 }
             </div>
         }
@@ -531,97 +554,101 @@
                         }
                     </div>
 
-                    @if (isLoadingMessages)
-                    {
-                        <div class="loading-messages">Loading messages...</div>
-                    }
-                    else if (!messages.Any())
-                    {
-                        <div class="no-messages">
-                            <div>No messages yet</div>
-                            <div class="no-messages-sub">Start the conversation!</div>
-                        </div>
-                    }
-                    else
-                    {
-                        @foreach (var (msg, index) in FilteredMessages.Select((m, i) => (m, i)))
-                        {
-                            var prevMsg = index > 0 ? FilteredMessages.ElementAtOrDefault(index - 1) : null;
-                            var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
-                            var isOwn = msg.Sender?.Id == _userId;
+                    <LoadingState Status="@messagesState" ErrorMessage="@messagesError" OnRetry="() => LoadMessages(true)">
+                        <SkeletonTemplate>
+                            <SkeletonMessage IsOwn="false" BubbleWidth="240px" />
+                            <SkeletonMessage IsOwn="true"  BubbleWidth="180px" />
+                            <SkeletonMessage IsOwn="false" BubbleWidth="280px" />
+                            <SkeletonMessage IsOwn="false" BubbleWidth="160px" />
+                            <SkeletonMessage IsOwn="true"  BubbleWidth="220px" />
+                            <SkeletonMessage IsOwn="false" BubbleWidth="200px" />
+                        </SkeletonTemplate>
+                        <EmptyTemplate>
+                            <div class="no-messages">
+                                <div>No messages yet</div>
+                                <div class="no-messages-sub">Start the conversation!</div>
+                            </div>
+                        </EmptyTemplate>
+                        <SuccessTemplate>
+                            @foreach (var (msg, index) in FilteredMessages.Select((m, i) => (m, i)))
+                            {
+                                var prevMsg = index > 0 ? FilteredMessages.ElementAtOrDefault(index - 1) : null;
+                                var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
+                                var isOwn = msg.Sender?.Id == _userId;
 
-                            <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "")">
-                                @if (!sameAuthor && !isOwn)
-                                {
-                                    <div class="message-avatar">
-                                        <Avatar Name="@msg.Sender?.Name" ImageUrl="@GetFullImageUrl(msg.Sender?.ProfileImageUrl)" Size="30" />
-                                    </div>
-                                }
-                                else if (!isOwn)
-                                {
-                                    <div class="message-avatar-spacer"></div>
-                                }
-                                <div class="message-content">
-                                    @if (!sameAuthor)
+                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "")">
+                                    @if (!sameAuthor && !isOwn)
                                     {
-                                        <div class="message-header">
-                                            <span class="message-author" style="color: @(msg.Sender?.NameColor ?? "#FFFFFF");">@msg.Sender?.Name</span>
-                                            <span class="message-time">@msg.Date.ToLocalTime().ToString("HH:mm")</span>
+                                        <div class="message-avatar">
+                                            <Avatar Name="@msg.Sender?.Name" ImageUrl="@GetFullImageUrl(msg.Sender?.ProfileImageUrl)" Size="30" />
                                         </div>
                                     }
-                                    @if (!string.IsNullOrWhiteSpace(msg.Text))
+                                    else if (!isOwn)
                                     {
-                                        <div class="message-bubble @(isOwn ? "own" : "")">
-                                            @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
-                                            {
-                                                @((MarkupString)HighlightSearchTerm(msg.Text))
-                                            }
-                                            else
-                                            {
-                                                @((MarkupString)RenderMessageContent(msg.Text))
-                                            }
-                                        </div>
+                                        <div class="message-avatar-spacer"></div>
                                     }
-                                    <div class="message-actions">
-                                        <button class="message-action-btn" @onclick="() => PinMessage(msg.Id)" @onclick:stopPropagation="true" title="Pin message">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    @if (msg.Attachments?.Any() == true)
-                                    {
-                                        <div class="message-attachments">
-                                            @foreach (var att in msg.Attachments)
-                                            {
-                                                @if (IsImageMimeType(att.MimeType))
+                                    <div class="message-content">
+                                        @if (!sameAuthor)
+                                        {
+                                            <div class="message-header">
+                                                <span class="message-author" style="color: @(msg.Sender?.NameColor ?? "#FFFFFF");">@msg.Sender?.Name</span>
+                                                <span class="message-time">@msg.Date.ToLocalTime().ToString("HH:mm")</span>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(msg.Text))
+                                        {
+                                            <div class="message-bubble @(isOwn ? "own" : "")">
+                                                @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
                                                 {
-                                                    <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
-                                                        <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
-                                                    </a>
+                                                    @((MarkupString)HighlightSearchTerm(msg.Text))
                                                 }
                                                 else
                                                 {
-                                                    <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-attachment">
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                                        <span class="attachment-file-name">@att.FileName</span>
-                                                        <span class="attachment-file-size">@FormatFileSize(att.Size)</span>
-                                                    </a>
+                                                    @((MarkupString)RenderMessageContent(msg.Text))
                                                 }
-                                            }
+                                            </div>
+                                        }
+                                        <div class="message-actions">
+                                            <button class="message-action-btn" @onclick="() => PinMessage(msg.Id)" @onclick:stopPropagation="true" title="Pin message">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                                </svg>
+                                            </button>
                                         </div>
-                                    }
+                                        @if (msg.Attachments?.Any() == true)
+                                        {
+                                            <div class="message-attachments">
+                                                @foreach (var att in msg.Attachments)
+                                                {
+                                                    @if (IsImageMimeType(att.MimeType))
+                                                    {
+                                                        <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
+                                                            <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-attachment">
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                            <span class="attachment-file-name">@att.FileName</span>
+                                                            <span class="attachment-file-size">@FormatFileSize(att.Size)</span>
+                                                        </a>
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
-                            </div>
-                        }
-                        @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery) && !FilteredMessages.Any())
-                        {
-                            <div class="no-search-results">
-                                No messages match your search.
-                            </div>
-                        }
-                    }
+                            }
+                            @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery) && !FilteredMessages.Any())
+                            {
+                                <div class="no-search-results">
+                                    No messages match your search.
+                                </div>
+                            }
+                        </SuccessTemplate>
+                    </LoadingState>
                     <div id="messages-end"></div>
                 </div>
 
@@ -812,21 +839,36 @@
                 </button>
             </div>
             <div class="members-list">
-                @if (teamDetails?.Members != null)
-                {
-                    @foreach (var member in teamDetails.Members.OrderByDescending(m => m.Role == "Admin"))
-                    {
-                        <div class="member-row">
-                            <Avatar Name="@member.User?.Name" ImageUrl="@GetFullImageUrl(member.User?.ProfileImageUrl)" Size="30" />
-                            <div class="member-info">
-                                <div class="member-name" style="color: @(member.User?.NameColor ?? "#FFFFFF");">@member.User?.Name</div>
-                                <div class="member-status @(member.Role == "Admin" ? "admin" : "")">
-                                    @(member.Role == "Admin" ? "Admin" : "Member")
-                                </div>
-                            </div>
+                <LoadingState Status="@membersState" ErrorMessage="@membersError" OnRetry="LoadTeamDetails">
+                    <SkeletonTemplate>
+                        @for (int i = 0; i < 4; i++)
+                        {
+                            <SkeletonMemberRow />
+                        }
+                    </SkeletonTemplate>
+                    <EmptyTemplate>
+                        <div class="empty-section">
+                            <div class="empty-text">No members</div>
                         </div>
-                    }
-                }
+                    </EmptyTemplate>
+                    <SuccessTemplate>
+                        @if (teamDetails?.Members != null)
+                        {
+                            @foreach (var member in teamDetails.Members.OrderByDescending(m => m.Role == "Admin"))
+                            {
+                                <div class="member-row">
+                                    <Avatar Name="@member.User?.Name" ImageUrl="@GetFullImageUrl(member.User?.ProfileImageUrl)" Size="30" />
+                                    <div class="member-info">
+                                        <div class="member-name" style="color: @(member.User?.NameColor ?? "#FFFFFF");">@member.User?.Name</div>
+                                        <div class="member-status @(member.Role == "Admin" ? "admin" : "")">
+                                            @(member.Role == "Admin" ? "Admin" : "Member")
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </SuccessTemplate>
+                </LoadingState>
             </div>
             @if (isAdmin)
             {
@@ -2765,7 +2807,6 @@
     private Dictionary<Guid, List<ChatClient.MessageDTOPublic>> teamMessages = new();
     private List<ChatClient.MessageDTOPublic> messages = new();
     private string newMessageText = string.Empty;
-    private bool isLoadingMessages;
     private bool isSending;
 
     // Skeleton loader states
