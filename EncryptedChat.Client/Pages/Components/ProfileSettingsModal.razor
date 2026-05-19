@@ -1552,21 +1552,55 @@
     @@media (max-width: 767px) {
         .profile-settings-modal .modal-body {
             flex-direction: column;
+            min-height: 0;
         }
 
         .profile-modal-tabs {
             width: 100%;
             flex: 0 0 auto;
             flex-direction: row;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             border-right: none;
             border-bottom: 0.5px solid rgba(255,255,255,0.10);
-            padding: 10px 10px 0;
+            padding: 8px 12px;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .profile-modal-tabs::-webkit-scrollbar {
+            display: none;
         }
 
         .profile-tab {
             flex: 0 0 auto;
+            white-space: nowrap;
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .profile-modal-content,
+        .profile-modal-content-full {
+            padding: 16px;
+        }
+
+        .profile-modal-footer {
+            padding: 12px 16px;
+            gap: 10px;
+        }
+
+        .profile-modal-footer .glass-btn {
+            flex: 1;
+            justify-content: center;
+        }
+
+        .profile-modal-header {
+            padding: 0 16px;
+            min-height: 56px;
+        }
+
+        .profile-modal-header-title {
+            font-size: 15px;
         }
     }
 </style>
