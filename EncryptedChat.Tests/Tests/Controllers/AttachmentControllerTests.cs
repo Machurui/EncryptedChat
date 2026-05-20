@@ -13,6 +13,7 @@ namespace EncryptedChat.Tests;
 public class AttachmentControllerTests
 {
     private readonly Mock<IAttachmentService> _mockAttachmentService;
+    private readonly Mock<IRealtimeService> _mockRealtimeService;
     private readonly string _userId = Guid.NewGuid().ToString();
     private readonly Guid _messageId = Guid.NewGuid();
     private readonly Guid _attachmentId = Guid.NewGuid();
@@ -20,11 +21,12 @@ public class AttachmentControllerTests
     public AttachmentControllerTests()
     {
         _mockAttachmentService = new Mock<IAttachmentService>();
+        _mockRealtimeService = new Mock<IRealtimeService>();
     }
 
     private AttachmentController CreateController(string? userId = null)
     {
-        var controller = new AttachmentController(_mockAttachmentService.Object);
+        var controller = new AttachmentController(_mockAttachmentService.Object, _mockRealtimeService.Object);
         var claims = new List<Claim>();
 
         if (userId != null)

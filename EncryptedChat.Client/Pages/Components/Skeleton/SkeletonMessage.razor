@@ -1,0 +1,18 @@
+<div class="skeleton-message @(IsOwn ? "own" : "")">
+    @if (!IsOwn)
+    {
+        <SkeletonBox Width="30px" Height="30px" BorderRadius="50%" />
+    }
+    <div class="skeleton-message-content">
+        @if (!IsOwn)
+        {
+            <SkeletonBox Width="80px" Height="11px" CssClass="skeleton-mb-4" />
+        }
+        <SkeletonBox Width="@BubbleWidth" Height="36px" BorderRadius="14px" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOwn { get; set; }
+    [Parameter] public string BubbleWidth { get; set; } = "220px";
+}

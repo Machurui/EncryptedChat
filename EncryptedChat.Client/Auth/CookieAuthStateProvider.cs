@@ -46,29 +46,23 @@ public class CookieAuthStateProvider : AuthenticationStateProvider
     {
         try
         {
-            var response = await _http.GetAsync("api/auth/me");
+            var response = await _http.GetAsync("api/user/me");
 
             if (!response.IsSuccessStatusCode)
                 return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
 
             var me = await response.Content.ReadFromJsonAsync<MeResponse>();
-            if (me is null || string.IsNullOrEmpty(me.UserId))
+            if (me is null || string.IsNullOrEmpty(me.Id))
                 return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
 
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, me.UserId),
-                new("sub", me.UserId)
+                new(ClaimTypes.NameIdentifier, me.Id),
+                new("sub", me.Id)
             };
 
             if (!string.IsNullOrEmpty(me.Name))
                 claims.Add(new Claim(ClaimTypes.Name, me.Name));
-
-            if (me.Roles is not null)
-            {
-                foreach (var role in me.Roles)
-                    claims.Add(new Claim(ClaimTypes.Role, role));
-            }
 
             var identity = new ClaimsIdentity(claims, "cookie");
             return new AuthenticationState(new ClaimsPrincipal(identity));
@@ -79,5 +73,5 @@ public class CookieAuthStateProvider : AuthenticationStateProvider
         }
     }
 
-    private record MeResponse(string? UserId, string? Name, List<string>? Roles, bool IsAuthenticated);
+    private record MeResponse(string? Id, string? Name, string? Email, int Level);
 }

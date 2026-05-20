@@ -12,7 +12,8 @@ public class AuthService(
     SignInManager<User> signInManager,
     RoleManager<IdentityRole> roleManager,
     JwtTokenService tokens,
-    EncryptedChatContext context) : IAuthService
+    EncryptedChatContext context,
+    ISessionService sessionService) : IAuthService
 {
     private const string DefaultUserRole = "User";
 
@@ -21,6 +22,7 @@ public class AuthService(
     private readonly RoleManager<IdentityRole> _roleManager = roleManager;
     private readonly JwtTokenService _tokens = tokens;
     private readonly EncryptedChatContext _context = context;
+    private readonly ISessionService _sessionService = sessionService;
 
     public async Task<IdentityResult> RegisterAsync(RegisterDTO model)
     {
@@ -74,7 +76,7 @@ public class AuthService(
         return result;
     }
 
-    public async Task<LoginResult> LoginAsync(LoginDTO model)
+    public async Task<LoginResult> LoginAsync(LoginDTO model, string? deviceInfo = null, string? deviceKind = null, string? ipAddress = null)
     {
         User? user = await _userManager.FindByEmailAsync(model.Email)
                      ?? await _userManager.FindByNameAsync(model.Email);
@@ -100,6 +102,32 @@ public class AuthService(
         };
 
         _context.RefreshTokens.Add(refreshTokenEntity);
+
+        if (!string.IsNullOrEmpty(deviceInfo))
+        {
+            // Check for existing session with same device to avoid duplicates
+            var existingSession = await _context.Sessions
+                .FirstOrDefaultAsync(s => s.UserId == user.Id && s.DeviceInfo == deviceInfo && !s.IsRevoked);
+
+            if (existingSession != null)
+            {
+                // Update existing session
+                existingSession.TokenHash = SessionService.HashToken(tokenPair.AccessToken);
+                existingSession.LastActiveAt = DateTime.UtcNow;
+            }
+            else
+            {
+                // Create new session
+                await _sessionService.CreateSessionAsync(
+                    user.Id,
+                    tokenPair.AccessToken,
+                    deviceInfo,
+                    deviceKind ?? "web",
+                    ipAddress
+                );
+            }
+        }
+
         await _context.SaveChangesAsync();
 
         return LoginResult.Success(tokenPair.AccessToken, tokenPair.AccessTokenExpiresUtc, tokenPair.RefreshToken);
@@ -121,7 +149,7 @@ public class AuthService(
         }
     }
 
-    public async Task<LoginResult> RefreshAsync(string refreshToken)
+    public async Task<LoginResult> RefreshAsync(string refreshToken, string? oldAccessToken = null, string? deviceInfo = null, string? deviceKind = null, string? ipAddress = null)
     {
         string refreshTokenHash = HashRefreshToken(refreshToken);
         RefreshToken? storedToken = await _context.RefreshTokens
@@ -148,6 +176,44 @@ public class AuthService(
         };
 
         _context.RefreshTokens.Add(newRefreshToken);
+
+        // Update session token hash
+        string newTokenHash = SessionService.HashToken(newTokenPair.AccessToken);
+        Session? session = null;
+
+        // First try to find session by old token hash
+        if (!string.IsNullOrEmpty(oldAccessToken))
+        {
+            string oldTokenHash = SessionService.HashToken(oldAccessToken);
+            session = await _context.Sessions
+                .FirstOrDefaultAsync(s => s.UserId == user.Id && s.TokenHash == oldTokenHash && !s.IsRevoked);
+        }
+
+        // If not found by token, find existing session for same device (avoid duplicates)
+        if (session == null && !string.IsNullOrEmpty(deviceInfo))
+        {
+            session = await _context.Sessions
+                .FirstOrDefaultAsync(s => s.UserId == user.Id && s.DeviceInfo == deviceInfo && !s.IsRevoked);
+        }
+
+        if (session != null)
+        {
+            // Update existing session
+            session.TokenHash = newTokenHash;
+            session.LastActiveAt = DateTime.UtcNow;
+        }
+        else if (!string.IsNullOrEmpty(deviceInfo))
+        {
+            // Create new session only if no matching session exists
+            await _sessionService.CreateSessionAsync(
+                user.Id,
+                newTokenPair.AccessToken,
+                deviceInfo,
+                deviceKind ?? "web",
+                ipAddress
+            );
+        }
+
         await _context.SaveChangesAsync();
 
         return LoginResult.Success(newTokenPair.AccessToken, newTokenPair.AccessTokenExpiresUtc, newTokenPair.RefreshToken);
@@ -166,6 +232,33 @@ public class AuthService(
     public Task<IdentityResult> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model)
     {
         throw new NotImplementedException();
+    }
+
+    public async Task<IdentityResult> ChangePasswordAsync(string userId, ChangePasswordDTO model)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return IdentityResult.Failed(new IdentityError
+            {
+                Code = "UserNotFound",
+                Description = "User not found"
+            });
+
+        var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+
+        if (result.Succeeded)
+        {
+            user.PasswordChangedAt = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+        }
+
+        return result;
+    }
+
+    public async Task<DateTime?> GetPasswordChangedAtAsync(string userId)
+    {
+        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        return user?.PasswordChangedAt;
     }
 
     private static string HashRefreshToken(string refreshToken)

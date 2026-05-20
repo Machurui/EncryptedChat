@@ -9,10 +9,12 @@ namespace EncryptedChat.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class MessageController(IMessageService messageService, ITeamService teamService) : ControllerBase
+public class MessageController(IMessageService messageService, ITeamService teamService, IRealtimeService realtimeService, IRateLimitService rateLimitService) : ControllerBase
 {
     private readonly IMessageService _messageService = messageService;
     private readonly ITeamService _teamService = teamService;
+    private readonly IRealtimeService _realtimeService = realtimeService;
+    private readonly IRateLimitService _rateLimitService = rateLimitService;
 
     private string? GetCurrentUserId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -60,6 +62,13 @@ public class MessageController(IMessageService messageService, ITeamService team
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
+        var rateCheck = _rateLimitService.CheckAndRecord(userId);
+        if (!rateCheck.Allowed)
+        {
+            Response.Headers["Retry-After"] = Math.Ceiling(rateCheck.RetryAfterMs / 1000.0).ToString();
+            return StatusCode(429, new { error = "RateLimited", retryAfterMs = rateCheck.RetryAfterMs });
+        }
+
         bool isMember = await _teamService.IsMemberAsync(userId, dto.Team);
         if (!isMember)
             return Forbid();
@@ -73,6 +82,21 @@ public class MessageController(IMessageService messageService, ITeamService team
         MessageDTOPublic? message = await _messageService.CreateAsync(messageDto, userId);
         if (message is null)
             return BadRequest(new { Message = "Invalid request" });
+
+        // Broadcast to team members
+        await _realtimeService.BroadcastMessageAsync(dto.Team, message);
+
+        // Update last message for sidebar
+        IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(dto.Team);
+        if (memberIds.Count > 0)
+        {
+            string preview = (message.Text?.Length ?? 0) > 50
+                ? message.Text![..50] + "..."
+                : message.Text ?? "";
+            preview = preview.Replace("\n", " ").Trim();
+            await _realtimeService.BroadcastTeamLastMessageAsync(
+                dto.Team, memberIds, preview, message.Date, message.Sender?.Name);
+        }
 
         return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
     }

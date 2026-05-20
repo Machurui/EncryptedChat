@@ -11,8 +11,13 @@ namespace EncryptedChat.Controllers;
 [ApiController]
 [Authorize(Roles = "User")]
 [RequestSizeLimit(26_214_400)]
-public class AttachmentController(IAttachmentService attachmentService) : ControllerBase
+public class AttachmentController(
+    IAttachmentService attachmentService,
+    IRealtimeService realtimeService) : ControllerBase
 {
+    private readonly IAttachmentService _attachmentService = attachmentService;
+    private readonly IRealtimeService _realtimeService = realtimeService;
+
     private string? GetCurrentUserId() => User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
     [HttpPost]
@@ -32,11 +37,18 @@ public class AttachmentController(IAttachmentService attachmentService) : Contro
         using MemoryStream ms = new();
         await file.CopyToAsync(ms);
 
-        (AttachmentDTOPublic? attachment, string? error, bool isForbidden) = await attachmentService.CreateAsync(
+        (AttachmentDTOPublic? attachment, string? error, bool isForbidden) = await _attachmentService.CreateAsync(
             messageId, file.FileName, file.ContentType, ms.ToArray(), userId);
 
         if (attachment == null)
             return isForbidden ? Forbid() : BadRequest(new { Message = error });
+
+        // Broadcast attachment to team
+        Guid? teamId = await _attachmentService.GetTeamIdForMessageAsync(messageId);
+        if (teamId.HasValue)
+        {
+            await _realtimeService.BroadcastAttachmentAddedAsync(teamId.Value, messageId, attachment);
+        }
 
         return CreatedAtAction(nameof(GetMetadata), new { id = attachment.Id }, attachment);
     }
@@ -48,7 +60,7 @@ public class AttachmentController(IAttachmentService attachmentService) : Contro
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        AttachmentDTOPublic? attachment = await attachmentService.GetByIdAsync(id, userId);
+        AttachmentDTOPublic? attachment = await _attachmentService.GetByIdAsync(id, userId);
         return attachment == null ? NotFound() : Ok(attachment);
     }
 
@@ -59,7 +71,7 @@ public class AttachmentController(IAttachmentService attachmentService) : Contro
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        (byte[] Content, string FileName, string MimeType)? result = await attachmentService.DownloadAsync(id, userId);
+        (byte[] Content, string FileName, string MimeType)? result = await _attachmentService.DownloadAsync(id, userId);
         if (result == null)
             return NotFound();
 
@@ -74,6 +86,6 @@ public class AttachmentController(IAttachmentService attachmentService) : Contro
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        return await attachmentService.DeleteAsync(id, userId) ? NoContent() : NotFound();
+        return await _attachmentService.DeleteAsync(id, userId) ? NoContent() : NotFound();
     }
 }

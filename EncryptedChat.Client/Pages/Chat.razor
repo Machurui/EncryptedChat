@@ -1,0 +1,5021 @@
+@page "/chat"
+@page "/chat/{TeamId:guid}"
+@layout EmptyLayout
+@attribute [Authorize]
+
+@using System.Security.Claims
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using EncryptedChat.Client.Services
+@using EncryptedChat.Client.Pages.Components
+
+@inject AuthenticationStateProvider AuthStateProvider
+@inject TeamClient TeamClient
+@inject ChatClient ChatClient
+@inject AttachmentClient AttachmentClient
+@inject AuthClient AuthClient
+@inject UserClient UserClient
+@inject PinnedMessageClient PinnedMessageClient
+@inject FriendClient FriendClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@implements IAsyncDisposable
+
+<div class="app-background-static"></div>
+
+<div class="chat-floating-layout @(mobileShowConversation ? "mobile-show-conversation" : "")">
+    @* ── Sidebar (290px) ── *@
+    <GlassPanel Radius="24" Class="chat-sidebar-panel">
+        @* Header *@
+        <div class="sidebar-header">
+            <div class="brand-row">
+                <div class="brand-badge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="brand-title">EncryptedChat</div>
+                    <div class="e2ee-indicator">
+                        <span class="e2ee-dot"></span>
+                        E2EE active
+                    </div>
+                </div>
+            </div>
+            <button class="icon-btn" @onclick="() => showProfileModal = true" title="Settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+            </button>
+        </div>
+
+        @* Nav tabs *@
+        <div class="nav-tabs">
+            <button class="nav-tab @(activeNav == "chats" ? "active" : "")" @onclick='() => activeNav = "chats"'>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
+                    <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+                </svg>
+                Chats
+            </button>
+            <button class="nav-tab @(activeNav == "friends" ? "active" : "")" @onclick='() => activeNav = "friends"'>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                </svg>
+                Friends
+                @if (incomingRequests.Any())
+                {
+                    <span class="nav-tab-badge">@incomingRequests.Count()</span>
+                }
+            </button>
+        </div>
+
+        @if (activeNav == "chats")
+        {
+            @* Search *@
+            <div class="sidebar-search">
+                <div class="glass-input" style="background: rgba(0,0,0,0.18);">
+                    <svg class="glass-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" placeholder="Search conversations..." @bind="searchQuery" @bind:event="oninput" />
+                </div>
+            </div>
+
+            @* Direct Messages section *@
+            @if (DirectMessages.Any())
+            {
+                <div class="section-header">
+                    <span class="section-label">Direct Messages</span>
+                </div>
+                <div class="team-list dm-list">
+                    @foreach (var dm in DirectMessages)
+                    {
+                        var unreadCount = GetUnreadCount(dm.Id);
+                        var hasUnread = unreadCount > 0;
+                        var dmName = GetDmDisplayName(dm);
+                        <button class="team-row @(dm.Id == selectedTeamId ? "active" : "") @(hasUnread ? "unread" : "")" @onclick="() => SelectTeam(dm.Id)">
+                            <div class="team-glyph dm-glyph">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                            </div>
+                            <div class="team-info">
+                                <div class="team-row-header">
+                                    <span class="team-name @(hasUnread ? "bold" : "")">@dmName</span>
+                                    <span class="team-time">@GetLastActiveTime(dm.Id)</span>
+                                </div>
+                                <div class="team-preview @(hasUnread ? "unread" : "")">@GetLastMessagePreview(dm.Id)</div>
+                            </div>
+                            @if (hasUnread)
+                            {
+                                <span class="unread-badge">@unreadCount</span>
+                            }
+                        </button>
+                    }
+                </div>
+            }
+
+            @* Teams section *@
+            <div class="section-header">
+                <span class="section-label">Teams</span>
+                <button class="icon-btn" @onclick="OpenNewTeamModal" title="New team">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+
+            @* Team list *@
+            <div class="team-list">
+                <LoadingState Status="@teamsState" ErrorMessage="@teamsError" OnRetry="LoadTeams">
+                    <SkeletonTemplate>
+                        @for (int i = 0; i < 5; i++)
+                        {
+                            <SkeletonTeamRow />
+                        }
+                    </SkeletonTemplate>
+                    <EmptyTemplate>
+                        <div class="empty-section">
+                            <div class="empty-text">No teams yet</div>
+                        </div>
+                    </EmptyTemplate>
+                    <SuccessTemplate>
+                        @foreach (var team in FilteredTeams)
+                        {
+                            var unreadCount = GetUnreadCount(team.Id);
+                            var hasUnread = unreadCount > 0;
+                            <button class="team-row @(team.Id == selectedTeamId ? "active" : "") @(hasUnread ? "unread" : "")" @onclick="() => SelectTeam(team.Id)">
+                                <div class="team-glyph" style="background: linear-gradient(135deg, @team.Color, @GetSecondaryColor(team.Color));">
+                                    @team.Glyph
+                                </div>
+                                <div class="team-info">
+                                    <div class="team-row-header">
+                                        <span class="team-name @(hasUnread ? "bold" : "")">@team.Name</span>
+                                        <span class="team-time">@GetLastActiveTime(team.Id)</span>
+                                    </div>
+                                    <div class="team-preview @(hasUnread ? "unread" : "")">@GetLastMessagePreview(team.Id)</div>
+                                </div>
+                                @if (hasUnread)
+                                {
+                                    <span class="unread-badge">@unreadCount</span>
+                                }
+                            </button>
+                        }
+                    </SuccessTemplate>
+                </LoadingState>
+            </div>
+        }
+        else
+        {
+            @* Friends tab *@
+            @* Header *@
+            <div class="friends-header">
+                <div>
+                    <div class="friends-title">Friends</div>
+                    <div class="friends-subtitle">@friends.Count total · @friends.Count(f => IsStatusOnline(f.Status)) online</div>
+                </div>
+                <button class="icon-btn" @onclick="OpenAddFriendModal" title="Add friend">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+
+            @* Search *@
+            <div class="sidebar-search">
+                <div class="glass-input" style="background: rgba(0,0,0,0.18);">
+                    <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" placeholder="Search friends..." @bind="friendSearchQuery" @bind:event="oninput" />
+                </div>
+            </div>
+
+            @* Tabs: All | Online | Requests *@
+            <div class="friends-tabs">
+                <button class="friends-tab @(friendsTab == "all" ? "active" : "")" @onclick='() => friendsTab = "all"'>All</button>
+                <button class="friends-tab @(friendsTab == "online" ? "active" : "")" @onclick='() => friendsTab = "online"'>Online</button>
+                <button class="friends-tab @(friendsTab == "requests" ? "active" : "")" @onclick='() => friendsTab = "requests"'>
+                    Requests
+                    @if (incomingRequests.Any())
+                    {
+                        <span class="tab-badge">@incomingRequests.Count()</span>
+                    }
+                </button>
+            </div>
+
+            @* Content based on tab *@
+            <div class="friends-list-container">
+                @if (friendsTab == "requests")
+                {
+                    @* Requests view *@
+                    @if (incomingRequests.Any())
+                    {
+                        <div class="requests-section-label">Incoming · @incomingRequests.Count()</div>
+                        @foreach (var req in incomingRequests)
+                        {
+                            <div class="request-card">
+                                <div class="request-header">
+                                    <Avatar Name="@req.Name" ImageUrl="@GetFullImageUrl(req.ProfileImageUrl)" Size="32" />
+                                    <div class="request-info">
+                                        <div class="request-name" style="color: @req.NameColor;">@req.Name</div>
+                                        <div class="request-meta">
+                                            <span>@($"by @{req.Handle} · {GetRelativeTimeFromDate(req.SentAt)}")</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="request-actions">
+                                    <button class="glass-btn glass-btn-primary glass-btn-sm" @onclick="() => AcceptFriendRequest(req.RequestId)">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                        Accept
+                                    </button>
+                                    <button class="glass-btn glass-btn-sm" @onclick="() => DeclineFriendRequest(req.RequestId)">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        Decline
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    @if (outgoingRequests.Any())
+                    {
+                        <div class="requests-section-label" style="margin-top: 14px;">Sent · @outgoingRequests.Count()</div>
+                        @foreach (var req in outgoingRequests)
+                        {
+                            <div class="friend-row">
+                                <Avatar Name="@req.Name" ImageUrl="@GetFullImageUrl(req.ProfileImageUrl)" Size="28" />
+                                <div class="friend-row-content">
+                                    <div class="friend-row-name" style="color: @req.NameColor;">@req.Name</div>
+                                    <div class="friend-row-meta">Pending · sent @GetRelativeTimeFromDate(req.SentAt)</div>
+                                </div>
+                                <button class="glass-btn glass-btn-sm" @onclick="() => CancelFriendRequest(req.RequestId)">Cancel</button>
+                            </div>
+                        }
+                    }
+                    @if (!incomingRequests.Any() && !outgoingRequests.Any())
+                    {
+                        <div class="empty-section">
+                            <div class="empty-text">No pending requests</div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    @* All / Online friends list *@
+                    <LoadingState Status="@friendsState" ErrorMessage="@friendsError" OnRetry="LoadFriends">
+                        <SkeletonTemplate>
+                            @for (int i = 0; i < 4; i++)
+                            {
+                                <SkeletonFriendRow />
+                            }
+                        </SkeletonTemplate>
+                        <EmptyTemplate>
+                            <div class="empty-section">
+                                <div class="empty-text">No friends yet</div>
+                                <button class="glass-btn glass-btn-sm" style="margin-top: 10px;" @onclick="OpenAddFriendModal">Add friends</button>
+                            </div>
+                        </EmptyTemplate>
+                        <SuccessTemplate>
+                            @foreach (var friend in GetFilteredFriendsByTab())
+                            {
+                                <div class="friend-row">
+                                    <div class="friend-avatar-wrapper">
+                                        <Avatar Name="@friend.Name" ImageUrl="@GetFullImageUrl(friend.ProfileImageUrl)" Size="32" />
+                                        <span class="status-dot-small @GetFriendDisplayStatus(friend.Status)"></span>
+                                    </div>
+                                    <div class="friend-row-content">
+                                        <div class="friend-row-name" style="color: @friend.NameColor;">@friend.Name</div>
+                                        <div class="friend-row-meta">
+                                            <span class="friend-status-indicator @GetFriendDisplayStatus(friend.Status)"></span>
+                                            @if (IsStatusOnline(friend.Status))
+                                            {
+                                                @if (!string.IsNullOrEmpty(friend.StatusMessage))
+                                                {
+                                                    <span>@friend.StatusMessage</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>@(friend.Status == "online" ? "Online" : friend.Status == "away" ? "Away" : "Do not disturb")</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span>@(friend.LastSeenAt.HasValue ? GetRelativeTimeFromDate(friend.LastSeenAt.Value) : "Offline")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <button class="icon-btn" title="Message" @onclick="() => StartDirectMessage(friend.UserId)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                        </svg>
+                                    </button>
+                                    <div class="friend-more-menu popup-container">
+                                        <button class="icon-btn" title="More" @onclick="() => ToggleFriendMenu(friend.UserId)" @onclick:stopPropagation="true">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                                            </svg>
+                                        </button>
+                                        @if (openFriendMenuId == friend.UserId)
+                                        {
+                                            <div class="friend-dropdown">
+                                                <button class="friend-dropdown-item danger" @onclick="() => RemoveFriend(friend.UserId)" @onclick:stopPropagation="true">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/>
+                                                    </svg>
+                                                    Remove friend
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            @if (!GetFilteredFriendsByTab().Any())
+                            {
+                                <div class="empty-section">
+                                    <div class="empty-text">No results</div>
+                                </div>
+                            }
+                        </SuccessTemplate>
+                    </LoadingState>
+                }
+            </div>
+        }
+
+        @* Profile dock *@
+        <div class="profile-dock popup-container">
+            @if (profileState == LoadState.Success)
+            {
+                <button class="profile-dock-btn @(showStatusMenu ? "active" : "")" @onclick="ToggleStatusMenu">
+                    <div class="profile-avatar-wrapper">
+                        <Avatar Name="@currentUserName" ImageUrl="@currentUserProfileImage" Size="32" />
+                        <span class="status-dot @currentStatus"></span>
+                    </div>
+                    <div class="profile-info">
+                        <div class="profile-name" style="color: @currentUserNameColor;">@currentUserName</div>
+                        <div class="profile-status-text @currentStatus">
+                            @if (!string.IsNullOrEmpty(currentStatusMessage))
+                            {
+                                @currentStatusMessage
+                            }
+                            else
+                            {
+                                @GetStatusLabel(currentStatus)
+                            }
+                        </div>
+                    </div>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="color: rgba(255,255,255,0.45); transform: @(showStatusMenu ? "rotate(180deg)" : "none"); transition: transform 0.15s;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+            }
+            else
+            {
+                <div class="profile-dock-btn" style="cursor: default;" aria-busy="true">
+                    <div class="profile-avatar-wrapper">
+                        <SkeletonBox Width="32px" Height="32px" BorderRadius="50%" />
+                    </div>
+                    <div class="profile-info">
+                        <SkeletonBox Width="80%" Height="12px" />
+                        <SkeletonBox Width="55%" Height="10px" CssClass="skeleton-mt-4" />
+                    </div>
+                </div>
+            }
+        </div>
+    </GlassPanel>
+
+    @* ── Conversation column ── *@
+    <div class="conversation-column">
+        @if (selectedTeam != null)
+        {
+            @* Conversation header *@
+            <GlassPanel Radius="20" Class="conversation-header-panel">
+                <div class="conversation-header">
+                    @if (headerSearchMode)
+                    {
+                        <div class="header-search-mode">
+                            <svg class="header-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text"
+                                   class="header-search-input"
+                                   placeholder="Search in @(selectedTeam.IsDirect ? GetDmDisplayName(selectedTeam) : selectedTeam.Name)..."
+                                   @bind="headerSearchQuery"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleHeaderSearchKeyDown"
+                                   @ref="headerSearchInputRef" />
+                            <span class="header-search-hint">
+                                @if (!string.IsNullOrWhiteSpace(headerSearchQuery))
+                                {
+                                    @($"{GetSearchMatchCount()} matches")
+                                }
+                                else
+                                {
+                                    <text>Esc to close</text>
+                                }
+                            </span>
+                            <button class="icon-btn" @onclick="CloseHeaderSearch" title="Close search">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="conversation-header-left">
+                            <button class="icon-btn mobile-only" @onclick="BackToSidebarMobile" aria-label="Back to teams" title="Back">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"/>
+                                </svg>
+                            </button>
+                            @if (selectedTeam.IsDirect)
+                            {
+                                <div class="team-glyph team-glyph-lg dm-glyph">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                    </svg>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="team-glyph team-glyph-lg" style="background: linear-gradient(135deg, @selectedTeam.Color, @GetSecondaryColor(selectedTeam.Color));">
+                                    @selectedTeam.Glyph
+                                </div>
+                            }
+                            <div>
+                                <div class="conversation-title-row">
+                                    <span class="conversation-title">@(selectedTeam.IsDirect ? GetDmDisplayName(selectedTeam) : selectedTeam.Name)</span>
+                                    <span class="e2ee-badge" title="End-to-end encrypted">
+                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                                        </svg>
+                                        E2EE
+                                    </span>
+                                </div>
+                                <div class="conversation-meta">
+                                    @if (teamDetails?.Members != null)
+                                    {
+                                        <span>@teamDetails.Members.Count members · @GetOnlineMemberCount() online</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="conversation-header-right">
+                            <button class="icon-btn hide-desktop-up" @onclick="ToggleMembersDrawer" aria-label="Show members" title="Members">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                </svg>
+                            </button>
+                            <button class="icon-btn" @onclick="OpenHeaderSearch" title="Search">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            </button>
+                            <div class="header-menu-container popup-container">
+                                <button class="icon-btn @(showPinnedDropdown ? "active" : "")" @onclick="TogglePinnedDropdown" title="Pinned messages">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                    </svg>
+                                    @if (pinnedMessages.Count > 0)
+                                    {
+                                        <span class="pin-indicator"></span>
+                                    }
+                                </button>
+                                @if (showPinnedDropdown)
+                                {
+                                    <div class="header-dropdown pinned-dropdown">
+                                        <div class="pinned-header">
+                                            <div class="pinned-header-title">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                                </svg>
+                                                Pinned in @(selectedTeam?.IsDirect == true ? GetDmDisplayName(selectedTeam) : selectedTeam?.Name)
+                                            </div>
+                                            <span class="pinned-count">@pinnedMessages.Count</span>
+                                        </div>
+                                        <div class="pinned-content">
+                                            @if (!pinnedMessages.Any())
+                                            {
+                                                <div class="pinned-empty">
+                                                    <div>No pinned messages yet.</div>
+                                                    <div class="pinned-hint">Hover any message and use the pin icon to pin it.</div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var pin in pinnedMessages)
+                                                {
+                                                    <div class="pinned-item">
+                                                        <Avatar Name="@pin.Message?.Sender?.Name" ImageUrl="@GetFullImageUrl(pin.Message?.Sender?.ProfileImageUrl)" Size="26" />
+                                                        <div class="pinned-item-content">
+                                                            <div class="pinned-item-meta">
+                                                                <span class="pinned-item-author">@pin.Message?.Sender?.Name</span>
+                                                                <span>·</span>
+                                                                <span>@pin.PinnedAt.ToLocalTime().ToString("MMM d")</span>
+                                                            </div>
+                                                            <div class="pinned-item-text">@pin.Message?.Text</div>
+                                                        </div>
+                                                        <button class="icon-btn pinned-unpin-btn" @onclick="() => UnpinMessage(pin.MessageId)" @onclick:stopPropagation="true" title="Unpin">
+                                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="header-menu-container popup-container">
+                                <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                </button>
+                                @if (showHeaderMoreMenu)
+                                {
+                                    <div class="header-dropdown more-dropdown">
+                                        <button class="dropdown-item" @onclick="OpenTeamManageModal">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                                <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                            </svg>
+                                            <span>Manage team...</span>
+                                        </button>
+                                        <div class="dropdown-divider"></div>
+                                        <button class="dropdown-item danger" @onclick="LeaveTeamAction">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                                            </svg>
+                                            <span>Leave team...</span>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                            <button class="icon-btn mobile-members-toggle" @onclick="ToggleMembersRail" title="Members">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                </svg>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </GlassPanel>
+
+            @* Message stream *@
+            <GlassPanel Radius="20" Class="message-stream-panel">
+                <div id="messages-container" class="messages-container">
+                    <div class="encryption-pill">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        @if (selectedTeam?.IsDirect == true)
+                        {
+                            <span>Messages are end-to-end encrypted.</span>
+                        }
+                        else
+                        {
+                            <span>Messages are end-to-end encrypted. Only members of this team can read them.</span>
+                        }
+                    </div>
+
+                    <LoadingState Status="@messagesState" ErrorMessage="@messagesError" OnRetry="() => LoadMessages(true)">
+                        <SkeletonTemplate>
+                            <SkeletonMessage IsOwn="false" BubbleWidth="240px" />
+                            <SkeletonMessage IsOwn="true"  BubbleWidth="180px" />
+                            <SkeletonMessage IsOwn="false" BubbleWidth="280px" />
+                            <SkeletonMessage IsOwn="false" BubbleWidth="160px" />
+                            <SkeletonMessage IsOwn="true"  BubbleWidth="220px" />
+                            <SkeletonMessage IsOwn="false" BubbleWidth="200px" />
+                        </SkeletonTemplate>
+                        <EmptyTemplate>
+                            <div class="no-messages">
+                                <div>No messages yet</div>
+                                <div class="no-messages-sub">Start the conversation!</div>
+                            </div>
+                        </EmptyTemplate>
+                        <SuccessTemplate>
+                            @if (isLoadingOlderMessages)
+                            {
+                                <SkeletonMessage IsOwn="false" BubbleWidth="200px" />
+                                <SkeletonMessage IsOwn="false" BubbleWidth="260px" />
+                                <SkeletonMessage IsOwn="true"  BubbleWidth="180px" />
+                            }
+                            @foreach (var (msg, index) in FilteredMessages.Select((m, i) => (m, i)))
+                            {
+                                var prevMsg = index > 0 ? FilteredMessages.ElementAtOrDefault(index - 1) : null;
+                                var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
+                                var isOwn = msg.Sender?.Id == _userId;
+
+                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "") @(animatingMessageIds.Contains(msg.Id) ? "fade-in" : "")">
+                                    @if (!sameAuthor && !isOwn)
+                                    {
+                                        <div class="message-avatar">
+                                            <Avatar Name="@msg.Sender?.Name" ImageUrl="@GetFullImageUrl(msg.Sender?.ProfileImageUrl)" Size="30" />
+                                        </div>
+                                    }
+                                    else if (!isOwn)
+                                    {
+                                        <div class="message-avatar-spacer"></div>
+                                    }
+                                    <div class="message-content">
+                                        @if (!sameAuthor)
+                                        {
+                                            <div class="message-header">
+                                                <span class="message-author" style="color: @(msg.Sender?.NameColor ?? "#FFFFFF");">@msg.Sender?.Name</span>
+                                                <span class="message-time">@msg.Date.ToLocalTime().ToString("HH:mm")</span>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(msg.Text))
+                                        {
+                                            <div class="message-bubble @(isOwn ? "own" : "")">
+                                                @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
+                                                {
+                                                    @((MarkupString)HighlightSearchTerm(msg.Text))
+                                                }
+                                                else
+                                                {
+                                                    @((MarkupString)RenderMessageContent(msg.Text))
+                                                }
+                                            </div>
+                                        }
+                                        <div class="message-actions">
+                                            <button class="message-action-btn" @onclick="() => PinMessage(msg.Id)" @onclick:stopPropagation="true" title="Pin message">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        @if (msg.Attachments?.Any() == true)
+                                        {
+                                            <div class="message-attachments">
+                                                @foreach (var att in msg.Attachments)
+                                                {
+                                                    @if (IsImageMimeType(att.MimeType))
+                                                    {
+                                                        <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
+                                                            <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-attachment">
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                            <span class="attachment-file-name">@att.FileName</span>
+                                                            <span class="attachment-file-size">@FormatFileSize(att.Size)</span>
+                                                        </a>
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery) && !FilteredMessages.Any())
+                            {
+                                <div class="no-search-results">
+                                    No messages match your search.
+                                </div>
+                            }
+                        </SuccessTemplate>
+                    </LoadingState>
+                    <div id="messages-end"></div>
+                </div>
+
+                @if (showJumpToBottomButton)
+                {
+                    <button class="jump-to-bottom-btn" @onclick="JumpToPresent" title="Jump to present" aria-label="Jump to present">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                }
+
+                @* Typing Indicator *@
+                @{
+                    var currentTypingUsers = selectedTeamId.HasValue && typingUsers.TryGetValue(selectedTeamId.Value, out var users)
+                        ? users.Where(u => u.UserId != _userId).ToList()
+                        : new List<TypingUser>();
+                }
+                @if (currentTypingUsers.Any())
+                {
+                    <div class="typing-indicator">
+                        <span class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </span>
+                        <span class="typing-text">
+                            @if (currentTypingUsers.Count == 1)
+                            {
+                                @($"{currentTypingUsers[0].UserName.Split(' ')[0]} is typing...")
+                            }
+                            else if (currentTypingUsers.Count == 2)
+                            {
+                                @($"{currentTypingUsers[0].UserName.Split(' ')[0]} and {currentTypingUsers[1].UserName.Split(' ')[0]} are typing...")
+                            }
+                            else
+                            {
+                                @($"{currentTypingUsers.Count} people are typing...")
+                            }
+                        </span>
+                    </div>
+                }
+
+                @* Composer *@
+                <div class="composer-wrapper">
+                    @if (showMentionDropdown && filteredMentions.Any())
+                    {
+                        <div class="mention-dropdown">
+                            @foreach (var (member, index) in filteredMentions.Select((m, i) => (m, i)))
+                            {
+                                <button class="mention-item @(index == selectedMentionIndex ? "selected" : "")"
+                                        @onclick="() => InsertMention(member)"
+                                        @onmouseenter="() => selectedMentionIndex = index">
+                                    <div class="mention-avatar">
+                                        @if (!string.IsNullOrEmpty(member.User?.ProfileImageUrl))
+                                        {
+                                            <img src="@GetFullImageUrl(member.User.ProfileImageUrl)" alt="@member.User?.Name" />
+                                        }
+                                        else
+                                        {
+                                            <span>@(member.User?.Name?.FirstOrDefault())</span>
+                                        }
+                                    </div>
+                                    <div class="mention-info">
+                                        <span class="mention-name" style="color: @(member.User?.NameColor ?? "#fff")">@member.User?.Name</span>
+                                        @if (!string.IsNullOrEmpty(member.User?.Handle))
+                                        {
+                                            <span class="mention-handle">@@@member.User.Handle</span>
+                                        }
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    }
+                    @if (selectedFile != null)
+                    {
+                        <div class="attachment-preview">
+                            <div class="attachment-info">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                <span class="attachment-name">@selectedFile.Name</span>
+                                <span class="attachment-size">@FormatFileSize(selectedFile.Size)</span>
+                            </div>
+                            <button class="attachment-remove" @onclick="RemoveAttachment" title="Remove">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                    }
+                    <div class="composer">
+                        <InputFile @ref="fileInput" OnChange="HandleFileSelected" style="display: none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" />
+
+                        @* Attach button *@
+                        <button class="icon-btn" title="Attach file" @onclick="TriggerFileInput">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                            </svg>
+                        </button>
+
+                        @* Input *@
+                        <input id="composer-input" type="text" class="composer-input" placeholder="Send an encrypted message..."
+                               @bind="newMessageText" @bind:event="oninput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
+
+                        @* Emoji button *@
+                        <div class="picker-container popup-container">
+                            <button class="icon-btn @(showEmojiPicker ? "active" : "")" title="Emoji" @onclick="ToggleEmojiPicker" @onclick:stopPropagation="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+                                </svg>
+                            </button>
+                            @if (showEmojiPicker)
+                            {
+                                <div class="emoji-picker" @onclick:stopPropagation="true">
+                                    <div class="emoji-picker-header">
+                                        <input type="text" class="emoji-search" placeholder="Search emoji..." @bind="emojiSearch" @bind:event="oninput" />
+                                    </div>
+                                    <div class="emoji-grid">
+                                        @foreach (var emoji in FilteredEmojis)
+                                        {
+                                            <button class="emoji-item" @onclick="() => InsertEmoji(emoji)" title="@emoji">@emoji</button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @* GIF button *@
+                        <div class="picker-container popup-container">
+                            <button class="icon-btn @(showGifPicker ? "active" : "")" title="GIF" @onclick="ToggleGifPicker" @onclick:stopPropagation="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                                </svg>
+                            </button>
+                            @if (showGifPicker)
+                            {
+                                <div class="gif-picker" @onclick:stopPropagation="true">
+                                    <div class="gif-picker-header">
+                                        <input type="text" class="gif-search" placeholder="Search GIFs..." @bind="gifSearch" @bind:event="oninput" @onkeydown="HandleGifSearchKeydown" />
+                                    </div>
+                                    @if (isLoadingGifs)
+                                    {
+                                        <div class="gif-loading">Loading...</div>
+                                    }
+                                    else if (gifResults.Any())
+                                    {
+                                        <div class="gif-grid">
+                                            @foreach (var gif in gifResults)
+                                            {
+                                                <button class="gif-item" @onclick="() => InsertGif(gif.Url)">
+                                                    <img src="@gif.PreviewUrl" alt="GIF" loading="lazy" />
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="gif-empty">Search for GIFs</div>
+                                    }
+                                    <div class="gif-powered">Powered by Tenor</div>
+                                </div>
+                            }
+                        </div>
+
+                        @* Send button *@
+                        <button class="send-btn @(CanSend && !IsInCooldown ? "active" : "") @(IsInCooldown ? "cooldown" : "")"
+                                @onclick="SendMessage"
+                                disabled="@(!CanSend || isSending || IsInCooldown)">
+                            @if (IsInCooldown)
+                            {
+                                <span class="send-btn-countdown">Wait @RemainingCooldownSec\s</span>
+                            }
+                            else
+                            {
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                </svg>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </GlassPanel>
+        }
+        else
+        {
+            <GlassPanel Radius="20" Class="empty-state-panel">
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                    </svg>
+                    <div>Select a conversation</div>
+                    <div class="empty-state-sub">Choose a team from the sidebar to start chatting</div>
+                </div>
+            </GlassPanel>
+        }
+    </div>
+
+    @* ── Members rail (230px) ── *@
+    @if (selectedTeam != null)
+    {
+        <GlassPanel Radius="24" Class="@($"members-rail-panel {(showMembersRail ? "show" : "")} {(mobileShowMembersDrawer ? "drawer-open" : "")}")">
+            <div class="members-header">
+                <span class="section-label">Members</span>
+                <button class="icon-btn mobile-close" @onclick="() => showMembersRail = false">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="members-list">
+                <LoadingState Status="@membersState" ErrorMessage="@membersError" OnRetry="LoadTeamDetails">
+                    <SkeletonTemplate>
+                        @for (int i = 0; i < 4; i++)
+                        {
+                            <SkeletonMemberRow />
+                        }
+                    </SkeletonTemplate>
+                    <EmptyTemplate>
+                        <div class="empty-section">
+                            <div class="empty-text">No members</div>
+                        </div>
+                    </EmptyTemplate>
+                    <SuccessTemplate>
+                        @if (teamDetails?.Members != null)
+                        {
+                            @foreach (var member in teamDetails.Members.OrderByDescending(m => m.Role == "Admin"))
+                            {
+                                <div class="member-row">
+                                    <Avatar Name="@member.User?.Name" ImageUrl="@GetFullImageUrl(member.User?.ProfileImageUrl)" Size="30" />
+                                    <div class="member-info">
+                                        <div class="member-name" style="color: @(member.User?.NameColor ?? "#FFFFFF");">@member.User?.Name</div>
+                                        <div class="member-status @(member.Role == "Admin" ? "admin" : "")">
+                                            @(member.Role == "Admin" ? "Admin" : "Member")
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </SuccessTemplate>
+                </LoadingState>
+            </div>
+            @if (isAdmin)
+            {
+                <div class="members-footer">
+                    <button class="glass-btn" style="width: 100%;" @onclick="OpenMemberModal">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                        </svg>
+                        Manage team
+                    </button>
+                </div>
+            }
+        </GlassPanel>
+    }
+</div>
+
+@* ── Mobile sidebar overlay ── *@
+<div class="drawer-overlay @(mobileShowMembersDrawer ? "show" : "")"
+     @onclick="() => mobileShowMembersDrawer = false"></div>
+
+@* ── Team Manage Modal ── *@
+<TeamManageModal
+    IsOpen="@isMemberModalOpen"
+    Team="@selectedTeam"
+    Members="@teamDetails?.Members?.ToList()"
+    CurrentUserId="@_userId"
+    IsAdmin="@IsCurrentUserAdmin"
+    OnClose="CloseMemberModal"
+    OnPromote="PromoteMember"
+    OnRemove="RemoveMember" />
+
+@* ── New Team Modal ── *@
+<NewTeamModal
+    IsOpen="@showNewTeamModal"
+    OnClose="() => showNewTeamModal = false"
+    OnCreate="HandleCreateTeam"
+    Friends="@GetFriendsForModal()" />
+
+@* ── Add Friend Modal ── *@
+<AddFriendModal
+    IsOpen="@showAddFriendModal"
+    OnClose="() => showAddFriendModal = false"
+    OnRequestSent="LoadFriends" />
+
+@* ── Profile Settings Modal ── *@
+<ProfileSettingsModal
+    IsOpen="@showProfileModal"
+    UserName="@currentUserName"
+    NameChanged="HandleProfileNameChanged"
+    UserEmail="@currentUserEmail"
+    Handle="@currentUserHandle"
+    HandleChanged="HandleProfileHandleChanged"
+    NameColor="@currentUserNameColor"
+    NameColorChanged="HandleProfileNameColorChanged"
+    ProfileImageUrl="@currentUserProfileImage"
+    ProfileImageUrlChanged="HandleProfileImageChanged"
+    Status="@currentStatus"
+    StatusChanged="HandleProfileStatusChanged"
+    StatusMessage="@currentStatusMessage"
+    StatusMessageChanged="HandleProfileStatusMessageChanged"
+    Theme="@currentTheme"
+    ThemeChanged="HandleThemeChanged"
+    ReadReceipts="@currentReadReceipts"
+    ReadReceiptsChanged="HandleReadReceiptsChanged"
+    TypingIndicators="@currentTypingIndicators"
+    TypingIndicatorsChanged="HandleTypingIndicatorsChanged"
+    NotificationPreference="@currentNotificationPreference"
+    NotificationPreferenceChanged="HandleNotificationPreferenceChanged"
+    OnClose="() => showProfileModal = false"
+    OnSave="HandleProfileSave"
+    OnLogout="Logout" />
+
+@* ── Status Menu (same level as modals for consistent styling) ── *@
+@if (showStatusMenu)
+{
+    <div class="modal-overlay status-menu-overlay" @onclick="() => showStatusMenu = false">
+        <div class="status-menu-anchor popup-container" @onclick:stopPropagation="true">
+            <GlassPanel Radius="16" Class="status-menu-panel">
+                <div class="status-menu-header">Set status</div>
+
+                <div class="status-presets">
+                    @foreach (var preset in statusPresets)
+                    {
+                        var isSelected = currentStatus == preset.Key;
+                        <button class="status-preset-btn @(isSelected ? "selected" : "")"
+                                style="@(isSelected ? $"background: {GetStatusDimColor(preset.Key)};" : "")"
+                                @onclick="() => SelectStatus(preset.Key)">
+                            <span class="status-preset-dot @preset.Key"></span>
+                            <span class="status-preset-label @(isSelected ? "selected" : "")">@preset.Value</span>
+                            @if (isSelected)
+                            {
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                            }
+                        </button>
+                    }
+                </div>
+
+                <div class="status-menu-divider"></div>
+
+                <div class="status-custom-section">
+                    <div class="status-custom-label">Custom message</div>
+                    <GlassInput Placeholder="What are you up to?" @bind-Value="editStatusMessage" FontSize="12" />
+                </div>
+
+                <div class="status-menu-buttons">
+                    <button class="glass-btn glass-btn-sm" @onclick="ClearStatusMessage">Clear</button>
+                    <button class="glass-btn glass-btn-primary glass-btn-sm" @onclick="SaveStatusAndClose" disabled="@isSavingStatus">
+                        @(isSavingStatus ? "..." : "Save")
+                    </button>
+                </div>
+
+                <div class="status-menu-divider"></div>
+
+                <button class="status-edit-profile" @onclick="OpenProfileFromStatus">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                    </svg>
+                    <span>Edit profile…</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </button>
+
+                <div class="status-menu-divider"></div>
+
+                <button class="status-signout-btn" @onclick="HandleQuickLogout">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    <span>Sign out</span>
+                </button>
+            </GlassPanel>
+        </div>
+    </div>
+}
+
+<style>
+    .chat-floating-layout {
+        position: absolute;
+        inset: 0;
+        padding: 18px;
+        display: flex;
+        gap: 14px;
+    }
+
+    /* ── Sidebar ── */
+    .chat-sidebar-panel {
+        width: 290px;
+        flex: 0 0 290px;
+    }
+
+    .chat-sidebar-panel,
+    .chat-sidebar-panel .glass-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar-header {
+        padding: 18px 18px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .brand-badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, var(--accent), oklch(0.55 0.16 225));
+        display: grid;
+        place-items: center;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.4);
+    }
+
+    .brand-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: white;
+        letter-spacing: -0.01em;
+    }
+
+    .e2ee-indicator {
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .e2ee-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: oklch(0.74 0.15 145);
+        box-shadow: 0 0 6px oklch(0.74 0.15 145);
+    }
+
+    .nav-tabs {
+        padding: 0 14px 10px;
+        display: flex;
+        gap: 4px;
+    }
+
+    .nav-tab {
+        flex: 1;
+        padding: 7px 0;
+        border-radius: 9px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.65);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-family: inherit;
+        transition: all 0.15s;
+    }
+
+    .nav-tab:hover:not(.active) {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(255,255,255,0.12);
+    }
+
+    .nav-tab.active {
+        background: rgba(255,255,255,0.12);
+        border-color: rgba(255,255,255,0.20);
+        color: white;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20);
+    }
+
+    .nav-tab-badge {
+        font-size: 9px;
+        font-weight: 700;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--accent, oklch(0.65 0.16 165));
+        color: white;
+        min-width: 14px;
+        text-align: center;
+    }
+
+    .sidebar-search {
+        padding: 0 14px 12px;
+    }
+
+    .section-header {
+        padding: 0 22px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .section-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.45);
+    }
+
+    .team-list {
+        flex: 1;
+        overflow: auto;
+        padding: 0 10px 14px;
+        min-height: 0;
+    }
+
+    .dm-list {
+        flex: 0 0 auto;
+        max-height: 30%;
+        overflow: auto;
+    }
+
+    .team-row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        width: 100%;
+        padding: 8px 10px;
+        margin-bottom: 2px;
+        border-radius: 12px;
+        border: none;
+        cursor: pointer;
+        background: transparent;
+        text-align: left;
+        font-family: inherit;
+        transition: background 0.15s;
+        position: relative;
+    }
+
+    .team-row:hover:not(.active) {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .team-row.active {
+        background: rgba(255,255,255,0.14);
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.25), 0 4px 12px rgba(0,0,0,0.10);
+    }
+
+    .team-row.unread .team-name {
+        color: rgba(255,255,255,0.95);
+        font-weight: 600;
+    }
+
+    .team-row.unread .team-preview {
+        color: rgba(255,255,255,0.78);
+        font-weight: 500;
+    }
+
+    .team-glyph {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        color: white;
+        font-weight: 700;
+        font-size: 13px;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 2px 6px rgba(0,0,0,0.20);
+        border: 0.5px solid rgba(255,255,255,0.22);
+        flex: 0 0 32px;
+        letter-spacing: -0.02em;
+    }
+
+    .team-glyph-lg {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+        flex: 0 0 36px;
+    }
+
+    .dm-glyph {
+        background: linear-gradient(135deg, oklch(0.55 0.12 250), oklch(0.45 0.10 270));
+    }
+
+    .team-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .team-row-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+
+    .team-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .team-time {
+        font-size: 10px;
+        color: rgba(255,255,255,0.5);
+        flex: 0 0 auto;
+    }
+
+    .team-preview {
+        font-size: 11px;
+        color: rgba(255,255,255,0.50);
+        font-weight: 400;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-top: 1px;
+        flex: 1;
+    }
+
+    .team-preview.unread {
+        color: rgba(255,255,255,0.78);
+        font-weight: 500;
+    }
+
+    .team-name.bold {
+        font-weight: 700;
+    }
+
+    .unread-badge {
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        background: var(--accent, oklch(0.65 0.16 165));
+        color: white;
+        min-width: 18px;
+        text-align: center;
+        box-shadow: 0 0 12px color-mix(in oklch, var(--accent, oklch(0.65 0.16 165)) 50%, transparent);
+        flex: 0 0 auto;
+    }
+
+    .friends-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .friends-list {
+        flex: 1;
+        overflow: auto;
+        padding: 0 10px 14px;
+    }
+
+    .friend-row-sidebar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        margin-bottom: 2px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .friend-row-sidebar:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .friend-avatar-wrapper {
+        position: relative;
+    }
+
+    .friend-status-dot {
+        position: absolute;
+        bottom: -1px;
+        right: -1px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 2px solid rgba(0,0,0,0.55);
+        background: #9ca3af;
+    }
+
+    .friend-status-dot.online {
+        background: #34d399 !important;
+        box-shadow: 0 0 6px #34d399;
+    }
+
+    .friend-status-dot.away {
+        background: #fbbf24 !important;
+    }
+
+    .friend-status-dot.busy {
+        background: #f87171 !important;
+        box-shadow: 0 0 6px #f87171;
+    }
+
+    .friend-status-dot.offline,
+    .friend-status-dot.invisible {
+        background: #9ca3af !important;
+    }
+
+    .friend-row-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .friend-row-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .friend-row-status {
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .friends-empty {
+        text-align: center;
+        padding: 30px 14px;
+        color: rgba(255,255,255,0.45);
+    }
+
+    .friends-empty-text {
+        font-size: 12px;
+    }
+
+    .profile-dock {
+        position: relative;
+        padding: 12px;
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+        margin-top: auto;
+    }
+
+    .profile-dock-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: 12px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        text-align: left;
+        transition: background 0.15s;
+    }
+
+    .profile-dock-btn:hover {
+        background: rgba(255,255,255,0.04);
+    }
+
+    .profile-dock-btn.active {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .profile-avatar-wrapper {
+        position: relative;
+        flex: 0 0 auto;
+    }
+
+    .profile-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .profile-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .profile-status-text {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .profile-status-text::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+    }
+
+    .profile-status-text.online::before {
+        background: oklch(0.74 0.15 145);
+        box-shadow: 0 0 6px oklch(0.74 0.15 145);
+    }
+
+    .profile-status-text.away::before {
+        background: oklch(0.78 0.14 75);
+    }
+
+    .profile-status-text.busy::before {
+        background: oklch(0.68 0.18 28);
+        box-shadow: 0 0 6px oklch(0.68 0.18 28);
+    }
+
+    .profile-status-text.invisible::before,
+    .profile-status-text.offline::before {
+        background: rgba(255,255,255,0.45);
+    }
+
+    .status-dot {
+        position: absolute;
+        bottom: -1px;
+        right: -1px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        border: 2px solid rgba(0,0,0,0.55);
+        background: rgba(255,255,255,0.45);
+    }
+
+    .status-dot.online {
+        background: oklch(0.74 0.15 145) !important;
+        box-shadow: 0 0 6px oklch(0.74 0.15 145);
+    }
+
+    .status-dot.away {
+        background: oklch(0.78 0.14 75) !important;
+        box-shadow: none;
+    }
+
+    .status-dot.busy {
+        background: oklch(0.68 0.18 28) !important;
+        box-shadow: 0 0 6px oklch(0.68 0.18 28);
+    }
+
+    .status-dot.invisible,
+    .status-dot.offline {
+        background: rgba(255,255,255,0.45) !important;
+        box-shadow: none !important;
+    }
+
+    .status-dot-small {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 2px solid rgba(0,0,0,0.55);
+        background: rgba(255,255,255,0.45);
+    }
+
+    .status-dot-small.online {
+        background: oklch(0.74 0.15 145);
+        box-shadow: 0 0 5px oklch(0.74 0.15 145);
+    }
+
+    .status-dot-small.away {
+        background: oklch(0.78 0.14 75);
+    }
+
+    .status-dot-small.busy {
+        background: oklch(0.68 0.18 28);
+        box-shadow: 0 0 5px oklch(0.68 0.18 28);
+    }
+
+    .status-dot-small.invisible,
+    .status-dot-small.offline {
+        background: rgba(255,255,255,0.45);
+    }
+
+    .empty-section {
+        padding: 24px 16px;
+        text-align: center;
+    }
+
+    .empty-text {
+        font-size: 12px;
+        color: rgba(255,255,255,0.45);
+    }
+
+    /* ── Friends Panel ── */
+    .friends-header {
+        padding: 18px 18px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .friends-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.01em;
+    }
+
+    .friends-subtitle {
+        font-size: 10.5px;
+        color: rgba(255,255,255,0.55);
+        margin-top: 2px;
+    }
+
+    .friends-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 14px 10px;
+    }
+
+    .friends-tab {
+        flex: 1;
+        padding: 6px 0;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        background: transparent;
+        border: 0.5px solid rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.65);
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        transition: all 0.15s;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .friends-tab:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .friends-tab.active {
+        background: rgba(255,255,255,0.12);
+        border-color: rgba(255,255,255,0.18);
+        color: white;
+    }
+
+    .tab-badge {
+        font-size: 9px;
+        font-weight: 700;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--accent, oklch(0.65 0.16 165));
+        color: white;
+        min-width: 14px;
+        text-align: center;
+    }
+
+    .friends-list-container {
+        flex: 1;
+        overflow: auto;
+        padding: 0 10px 14px;
+    }
+
+    .friend-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        margin-bottom: 1px;
+        cursor: pointer;
+    }
+
+    .friend-row:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .friend-avatar-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .friend-avatar-wrapper .status-dot-small {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+    }
+
+    .friend-row-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .friend-row-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .friend-row-meta {
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .friend-status-indicator {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #9ca3af;
+    }
+
+    .friend-status-indicator.online {
+        background: #34d399;
+        box-shadow: 0 0 6px #34d399;
+    }
+
+    .friend-status-indicator.away {
+        background: #fbbf24;
+    }
+
+    .friend-status-indicator.busy {
+        background: #f87171;
+        box-shadow: 0 0 6px #f87171;
+    }
+
+    .friend-status-indicator.offline,
+    .friend-status-indicator.invisible {
+        background: #9ca3af;
+    }
+
+    .friend-more-menu {
+        position: relative;
+    }
+
+    .friend-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        min-width: 140px;
+        background: rgba(15,18,25,0.95);
+        backdrop-filter: blur(20px) saturate(160%);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        padding: 4px;
+        z-index: 100;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .friend-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 10px;
+        border: none;
+        background: transparent;
+        color: rgba(255,255,255,0.85);
+        font-size: 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .friend-dropdown-item:hover {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .friend-dropdown-item.danger {
+        color: oklch(0.70 0.18 25);
+    }
+
+    .friend-dropdown-item.danger:hover {
+        background: rgba(239,68,68,0.15);
+    }
+
+    .requests-section-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.45);
+        padding: 4px 12px 6px;
+    }
+
+    .request-card {
+        padding: 10px 12px;
+        border-radius: 14px;
+        margin-bottom: 6px;
+        background: rgba(255,255,255,0.05);
+        border: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .request-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .request-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .request-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .request-meta {
+        font-size: 10px;
+        color: rgba(255,255,255,0.55);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .request-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .request-actions .glass-btn {
+        flex: 1;
+    }
+
+    .profile-info {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .profile-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .profile-status {
+        font-size: 10px;
+        color: oklch(0.74 0.15 145);
+    }
+
+    /* ── Conversation column ── */
+    .conversation-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+    }
+
+    .conversation-header-panel {
+        flex: 0 0 auto;
+        overflow: visible !important;
+        position: relative;
+        z-index: 50;
+    }
+
+    .conversation-header-panel .glass-backdrop,
+    .conversation-header-panel .glass-tint,
+    .conversation-header-panel .glass-shine {
+        border-radius: var(--glass-radius, 20px);
+    }
+
+    .messages-panel {
+        position: relative;
+        z-index: 1;
+    }
+
+    .conversation-header {
+        padding: 14px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .conversation-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .conversation-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: white;
+        letter-spacing: -0.01em;
+    }
+
+    .conversation-meta {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        margin-top: 2px;
+    }
+
+    .conversation-header-right {
+        display: flex;
+        gap: 6px;
+    }
+
+    .message-stream-panel {
+        flex: 1;
+        min-height: 0;
+    }
+
+    .message-stream-panel,
+    .message-stream-panel .glass-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .messages-container {
+        flex: 1;
+        overflow: auto;
+        padding: 20px 24px 8px;
+    }
+
+    .encryption-pill {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin: 0 auto 18px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        width: fit-content;
+        background: rgba(16,185,129,0.10);
+        border: 0.5px solid rgba(16,185,129,0.30);
+        color: oklch(0.78 0.14 165);
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .loading-messages, .no-messages {
+        text-align: center;
+        padding: 40px;
+        color: rgba(255,255,255,0.50);
+    }
+
+    .no-messages-sub {
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .message {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .message.same {
+        margin-top: 3px;
+    }
+
+    .message.own {
+        flex-direction: row-reverse;
+    }
+
+    .message-avatar {
+        width: 30px;
+        flex: 0 0 30px;
+    }
+
+    .message-avatar-spacer {
+        width: 30px;
+        flex: 0 0 30px;
+    }
+
+    .message.same .message-avatar {
+        visibility: hidden;
+    }
+
+    .message-content {
+        max-width: 72%;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .message.own .message-content {
+        align-items: flex-end;
+    }
+
+    .message-header {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        display: flex;
+        gap: 6px;
+        padding: 0 4px;
+    }
+
+    .message-author {
+        font-weight: 600;
+        color: rgba(255,255,255,0.85);
+    }
+
+    .message-bubble {
+        padding: 9px 14px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.10);
+        color: white;
+        font-size: 13.5px;
+        line-height: 1.45;
+        border: 0.5px solid rgba(255,255,255,0.15);
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20);
+        backdrop-filter: blur(8px);
+        letter-spacing: -0.005em;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .message-bubble.own {
+        background: linear-gradient(135deg, var(--accent), oklch(0.40 0.16 135));
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px var(--accent-glow);
+    }
+
+    /* Pin / message actions */
+    .message-actions {
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+        margin-top: 2px;
+    }
+
+    .message:hover .message-actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .message-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        border: none;
+        background: rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.60);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+        padding: 0;
+    }
+
+    .message-action-btn:hover {
+        background: rgba(255,255,255,0.20);
+        color: rgba(255,255,255,0.95);
+    }
+
+    /* GIF in messages */
+    .message-gif {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 12px;
+        display: block;
+    }
+
+    .message-gif-inline {
+        max-width: 200px;
+        max-height: 150px;
+        border-radius: 8px;
+        vertical-align: middle;
+        margin: 4px 0;
+    }
+
+    /* Attachments in messages */
+    .message-attachments {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .message-attachment {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 12px;
+        transition: background 0.15s;
+        max-width: fit-content;
+    }
+
+    .message-attachment:hover {
+        background: rgba(255,255,255,0.12);
+    }
+
+    .message-attachment svg {
+        flex-shrink: 0;
+        color: var(--accent);
+    }
+
+    .attachment-file-name {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+    }
+
+    .attachment-file-size {
+        color: rgba(255,255,255,0.5);
+        flex-shrink: 0;
+    }
+
+    .message-image-attachment {
+        display: block;
+        max-width: 300px;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .message-image-attachment img {
+        width: 100%;
+        height: auto;
+        display: block;
+        transition: opacity 0.15s;
+    }
+
+    .message-image-attachment:hover img {
+        opacity: 0.9;
+    }
+
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 16px;
+        font-size: 12px;
+        color: rgba(255,255,255,0.55);
+    }
+
+    .typing-dots {
+        display: flex;
+        gap: 3px;
+    }
+
+    .typing-dots span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.45);
+        animation: typing-bounce 1.2s infinite ease-in-out;
+    }
+
+    .typing-dots span:nth-child(1) { animation-delay: 0s; }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @@keyframes typing-bounce {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+        30% { transform: translateY(-4px); opacity: 1; }
+    }
+
+    .typing-text {
+        font-style: italic;
+    }
+
+    .composer-wrapper {
+        padding: 12px 16px 14px;
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .attachment-preview {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+    }
+
+    .attachment-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(255,255,255,0.8);
+        min-width: 0;
+    }
+
+    .attachment-info svg {
+        flex-shrink: 0;
+        color: var(--accent);
+    }
+
+    .attachment-name {
+        font-size: 12px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .attachment-size {
+        font-size: 10px;
+        color: rgba(255,255,255,0.5);
+        flex-shrink: 0;
+    }
+
+    .attachment-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.6);
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .attachment-remove:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .composer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px 6px 14px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.18);
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.25);
+    }
+
+    .composer-input {
+        flex: 1;
+        min-width: 0;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: white;
+        font-size: 14px;
+        padding: 8px 0;
+        font-family: inherit;
+    }
+
+    .composer-input::placeholder {
+        color: rgba(255,255,255,0.45);
+    }
+
+    .send-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        border: 0.5px solid rgba(255,255,255,0.22);
+        background: rgba(255,255,255,0.10);
+        color: white;
+        cursor: default;
+        transition: all 0.2s;
+    }
+
+    .send-btn.active {
+        background: linear-gradient(135deg, var(--accent), oklch(0.50 0.16 195));
+        cursor: pointer;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 4px 14px var(--accent-glow);
+    }
+
+    .send-btn.cooldown {
+        background: rgba(255, 100, 100, 0.15);
+        color: rgba(255, 200, 200, 0.85);
+        cursor: not-allowed;
+        font-size: 11px;
+        font-weight: 600;
+        min-width: 60px;
+        padding: 0 10px;
+    }
+
+    .send-btn-countdown {
+        white-space: nowrap;
+    }
+
+    /* ── Picker containers ── */
+    .picker-container {
+        position: relative;
+    }
+
+    .picker-container .icon-btn.active {
+        background: rgba(255,255,255,0.12);
+        color: var(--accent);
+    }
+
+    /* ── Emoji picker ── */
+    .emoji-picker {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        width: 320px;
+        max-height: 350px;
+        background: rgba(18, 20, 26, 0.95);
+        backdrop-filter: blur(20px);
+        border: 0.5px solid rgba(255,255,255,0.15);
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        overflow: hidden;
+        z-index: 100;
+    }
+
+    .emoji-picker-header {
+        padding: 10px;
+        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .emoji-search {
+        width: 100%;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+        color: white;
+        font-size: 13px;
+        outline: none;
+    }
+
+    .emoji-search::placeholder {
+        color: rgba(255,255,255,0.4);
+    }
+
+    .emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 2px;
+        padding: 10px;
+        max-height: 280px;
+        overflow-y: auto;
+    }
+
+    .emoji-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        aspect-ratio: 1;
+        font-size: 22px;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .emoji-item:hover {
+        background: rgba(255,255,255,0.10);
+    }
+
+    /* ── GIF picker ── */
+    .gif-picker {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        width: 340px;
+        max-height: 400px;
+        background: rgba(18, 20, 26, 0.95);
+        backdrop-filter: blur(20px);
+        border: 0.5px solid rgba(255,255,255,0.15);
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        overflow: hidden;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .gif-picker-header {
+        padding: 10px;
+        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .gif-search {
+        width: 100%;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+        color: white;
+        font-size: 13px;
+        outline: none;
+    }
+
+    .gif-search::placeholder {
+        color: rgba(255,255,255,0.4);
+    }
+
+    .gif-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+        padding: 10px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .gif-item {
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .gif-item img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 8px;
+    }
+
+    .gif-item:hover {
+        opacity: 0.85;
+    }
+
+    .gif-loading,
+    .gif-empty {
+        padding: 40px 20px;
+        text-align: center;
+        color: rgba(255,255,255,0.5);
+        font-size: 13px;
+    }
+
+    .gif-powered {
+        padding: 8px;
+        text-align: center;
+        font-size: 10px;
+        color: rgba(255,255,255,0.35);
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .empty-state-panel {
+        flex: 1;
+        display: flex;
+    }
+
+    .empty-state {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        color: rgba(255,255,255,0.50);
+    }
+
+    .empty-state svg {
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .empty-state-sub {
+        font-size: 13px;
+        margin-top: 4px;
+    }
+
+    /* ── Members rail ── */
+    .members-rail-panel {
+        width: 230px;
+        flex: 0 0 230px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .members-header {
+        padding: 18px 18px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .members-list {
+        flex: 1;
+        overflow: auto;
+        padding: 0 12px 14px;
+    }
+
+    .member-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 8px;
+        border-radius: 12px;
+    }
+
+    .member-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .member-name {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .member-status {
+        font-size: 10px;
+        color: rgba(255,255,255,0.45);
+    }
+
+    .member-status.admin {
+        color: oklch(0.78 0.14 75);
+    }
+
+    .members-footer {
+        padding: 12px;
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .mobile-close, .mobile-members-toggle {
+        display: none;
+    }
+
+    .modal-member-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        margin-bottom: 4px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 10px;
+    }
+
+    .error-banner {
+        padding: 10px 12px;
+        background: rgba(220,60,60,0.15);
+        border: 0.5px solid rgba(220,60,60,0.30);
+        border-radius: 10px;
+        font-size: 12px;
+        color: oklch(0.78 0.14 25);
+        margin-bottom: 16px;
+    }
+
+
+    /* ── Status Menu (uses modal-overlay for consistent styling) ── */
+    .status-menu-overlay {
+        place-items: end start;
+        padding: 0;
+    }
+
+    .status-menu-anchor {
+        position: fixed;
+        left: 30px;
+        bottom: 90px;
+        width: 266px;
+    }
+
+    .status-menu-panel {
+        width: 100%;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .status-menu-panel > .glass-content {
+        padding: 12px;
+    }
+
+    .status-menu-header {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        padding: 4px 8px 8px;
+    }
+
+    .status-presets {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .status-preset-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-family: inherit;
+        color: white;
+        font-size: 12.5px;
+        text-align: left;
+        transition: background 0.15s;
+    }
+
+    .status-preset-btn:hover:not(.selected) {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .status-preset-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+        display: inline-block;
+    }
+
+    .status-preset-dot.online {
+        background: var(--status-online) !important;
+        box-shadow: 0 0 8px var(--status-online);
+    }
+
+    .status-preset-dot.away {
+        background: var(--status-away) !important;
+        box-shadow: none;
+    }
+
+    .status-preset-dot.busy {
+        background: var(--status-busy) !important;
+        box-shadow: 0 0 8px var(--status-busy);
+    }
+
+    .status-preset-dot.invisible {
+        background: var(--status-invisible) !important;
+        box-shadow: none;
+    }
+
+    .status-preset-label {
+        flex: 1;
+        font-weight: 500;
+    }
+
+    .status-preset-label.selected {
+        font-weight: 600;
+    }
+
+    .status-menu-divider {
+        height: 1px;
+        background: rgba(255,255,255,0.08);
+        margin: 10px 4px;
+    }
+
+    .status-custom-section {
+        padding: 0 4px 4px;
+    }
+
+    .status-custom-label {
+        font-size: 10.5px;
+        color: rgba(255,255,255,0.55);
+        margin-bottom: 6px;
+        padding: 0 4px;
+    }
+
+    .status-menu-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        padding: 0 4px;
+    }
+
+    .status-menu-buttons .glass-btn {
+        flex: 1;
+    }
+
+    .status-edit-profile {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12.5px;
+        color: white;
+        text-align: left;
+    }
+
+    .status-edit-profile span {
+        flex: 1;
+    }
+
+    .status-edit-profile:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .status-signout-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12.5px;
+        color: oklch(0.78 0.16 28);
+        text-align: left;
+        transition: background 0.15s;
+    }
+
+    .status-signout-btn span {
+        flex: 1;
+    }
+
+    .status-signout-btn:hover {
+        background: rgba(220, 40, 40, 0.10);
+    }
+
+    /* ─────────────── Chat Responsive Layout ─────────────── */
+
+    .drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 99;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    .drawer-overlay.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    @@media (min-width: 1024px) {
+        .drawer-overlay { display: none; }
+    }
+
+    /* ── Tablet (768 - 1023px) ── */
+    @@media (min-width: 768px) and (max-width: 1023px) {
+        .chat-sidebar-panel { width: 270px; }
+
+        .members-rail-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 280px;
+            z-index: 100;
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .members-rail-panel.drawer-open {
+            transform: translateX(0);
+        }
+    }
+
+    .jump-to-bottom-btn {
+        position: absolute;
+        bottom: 80px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(20, 25, 35, 0.92);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 0.5px solid rgba(255, 255, 255, 0.15);
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        transition: opacity 0.2s, transform 0.2s, background 0.2s;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .jump-to-bottom-btn:hover {
+        transform: translateY(-2px);
+        background: rgba(30, 35, 45, 0.95);
+    }
+
+    @@keyframes fade-in-message {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .message.fade-in {
+        animation: fade-in-message 250ms ease-out;
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .message.fade-in {
+            animation: none;
+        }
+    }
+
+    /* ── Mobile (max-width: 767px) ── */
+    @@media (max-width: 767px) {
+        .chat-floating-layout { padding: 0; gap: 0; }
+
+        .chat-sidebar-panel,
+        .conversation-column,
+        .members-rail-panel { border-radius: 0; }
+
+        .chat-floating-layout .chat-sidebar-panel { display: flex; flex: 1; }
+        .chat-floating-layout .conversation-column { display: none; }
+        .chat-floating-layout .members-rail-panel { display: none; }
+
+        .chat-floating-layout.mobile-show-conversation .chat-sidebar-panel { display: none; }
+        .chat-floating-layout.mobile-show-conversation .conversation-column {
+            display: flex;
+            flex: 1;
+        }
+
+        .chat-floating-layout.mobile-show-conversation .members-rail-panel.drawer-open {
+            display: flex;
+            position: fixed;
+            inset: 0 0 0 auto;
+            width: 85vw;
+            z-index: 100;
+            transform: translateX(0);
+            transition: transform 0.25s ease;
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-floating-layout.mobile-show-conversation .members-rail-panel:not(.drawer-open) {
+            display: none;
+        }
+
+        .composer-wrapper {
+            position: sticky;
+            bottom: 0;
+            background: inherit;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            z-index: 5;
+        }
+
+        .composer-input {
+            font-size: 16px;
+            min-height: var(--touch-target-min);
+        }
+
+        .composer .icon-btn {
+            min-width: var(--touch-target-min);
+            min-height: var(--touch-target-min);
+        }
+
+        /* Emoji/GIF pickers : center on mobile, max-width viewport */
+        .emoji-picker,
+        .gif-picker {
+            position: fixed !important;
+            bottom: 80px !important;
+            left: 8px !important;
+            right: 8px !important;
+            top: auto !important;
+            width: auto !important;
+            max-width: calc(100vw - 16px) !important;
+            margin: 0 auto !important;
+        }
+
+        .jump-to-bottom-btn {
+            bottom: 76px;
+            right: 12px;
+        }
+    }
+</style>
+
+@code {
+    private record FriendProfileUpdate(string Id, string Name, string? Handle, int Level, string? NameColor, string? ProfileImageUrl, string Status, string? StatusMessage, DateTime? LastSeenAt);
+    private record TeamDeletedEvent(Guid TeamId);
+    private record TeamMemberEvent(Guid TeamId, string UserId, TeamClient.TeamDTOPublic? Team);
+    private record TeamMemberRemovedEvent(Guid TeamId, string UserId);
+    private record MessagesExpiredEvent(Guid TeamId, List<Guid> MessageIds);
+    private record TeamLastMessageEvent(Guid TeamId, string? LastMessagePreview, DateTime? LastMessageTime, string? LastMessageSenderName);
+    private record UserTypingEvent(Guid TeamId, string UserId, string UserName);
+    private record UserStoppedTypingEvent(Guid TeamId, string UserId);
+
+    [Parameter]
+    public Guid? TeamId { get; set; }
+
+    private const string ApiBaseUrl = "https://localhost:7294";
+
+    private string? _userId;
+    private string? currentUserName;
+    private string? currentUserHandle;
+    private string? currentUserEmail;
+    private string? currentUserProfileImage;
+    private string currentUserNameColor = "#FFFFFF";
+    private string currentTheme = "dark";
+    private bool isAdmin;
+
+    private string activeNav = "chats";
+    private string searchQuery = string.Empty;
+    private string friendSearchQuery = string.Empty;
+    private bool showMembersRail;
+
+    // Mobile navigation state
+    private bool mobileShowConversation;
+    private bool mobileShowMembersDrawer;
+
+    // Status
+    private bool showStatusMenu;
+    private string currentStatus = "online";
+    private string? currentStatusMessage;
+    private string editStatusMessage = string.Empty;
+    private bool isSavingStatus;
+
+    // Privacy
+    private bool currentReadReceipts = true;
+    private bool currentTypingIndicators = true;
+    private string currentNotificationPreference = "all";
+
+    private readonly Dictionary<string, string> statusPresets = new()
+    {
+        { "online", "Online" },
+        { "away", "Away" },
+        { "busy", "Do not disturb" },
+        { "invisible", "Invisible" }
+    };
+
+    private List<TeamClient.TeamDTOPublic> teams = new();
+    private List<FriendClient.FriendDTO> friends = new();
+    private List<FriendClient.FriendRequestDTO> pendingRequests = new();
+    private string friendsTab = "all";
+    private bool showAddFriendModal;
+    private string? openFriendMenuId;
+    private Guid? selectedTeamId;
+    private TeamClient.TeamDTOPublic? selectedTeam;
+    private TeamClient.TeamDetailDTO? teamDetails;
+
+    private Dictionary<Guid, List<ChatClient.MessageDTOPublic>> teamMessages = new();
+    private List<ChatClient.MessageDTOPublic> messages = new();
+    private string newMessageText = string.Empty;
+    private bool isSending;
+
+    // Skeleton loader states
+    private LoadState teamsState = LoadState.Loading;
+    private LoadState friendsState = LoadState.Loading;
+    private LoadState messagesState = LoadState.Loading;
+    private LoadState membersState = LoadState.Loading;
+    private LoadState profileState = LoadState.Loading;
+    private string? teamsError;
+    private string? friendsError;
+    private string? messagesError;
+    private string? membersError;
+    private string? profileError;
+
+    // Messages pagination
+    private const int MessagesPageSize = 20;
+    private int currentPage = 1;
+    private bool hasMoreMessages = true;
+    private bool isLoadingOlderMessages;
+
+    // Anti-spam cooldown
+    private DateTime? cooldownUntilUtc;
+    private System.Timers.Timer? _cooldownTickTimer;
+    private string _lastAttemptedSendText = string.Empty;
+
+    private bool showJumpToBottomButton;
+    private HashSet<Guid> animatingMessageIds = new();
+
+    // Click-outside popup registry
+    private DotNetObjectReference<Chat>? _dotNetRef;
+    private bool _popupListenerRegistered;
+
+    // File attachment
+    private InputFile? fileInput;
+    private IBrowserFile? selectedFile;
+
+    // Emoji picker
+    private bool showEmojiPicker;
+    private string emojiSearch = "";
+    private static readonly string[] AllEmojis = new[]
+    {
+        "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "😊",
+        "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲", "😋",
+        "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔", "🤐",
+        "🤨", "😐", "😑", "😶", "😏", "😒", "🙄", "😬", "😮‍💨", "🤥",
+        "😌", "😔", "😪", "🤤", "😴", "😷", "🤒", "🤕", "🤢", "🤮",
+        "🤧", "🥵", "🥶", "🥴", "😵", "🤯", "🤠", "🥳", "🥸", "😎",
+        "🤓", "🧐", "😕", "😟", "🙁", "😮", "😯", "😲", "😳", "🥺",
+        "😦", "😧", "😨", "😰", "😥", "😢", "😭", "😱", "😖", "😣",
+        "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠", "🤬", "😈",
+        "👿", "💀", "☠️", "💩", "🤡", "👹", "👺", "👻", "👽", "👾",
+        "🤖", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾",
+        "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+        "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "♥️",
+        "👍", "👎", "👊", "✊", "🤛", "🤜", "🤝", "👏", "🙌", "👐",
+        "🤲", "🤚", "✋", "🖐️", "👋", "🤙", "💪", "🦾", "🖕", "✌️",
+        "🤞", "🤟", "🤘", "🤏", "👌", "🤌", "👈", "👉", "👆", "👇",
+        "☝️", "✍️", "🙏", "🔥", "⭐", "🌟", "✨", "💫", "🎉", "🎊"
+    };
+
+    private IEnumerable<string> FilteredEmojis => string.IsNullOrWhiteSpace(emojiSearch)
+        ? AllEmojis
+        : AllEmojis.Where(e => e.Contains(emojiSearch));
+
+    // GIF picker
+    private bool showGifPicker;
+    private string gifSearch = "";
+    private bool isLoadingGifs;
+    private List<GifResult> gifResults = new();
+    private record GifResult(string Url, string PreviewUrl);
+
+    private bool CanSend => !string.IsNullOrWhiteSpace(newMessageText) || selectedFile != null;
+
+    private HubConnection? hubConnection;
+    private bool _signalRInitialized;
+    private bool _shouldScrollToBottom;
+    private bool _isFirstLoad = true;
+    private record ScrollInfo(double Position, bool IsAtBottom);
+    private Dictionary<Guid, ScrollInfo> _teamScrollPositions = new();
+    private HashSet<Guid> _visitedTeams = new();
+
+    // Unread tracking
+    private Dictionary<Guid, int> unreadCounts = new();
+    private Dictionary<Guid, DateTime> lastReadTime = new();
+
+    // Last message updates (from real-time events)
+    private record TeamLastMessageInfo(string? Preview, DateTime? Time, string? SenderName);
+    private Dictionary<Guid, TeamLastMessageInfo> lastMessageUpdates = new();
+
+    // Attachments
+    private record AttachmentAddedEvent(Guid MessageId, AttachmentClient.AttachmentDTOPublic Attachment);
+
+    // Typing indicators
+    private record TypingUser(string UserId, string UserName, DateTime StartedAt);
+    private Dictionary<Guid, List<TypingUser>> typingUsers = new();
+    private System.Timers.Timer? typingTimer;
+    private bool isTyping;
+    private DateTime lastTypingTime;
+
+    // Mentions
+    private bool showMentionDropdown;
+    private string mentionQuery = "";
+    private int mentionStartIndex = -1;
+    private int selectedMentionIndex = 0;
+    private List<TeamClient.MemberDTOPublic> filteredMentions = new();
+
+
+    private bool isMemberModalOpen;
+    private string? memberError;
+
+    private bool showNewTeamModal;
+    private string newTeamName = string.Empty;
+    private string? newTeamError;
+    private bool isCreatingTeam;
+
+    private bool showProfileModal;
+
+    // Header state
+    private bool headerSearchMode;
+    private string headerSearchQuery = "";
+    private bool showHeaderMoreMenu;
+    private ElementReference headerSearchInputRef;
+
+    // Pinned messages
+    private bool showPinnedDropdown;
+    private List<PinnedMessageClient.PinnedMessageDTO> pinnedMessages = new();
+
+    private IEnumerable<TeamClient.TeamDTOPublic> DirectMessages =>
+        teams.Where(t => t.IsDirect).OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue);
+
+    private IEnumerable<TeamClient.TeamDTOPublic> FilteredTeams
+    {
+        get
+        {
+            var nonDmTeams = teams.Where(t => !t.IsDirect);
+            return string.IsNullOrWhiteSpace(searchQuery)
+                ? nonDmTeams
+                : nonDmTeams.Where(t => t.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private IEnumerable<FriendClient.FriendDTO> FilteredFriends =>
+        string.IsNullOrWhiteSpace(friendSearchQuery)
+            ? friends
+            : friends.Where(f =>
+                f.Name.Contains(friendSearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (f.Handle?.Contains(friendSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private IEnumerable<FriendClient.FriendRequestDTO> incomingRequests =>
+        pendingRequests.Where(r => r.IsIncoming);
+
+    private IEnumerable<FriendClient.FriendRequestDTO> outgoingRequests =>
+        pendingRequests.Where(r => !r.IsIncoming);
+
+    private static bool IsStatusOnline(string? status) =>
+        status == "online" || status == "away" || status == "busy";
+
+    private IEnumerable<FriendClient.FriendDTO> GetFilteredFriendsByTab()
+    {
+        var filtered = FilteredFriends;
+        if (friendsTab == "online")
+            filtered = filtered.Where(f => IsStatusOnline(f.Status));
+        return filtered;
+    }
+
+    private int GetOnlineMemberCount()
+    {
+        if (teamDetails?.Members == null) return 0;
+        return teamDetails.Members.Count(m => IsStatusOnline(m.User?.Status));
+    }
+
+    private IEnumerable<ChatClient.MessageDTOPublic> FilteredMessages =>
+        string.IsNullOrWhiteSpace(headerSearchQuery) || !headerSearchMode
+            ? messages
+            : messages.Where(m =>
+                m.Text?.Contains(headerSearchQuery, StringComparison.OrdinalIgnoreCase) == true);
+
+    private string HighlightSearchTerm(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(headerSearchQuery) || string.IsNullOrWhiteSpace(text))
+            return RenderMessageContent(text);
+
+        var rendered = RenderMessageContent(text);
+        var pattern = Regex.Escape(headerSearchQuery);
+        return Regex.Replace(
+            rendered,
+            $"({pattern})",
+            "<mark class=\"search-highlight\">$1</mark>",
+            RegexOptions.IgnoreCase
+        );
+    }
+
+    private string GetRelativeTimeFromDate(DateTime date)
+    {
+        var diff = DateTime.UtcNow - date;
+        if (diff.TotalMinutes < 1) return "now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+        return date.ToLocalTime().ToString("MMM d");
+    }
+
+    private void OpenAddFriendModal() => showAddFriendModal = true;
+
+    private bool IsCurrentUserAdmin =>
+        selectedTeam?.Role == "Admin" ||
+        teamDetails?.Members?.Any(m => m.User?.Id == _userId && m.Role == "Admin") == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+        currentUserName = user.FindFirst(c => c.Type == ClaimTypes.Name)?.Value ?? "User";
+        currentUserEmail = user.FindFirst(c => c.Type == ClaimTypes.Email)?.Value;
+
+        await LoadUserStatus();
+        await LoadTeams();
+        await LoadFriends();
+
+        if (TeamId.HasValue)
+        {
+            await SelectTeam(TeamId.Value);
+        }
+        else if (teams.Any())
+        {
+            await SelectTeam(teams.First().Id);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (TeamId.HasValue && TeamId != selectedTeamId)
+        {
+            await SelectTeam(TeamId.Value);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("setupMobileComposerScroll", "composer-input", "messages-container");
+
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("popupRegistry.register",
+                "chat-popups", _dotNetRef, nameof(CloseAllPopups), ".popup-container");
+            _popupListenerRegistered = true;
+
+            await JS.InvokeVoidAsync("setupMessagesScrollListener",
+                "messages-container",
+                _dotNetRef,
+                nameof(LoadOlderMessagesJs),
+                nameof(SetJumpToBottomVisible));
+        }
+
+        if (_shouldScrollToBottom)
+        {
+            Console.WriteLine("[Scroll] OnAfterRenderAsync: scrolling now");
+            _shouldScrollToBottom = false;
+            await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
+        }
+    }
+
+    private async Task LoadTeams()
+    {
+        if (string.IsNullOrEmpty(_userId))
+        {
+            teamsState = LoadState.Error;
+            teamsError = "User session not loaded.";
+            return;
+        }
+
+        if (!teams.Any()) teamsState = LoadState.Loading;
+        teamsError = null;
+
+        try
+        {
+            var result = await TeamClient.GetTeamsByUserAsync(_userId);
+            if (!result.Success)
+            {
+                teamsState = LoadState.Error;
+                teamsError = result.ErrorMessage ?? "Failed to load teams.";
+                return;
+            }
+            teams = result.Value ?? [];
+            teamsState = teams.Any() ? LoadState.Success : LoadState.Empty;
+        }
+        catch (Exception ex)
+        {
+            teamsState = LoadState.Error;
+            teamsError = ex.Message;
+        }
+    }
+
+    private async Task LoadUserStatus()
+    {
+        if (string.IsNullOrEmpty(currentUserName)) profileState = LoadState.Loading;
+        profileError = null;
+
+        try
+        {
+            var result = await UserClient.GetProfileAsync();
+            if (!result.Success || result.Value == null)
+            {
+                profileState = LoadState.Error;
+                profileError = result.ErrorMessage ?? "Failed to load profile.";
+                return;
+            }
+
+            currentUserName = result.Value.Name;
+            currentUserHandle = result.Value.Handle;
+            currentUserProfileImage = GetFullImageUrl(result.Value.ProfileImageUrl);
+            currentUserNameColor = result.Value.NameColor;
+            currentStatus = result.Value.Status;
+            currentStatusMessage = result.Value.StatusMessage;
+            currentTheme = result.Value.Theme;
+            currentReadReceipts = result.Value.ReadReceipts;
+            currentTypingIndicators = result.Value.TypingIndicators;
+            currentNotificationPreference = (result.Value.NotificationPreference ?? "all").ToLowerInvariant().Trim();
+            Console.WriteLine($"[Profile] Loaded NotificationPreference: '{currentNotificationPreference}'");
+            editStatusMessage = currentStatusMessage ?? string.Empty;
+            ApplyTheme(currentTheme);
+            profileState = LoadState.Success;
+        }
+        catch (Exception ex)
+        {
+            profileState = LoadState.Error;
+            profileError = ex.Message;
+        }
+    }
+
+    private string? GetFullImageUrl(string? relativeUrl)
+    {
+        if (string.IsNullOrEmpty(relativeUrl)) return null;
+        if (relativeUrl.StartsWith("http")) return relativeUrl;
+        return $"{ApiBaseUrl}{relativeUrl}";
+    }
+
+    private async Task LoadFriends()
+    {
+        if (!friends.Any()) friendsState = LoadState.Loading;
+        friendsError = null;
+
+        try
+        {
+            var friendsResult = await FriendClient.GetFriendsAsync();
+            if (!friendsResult.Success)
+            {
+                friendsState = LoadState.Error;
+                friendsError = friendsResult.ErrorMessage ?? "Failed to load friends.";
+                return;
+            }
+            friends = friendsResult.Value ?? [];
+
+            var requestsResult = await FriendClient.GetPendingRequestsAsync();
+            if (requestsResult.Success)
+            {
+                pendingRequests = requestsResult.Value ?? [];
+            }
+
+            friendsState = friends.Any() ? LoadState.Success : LoadState.Empty;
+        }
+        catch (Exception ex)
+        {
+            friendsState = LoadState.Error;
+            friendsError = ex.Message;
+        }
+    }
+
+    private async Task AcceptFriendRequest(Guid requestId)
+    {
+        var result = await FriendClient.AcceptRequestAsync(requestId);
+        if (result.Success)
+        {
+            await LoadFriends();
+        }
+    }
+
+    private async Task DeclineFriendRequest(Guid requestId)
+    {
+        var result = await FriendClient.RejectRequestAsync(requestId);
+        if (result.Success)
+        {
+            await LoadFriends();
+        }
+    }
+
+    private async Task CancelFriendRequest(Guid requestId)
+    {
+        var result = await FriendClient.RejectRequestAsync(requestId);
+        if (result.Success)
+        {
+            await LoadFriends();
+        }
+    }
+
+    private void ToggleFriendMenu(string userId)
+    {
+        openFriendMenuId = openFriendMenuId == userId ? null : userId;
+    }
+
+    private async Task RemoveFriend(string userId)
+    {
+        openFriendMenuId = null;
+        var result = await FriendClient.RemoveFriendAsync(userId);
+        if (result.Success)
+        {
+            await LoadFriends();
+        }
+    }
+
+    private string GetFriendDisplayStatus(string status) => status switch
+    {
+        "invisible" => "offline",
+        _ => status
+    };
+
+    private string GetFriendStatusLabel(string status) => status switch
+    {
+        "online" => "Online",
+        "away" => "Away",
+        "busy" => "Do not disturb",
+        _ => "Offline"
+    };
+
+    private void ToggleStatusMenu()
+    {
+        showStatusMenu = !showStatusMenu;
+        if (showStatusMenu)
+        {
+            editStatusMessage = currentStatusMessage ?? string.Empty;
+        }
+    }
+
+    private void BackToSidebarMobile()
+    {
+        mobileShowConversation = false;
+        mobileShowMembersDrawer = false;
+    }
+
+    private void ToggleMembersDrawer()
+    {
+        mobileShowMembersDrawer = !mobileShowMembersDrawer;
+    }
+
+    private async Task SelectStatus(string status)
+    {
+        currentStatus = status;
+        await SaveStatusAndClose();
+    }
+
+    private async Task SaveStatus()
+    {
+        isSavingStatus = true;
+        try
+        {
+            var result = await UserClient.UpdateStatusAsync(currentStatus, editStatusMessage);
+            if (result.Success && result.Value != null)
+            {
+                currentStatus = result.Value.Status;
+                currentStatusMessage = result.Value.StatusMessage;
+            }
+        }
+        finally
+        {
+            isSavingStatus = false;
+        }
+    }
+
+    private async Task SaveStatusAndClose()
+    {
+        await SaveStatus();
+        showStatusMenu = false;
+    }
+
+    private async Task ClearStatusMessage()
+    {
+        editStatusMessage = string.Empty;
+        await SaveStatus();
+    }
+
+    private void OpenProfileFromStatus()
+    {
+        showStatusMenu = false;
+        showProfileModal = true;
+    }
+
+    private void HandleProfileStatusChanged(string newStatus)
+    {
+        currentStatus = newStatus;
+    }
+
+    private void HandleProfileStatusMessageChanged(string? newMessage)
+    {
+        currentStatusMessage = newMessage;
+        editStatusMessage = newMessage ?? string.Empty;
+    }
+
+    private void HandleProfileNameChanged(string newName)
+    {
+        currentUserName = newName;
+    }
+
+    private void HandleProfileHandleChanged(string? newHandle)
+    {
+        currentUserHandle = newHandle;
+    }
+
+    private void HandleProfileNameColorChanged(string newColor)
+    {
+        currentUserNameColor = newColor;
+    }
+
+    private void HandleProfileImageChanged(string? newImageUrl)
+    {
+        currentUserProfileImage = GetFullImageUrl(newImageUrl);
+    }
+
+    private async Task HandleThemeChanged(string newTheme)
+    {
+        currentTheme = newTheme;
+        ApplyTheme(newTheme);
+        await UserClient.UpdateThemeAsync(newTheme);
+    }
+
+    private void ApplyTheme(string theme)
+    {
+        _ = JS.InvokeVoidAsync("applyTheme", theme);
+    }
+
+    private void HandleReadReceiptsChanged(bool value)
+    {
+        currentReadReceipts = value;
+    }
+
+    private void HandleTypingIndicatorsChanged(bool value)
+    {
+        currentTypingIndicators = value;
+    }
+
+    private void HandleNotificationPreferenceChanged(string value)
+    {
+        currentNotificationPreference = (value ?? "all").ToLowerInvariant().Trim();
+        Console.WriteLine($"[Profile] NotificationPreference changed to: '{currentNotificationPreference}'");
+    }
+
+    private async Task HandleProfileSave()
+    {
+        var dto = new UserClient.UserUpdateDTO(
+            Name: currentUserName,
+            Handle: currentUserHandle,
+            NameColor: currentUserNameColor,
+            Status: currentStatus,
+            StatusMessage: currentStatusMessage,
+            Theme: currentTheme,
+            ReadReceipts: currentReadReceipts,
+            TypingIndicators: currentTypingIndicators,
+            NotificationPreference: currentNotificationPreference
+        );
+        await UserClient.UpdateProfileAsync(dto);
+
+        // Refresh team details to show updated user info (name color, handle, etc.)
+        if (selectedTeamId.HasValue)
+        {
+            await LoadTeamDetails();
+        }
+    }
+
+    private string GetStatusLabel(string status) => statusPresets.GetValueOrDefault(status, "Online");
+
+    private string GetStatusDimColor(string status) => status switch
+    {
+        "online" => "oklch(0.74 0.15 145 / 0.18)",
+        "away" => "oklch(0.78 0.14 75 / 0.18)",
+        "busy" => "oklch(0.68 0.18 28 / 0.18)",
+        "invisible" => "rgba(255,255,255,0.10)",
+        _ => "transparent"
+    };
+
+    private bool _isSelectingTeam;
+
+    private async Task SelectTeam(Guid teamId)
+    {
+        // Prevent re-entry and skip if already selected
+        if (_isSelectingTeam || selectedTeamId == teamId)
+        {
+            return;
+        }
+
+        _isSelectingTeam = true;
+        try
+        {
+            // Save scroll info of current team before switching
+            if (selectedTeamId.HasValue)
+            {
+                var scrollInfo = await JS.InvokeAsync<ScrollInfo>("getScrollInfo", "messages-container");
+                _teamScrollPositions[selectedTeamId.Value] = scrollInfo;
+            }
+
+            // Stop typing on previous team before switching
+            if (isTyping && selectedTeamId.HasValue)
+            {
+                await StopTypingIndicator();
+            }
+
+            selectedTeamId = teamId;
+            selectedTeam = teams.FirstOrDefault(t => t.Id == teamId);
+            newMessageText = "";
+            mobileShowConversation = true;
+            mobileShowMembersDrawer = false;
+            showPinnedDropdown = false;
+            pinnedMessages = new();
+
+            if (selectedTeam == null) return;
+
+            // Check for unread BEFORE marking as read
+            var hadUnread = GetUnreadCount(teamId) > 0;
+            var isFirstVisit = !_visitedTeams.Contains(teamId);
+            _visitedTeams.Add(teamId);
+            MarkTeamAsRead(teamId);
+
+            await LoadTeamDetails();
+
+            // Scroll to bottom on first visit, first load, or if unread
+            // Otherwise restore previous scroll position (or scroll to bottom if user was there)
+            var shouldScrollToBottom = _isFirstLoad || isFirstVisit || hadUnread;
+            double? restorePosition = null;
+
+            if (!shouldScrollToBottom && _teamScrollPositions.TryGetValue(teamId, out var savedInfo))
+            {
+                if (savedInfo.IsAtBottom)
+                {
+                    shouldScrollToBottom = true;
+                }
+                else
+                {
+                    restorePosition = savedInfo.Position;
+                }
+            }
+
+            await LoadMessages(scrollToBottom: shouldScrollToBottom);
+
+            if (restorePosition.HasValue)
+            {
+                await JS.InvokeVoidAsync("setScrollPosition", "messages-container", restorePosition.Value);
+            }
+
+            // Only initialize SignalR once
+            if (!_signalRInitialized)
+            {
+                await InitializeSignalR();
+            }
+
+            Navigation.NavigateTo($"/chat/{teamId}", replace: true);
+        }
+        finally
+        {
+            _isSelectingTeam = false;
+        }
+    }
+
+    private async Task LoadTeamDetails()
+    {
+        if (!selectedTeamId.HasValue) return;
+
+        membersState = LoadState.Loading;
+        membersError = null;
+
+        try
+        {
+            var result = await TeamClient.GetTeamDetailsAsync(selectedTeamId.Value);
+            if (!result.Success)
+            {
+                membersState = LoadState.Error;
+                membersError = result.ErrorMessage ?? "Failed to load team details.";
+                return;
+            }
+
+            if (result.Value == null)
+            {
+                membersState = LoadState.Empty;
+                return;
+            }
+
+            teamDetails = result.Value;
+            isAdmin = teamDetails.Members?.Any(m => m.User?.Id == _userId && m.Role == "Admin") ?? false;
+            membersState = (teamDetails.Members != null && teamDetails.Members.Any())
+                ? LoadState.Success
+                : LoadState.Empty;
+        }
+        catch (Exception ex)
+        {
+            membersState = LoadState.Error;
+            membersError = ex.Message;
+        }
+    }
+
+    private async Task LoadMessages(bool scrollToBottom = false)
+    {
+        if (!selectedTeamId.HasValue) return;
+
+        messagesState = LoadState.Loading;
+        messagesError = null;
+        currentPage = 1;
+        hasMoreMessages = true;
+
+        try
+        {
+            var result = await ChatClient.GetMessagesByTeamAsync(
+                selectedTeamId.Value, page: 1, pageSize: MessagesPageSize);
+            if (!result.Success)
+            {
+                messagesState = LoadState.Error;
+                messagesError = result.ErrorMessage ?? "Failed to load messages.";
+                return;
+            }
+
+            var fetched = result.Value ?? [];
+            messages = fetched.OrderBy(m => m.Date).ToList();
+            teamMessages[selectedTeamId.Value] = messages;
+            hasMoreMessages = fetched.Count == MessagesPageSize;
+            messagesState = messages.Any() ? LoadState.Success : LoadState.Empty;
+
+            if (scrollToBottom)
+            {
+                Console.WriteLine("[Scroll] LoadMessages: scrolling to bottom");
+                _shouldScrollToBottom = true;
+                _isFirstLoad = false;
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            messagesState = LoadState.Error;
+            messagesError = ex.Message;
+        }
+    }
+
+    private async Task LoadOlderMessages()
+    {
+        if (!selectedTeamId.HasValue || !hasMoreMessages || isLoadingOlderMessages)
+            return;
+
+        isLoadingOlderMessages = true;
+        StateHasChanged();
+
+        try
+        {
+            var scrollHeightBefore = await JS.InvokeAsync<double>("getScrollHeight", "messages-container");
+
+            var nextPage = currentPage + 1;
+            var result = await ChatClient.GetMessagesByTeamAsync(
+                selectedTeamId.Value, page: nextPage, pageSize: MessagesPageSize);
+
+            if (!result.Success)
+            {
+                return; // silent: retry on next scroll
+            }
+
+            var fetched = result.Value ?? [];
+            if (fetched.Count == 0)
+            {
+                hasMoreMessages = false;
+                return;
+            }
+
+            if (fetched.Count < MessagesPageSize)
+                hasMoreMessages = false;
+
+            var olderSorted = fetched.OrderBy(m => m.Date).ToList();
+            messages = olderSorted.Concat(messages).ToList();
+            teamMessages[selectedTeamId.Value] = messages;
+            currentPage = nextPage;
+
+            StateHasChanged();
+
+            await Task.Yield();
+            await JS.InvokeVoidAsync("preserveScrollAfterPrepend",
+                "messages-container", scrollHeightBefore);
+        }
+        finally
+        {
+            isLoadingOlderMessages = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task LoadOlderMessagesJs() => await LoadOlderMessages();
+
+    private async Task InitializeSignalR()
+    {
+        // Skip if already initialized and connected
+        if (_signalRInitialized && hubConnection?.State == HubConnectionState.Connected)
+        {
+            return;
+        }
+
+        // Dispose existing connection if reconnecting
+        if (hubConnection != null)
+        {
+            try { await hubConnection.DisposeAsync(); } catch { }
+        }
+
+        try
+        {
+            var token = await AuthClient.GetSignalRTokenAsync();
+            if (string.IsNullOrEmpty(token)) return;
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl($"https://localhost:7294/hubs/chat?access_token={token}")
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.On<ChatClient.MessageDTOPublic>("ReceiveMessage", async message =>
+            {
+                Console.WriteLine($"[SignalR] ReceiveMessage: TeamId={message.TeamId}, SenderId={message.Sender?.Id}, SelectedTeam={selectedTeamId}");
+
+                // Store message (check for duplicates by Id)
+                if (!teamMessages.ContainsKey(message.TeamId))
+                    teamMessages[message.TeamId] = new();
+
+                if (teamMessages[message.TeamId].Any(m => m.Id == message.Id))
+                {
+                    Console.WriteLine("[SignalR] ReceiveMessage: Duplicate message, skipping");
+                    return;
+                }
+
+                // Add to cache (for non-current teams) or to messages (for current team)
+                if (message.TeamId == selectedTeamId)
+                {
+                    Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
+                    messages.Add(message);
+                    TriggerMessageFadeIn(message.Id);
+                    Console.WriteLine("[Scroll] ReceiveMessage: setting flag");
+                    _shouldScrollToBottom = true;
+                    await InvokeAsync(StateHasChanged);
+                }
+                else
+                {
+                    teamMessages[message.TeamId].Add(message);
+
+                    var pref = (currentNotificationPreference ?? "all").ToLowerInvariant().Trim();
+                    var messageTeam = teams.FirstOrDefault(t => t.Id == message.TeamId);
+                    var isDm = messageTeam?.IsDirect ?? false;
+                    var isMentioned = MessageMentionsUser(message.Text);
+
+                    // Determine if we should show unread badge based on preference
+                    var shouldCountUnread = pref switch
+                    {
+                        "all" => true,
+                        "mentions" => isDm || isMentioned,
+                        "none" => false,
+                        _ => true
+                    };
+
+                    if (shouldCountUnread)
+                    {
+                        IncrementUnread(message.TeamId);
+                        Console.WriteLine($"[SignalR] Unread incremented for {message.TeamId}, count = {GetUnreadCount(message.TeamId)}");
+                    }
+
+                    // Send browser notification (same logic as unread)
+                    if (shouldCountUnread && message.Sender?.Id != _userId && currentStatus != "busy")
+                    {
+                        var senderName = message.Sender?.Name ?? "Someone";
+                        var notifTitle = isDm ? senderName : $"{senderName} in {messageTeam?.Name ?? "Team"}";
+                        var text = message.Text?.Length > 50 ? message.Text[..50] + "..." : message.Text;
+                        await JS.InvokeVoidAsync("showNotification", notifTitle, text ?? "New message");
+                    }
+
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>
+            {
+                Console.WriteLine($"[SignalR] AttachmentAdded: MessageId={evt.MessageId}");
+
+                // Find in current team messages
+                var message = messages.FirstOrDefault(m => m.Id == evt.MessageId);
+                if (message != null)
+                {
+                    message.Attachments ??= new List<AttachmentClient.AttachmentDTOPublic>();
+                    if (!message.Attachments.Any(a => a.Id == evt.Attachment.Id))
+                    {
+                        message.Attachments.Add(evt.Attachment);
+                        _shouldScrollToBottom = true;
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+
+                // Also update in teamMessages cache
+                foreach (var kvp in teamMessages)
+                {
+                    var cachedMessage = kvp.Value.FirstOrDefault(m => m.Id == evt.MessageId);
+                    if (cachedMessage != null)
+                    {
+                        cachedMessage.Attachments ??= new List<AttachmentClient.AttachmentDTOPublic>();
+                        if (!cachedMessage.Attachments.Any(a => a.Id == evt.Attachment.Id))
+                        {
+                            cachedMessage.Attachments.Add(evt.Attachment);
+                        }
+                    }
+                }
+            });
+
+            hubConnection.On<FriendProfileUpdate>("FriendProfileUpdated", update =>
+            {
+                // Update friend list
+                var friend = friends.FirstOrDefault(f => f.UserId == update.Id);
+                if (friend != null)
+                {
+                    var index = friends.IndexOf(friend);
+                    friends[index] = friend with
+                    {
+                        Name = update.Name,
+                        Handle = update.Handle,
+                        NameColor = update.NameColor ?? friend.NameColor,
+                        ProfileImageUrl = update.ProfileImageUrl,
+                        Status = update.Status,
+                        StatusMessage = update.StatusMessage,
+                        LastSeenAt = update.LastSeenAt ?? friend.LastSeenAt
+                    };
+                }
+
+                // Update team members if this user is in the current team
+                if (teamDetails?.Members != null)
+                {
+                    var member = teamDetails.Members.FirstOrDefault(m => m.User?.Id == update.Id);
+                    if (member?.User != null)
+                    {
+                        var updatedUser = member.User with
+                        {
+                            Name = update.Name,
+                            Handle = update.Handle,
+                            NameColor = update.NameColor ?? member.User.NameColor,
+                            ProfileImageUrl = update.ProfileImageUrl
+                        };
+                        var idx = teamDetails.Members.ToList().IndexOf(member);
+                        var membersList = teamDetails.Members.ToList();
+                        membersList[idx] = member with { User = updatedUser };
+                        teamDetails = teamDetails with { Members = membersList };
+                    }
+                }
+
+                InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<Guid>("FriendRequestCancelled", async requestId =>
+            {
+                pendingRequests = pendingRequests.Where(r => r.RequestId != requestId).ToList();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("FriendRemoved", async removedByUserId =>
+            {
+                friends = friends.Where(f => f.UserId != removedByUserId).ToList();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<FriendClient.FriendRequestDTO>("FriendRequestReceived", async request =>
+            {
+                if (!pendingRequests.Any(r => r.RequestId == request.RequestId))
+                {
+                    pendingRequests.Add(request);
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<Guid, FriendClient.FriendDTO>("FriendRequestAccepted", async (requestId, newFriend) =>
+            {
+                pendingRequests = pendingRequests.Where(r => r.RequestId != requestId).ToList();
+                if (!friends.Any(f => f.UserId == newFriend.UserId))
+                {
+                    friends.Add(newFriend);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<FriendProfileUpdate>("FriendRequestProfileUpdated", async update =>
+            {
+                var request = pendingRequests.FirstOrDefault(r => r.UserId == update.Id);
+                if (request != null)
+                {
+                    var index = pendingRequests.IndexOf(request);
+                    pendingRequests[index] = request with
+                    {
+                        Name = update.Name,
+                        Handle = update.Handle,
+                        NameColor = update.NameColor ?? request.NameColor,
+                        ProfileImageUrl = update.ProfileImageUrl
+                    };
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<TeamClient.TeamDTOPublic>("TeamCreated", async team =>
+            {
+                if (!teams.Any(t => t.Id == team.Id))
+                {
+                    teams.Add(team);
+                    await hubConnection.InvokeAsync("JoinTeam", team.Id);
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<TeamClient.TeamDTOPublic>("TeamUpdated", async team =>
+            {
+                var index = teams.FindIndex(t => t.Id == team.Id);
+                if (index >= 0)
+                {
+                    teams[index] = team;
+                    if (selectedTeamId == team.Id)
+                    {
+                        selectedTeam = team;
+                    }
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<TeamDeletedEvent>("TeamDeleted", async evt =>
+            {
+                var removed = teams.RemoveAll(t => t.Id == evt.TeamId);
+                if (removed > 0)
+                {
+                    if (selectedTeamId == evt.TeamId)
+                    {
+                        selectedTeamId = teams.FirstOrDefault()?.Id;
+                        selectedTeam = teams.FirstOrDefault();
+                        if (selectedTeamId.HasValue)
+                            await LoadTeamDetails();
+                    }
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<TeamMemberEvent>("TeamMemberAdded", async evt =>
+            {
+                if (evt.UserId == _userId && evt.Team != null && !teams.Any(t => t.Id == evt.TeamId))
+                {
+                    teams.Add(evt.Team);
+                    await hubConnection.InvokeAsync("JoinTeam", evt.TeamId);
+                }
+                else if (evt.TeamId == selectedTeamId && evt.Team != null)
+                {
+                    var index = teams.FindIndex(t => t.Id == evt.TeamId);
+                    if (index >= 0)
+                        teams[index] = evt.Team;
+                    await LoadTeamDetails();
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<TeamMemberRemovedEvent>("TeamMemberRemoved", async evt =>
+            {
+                if (evt.UserId == _userId)
+                {
+                    teams.RemoveAll(t => t.Id == evt.TeamId);
+                    if (selectedTeamId == evt.TeamId)
+                    {
+                        selectedTeamId = teams.FirstOrDefault()?.Id;
+                        selectedTeam = teams.FirstOrDefault();
+                        if (selectedTeamId.HasValue)
+                            await LoadTeamDetails();
+                    }
+                }
+                else if (evt.TeamId == selectedTeamId)
+                {
+                    await LoadTeamDetails();
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<MessagesExpiredEvent>("MessagesExpired", async evt =>
+            {
+                if (teamMessages.TryGetValue(evt.TeamId, out var messages))
+                {
+                    var expiredSet = evt.MessageIds.ToHashSet();
+                    messages.RemoveAll(m => expiredSet.Contains(m.Id));
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<TeamLastMessageEvent>("TeamLastMessageUpdated", async evt =>
+            {
+                lastMessageUpdates[evt.TeamId] = new TeamLastMessageInfo(
+                    evt.LastMessagePreview,
+                    evt.LastMessageTime,
+                    evt.LastMessageSenderName);
+
+                var teamIndex = teams.FindIndex(t => t.Id == evt.TeamId);
+                if (teamIndex >= 0)
+                {
+                    teams = teams.OrderByDescending(t =>
+                        lastMessageUpdates.TryGetValue(t.Id, out var u) && u.Time.HasValue
+                            ? u.Time.Value
+                            : t.LastMessageTime ?? DateTime.MinValue).ToList();
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<TeamClient.TeamDTOPublic>("DirectMessageCreated", async dm =>
+            {
+                Console.WriteLine($"[SignalR] DirectMessageCreated: {dm.Id} - {dm.Name}");
+                // Add the DM to our teams list if not already there
+                if (!teams.Any(t => t.Id == dm.Id))
+                {
+                    teams.Insert(0, dm);
+                    // Join the SignalR group for this DM
+                    await hubConnection.InvokeAsync("JoinTeam", dm.Id);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<UserTypingEvent>("UserTyping", async evt =>
+            {
+                Console.WriteLine($"[SignalR] UserTyping received: TeamId={evt.TeamId}, UserId={evt.UserId}, UserName={evt.UserName}");
+
+                if (!typingUsers.ContainsKey(evt.TeamId))
+                    typingUsers[evt.TeamId] = new();
+
+                var existing = typingUsers[evt.TeamId].FirstOrDefault(u => u.UserId == evt.UserId);
+                if (existing != null)
+                    typingUsers[evt.TeamId].Remove(existing);
+
+                typingUsers[evt.TeamId].Add(new TypingUser(evt.UserId, evt.UserName, DateTime.UtcNow));
+                Console.WriteLine($"[SignalR] UserTyping: Added to typingUsers, count now = {typingUsers[evt.TeamId].Count}");
+                await InvokeAsync(StateHasChanged);
+
+                _ = Task.Delay(5000).ContinueWith(async _ =>
+                {
+                    if (typingUsers.TryGetValue(evt.TeamId, out var users))
+                    {
+                        users.RemoveAll(u => u.UserId == evt.UserId && (DateTime.UtcNow - u.StartedAt).TotalSeconds > 4);
+                        await InvokeAsync(StateHasChanged);
+                    }
+                });
+            });
+
+            hubConnection.On<UserStoppedTypingEvent>("UserStoppedTyping", async evt =>
+            {
+                if (typingUsers.TryGetValue(evt.TeamId, out var users))
+                {
+                    users.RemoveAll(u => u.UserId == evt.UserId);
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<int>("RateLimited", retryAfterMs =>
+            {
+                OnRateLimited(retryAfterMs);
+                return InvokeAsync(StateHasChanged);
+            });
+
+            await hubConnection.StartAsync();
+            Console.WriteLine($"[SignalR] Connected! ConnectionId={hubConnection.ConnectionId}");
+
+            foreach (var team in teams)
+            {
+                Console.WriteLine($"[SignalR] Joining team: {team.Id} ({team.Name})");
+                await hubConnection.InvokeAsync("JoinTeam", team.Id);
+            }
+            Console.WriteLine($"[SignalR] Joined {teams.Count} teams");
+
+            _signalRInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SignalR] Failed: {ex.Message}");
+            _signalRInitialized = false;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (showMentionDropdown && filteredMentions.Any())
+        {
+            if (e.Key == "ArrowDown")
+            {
+                selectedMentionIndex = (selectedMentionIndex + 1) % filteredMentions.Count;
+                return;
+            }
+            if (e.Key == "ArrowUp")
+            {
+                selectedMentionIndex = (selectedMentionIndex - 1 + filteredMentions.Count) % filteredMentions.Count;
+                return;
+            }
+            if (e.Key == "Enter" || e.Key == "Tab")
+            {
+                InsertMention(filteredMentions[selectedMentionIndex]);
+                return;
+            }
+            if (e.Key == "Escape")
+            {
+                CloseMentionDropdown();
+                return;
+            }
+        }
+
+        if (e.Key == "Enter" && !e.ShiftKey && !isSending)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task HandleMessageInput(ChangeEventArgs e)
+    {
+        newMessageText = e.Value?.ToString() ?? "";
+
+        // Check for mention trigger
+        CheckForMentionTrigger();
+
+        if (!selectedTeamId.HasValue || hubConnection?.State != HubConnectionState.Connected)
+            return;
+
+        if (!currentTypingIndicators)
+            return;
+
+        bool hasText = !string.IsNullOrWhiteSpace(newMessageText);
+
+        if (hasText)
+        {
+            var now = DateTime.UtcNow;
+            if (!isTyping || (now - lastTypingTime).TotalSeconds > 2)
+            {
+                isTyping = true;
+                lastTypingTime = now;
+                Console.WriteLine($"[Typing] StartTyping for team {selectedTeamId.Value}");
+                await hubConnection.InvokeAsync("StartTyping", selectedTeamId.Value);
+            }
+        }
+        else if (isTyping)
+        {
+            Console.WriteLine($"[Typing] StopTyping (input cleared) for team {selectedTeamId.Value}");
+            await StopTypingIndicator();
+        }
+    }
+
+    private async Task StopTypingIndicator()
+    {
+        if (isTyping && selectedTeamId.HasValue && hubConnection?.State == HubConnectionState.Connected)
+        {
+            isTyping = false;
+            await hubConnection.InvokeAsync("StopTyping", selectedTeamId.Value);
+        }
+    }
+
+    private async Task HandleComposerBlur()
+    {
+        await Task.Delay(150); // Allow click on mention item
+        CloseMentionDropdown();
+        await StopTypingIndicator();
+    }
+
+    private void CheckForMentionTrigger()
+    {
+        if (string.IsNullOrEmpty(newMessageText) || teamDetails?.Members == null)
+        {
+            CloseMentionDropdown();
+            return;
+        }
+
+        // Find the last @ that starts a mention
+        int lastAtIndex = newMessageText.LastIndexOf('@');
+        if (lastAtIndex == -1)
+        {
+            CloseMentionDropdown();
+            return;
+        }
+
+        // Check if @ is at start or preceded by space (not in middle of word)
+        if (lastAtIndex > 0 && newMessageText[lastAtIndex - 1] != ' ')
+        {
+            CloseMentionDropdown();
+            return;
+        }
+
+        // Get the query after @
+        string query = newMessageText[(lastAtIndex + 1)..];
+
+        // If there's a space after the query start, the mention is complete
+        if (query.Contains(' '))
+        {
+            CloseMentionDropdown();
+            return;
+        }
+
+        mentionStartIndex = lastAtIndex;
+        mentionQuery = query.ToLowerInvariant();
+
+        // Filter members based on query
+        filteredMentions = teamDetails.Members
+            .Where(m => m.User != null && m.User.Id != _userId)
+            .Where(m =>
+                (m.User!.Name?.ToLowerInvariant().Contains(mentionQuery) ?? false) ||
+                (m.User!.Handle?.ToLowerInvariant().Contains(mentionQuery) ?? false))
+            .Take(5)
+            .ToList();
+
+        if (filteredMentions.Any())
+        {
+            showMentionDropdown = true;
+            selectedMentionIndex = 0;
+        }
+        else
+        {
+            CloseMentionDropdown();
+        }
+    }
+
+    private void InsertMention(TeamClient.MemberDTOPublic member)
+    {
+        if (member.User == null || mentionStartIndex < 0) return;
+
+        string mentionText = !string.IsNullOrEmpty(member.User.Handle)
+            ? $"@{member.User.Handle}"
+            : $"@{member.User.Name}";
+
+        // Replace the @query with the full mention
+        newMessageText = newMessageText[..mentionStartIndex] + mentionText + " ";
+        CloseMentionDropdown();
+    }
+
+    private void CloseMentionDropdown()
+    {
+        showMentionDropdown = false;
+        mentionQuery = "";
+        mentionStartIndex = -1;
+        selectedMentionIndex = 0;
+        filteredMentions.Clear();
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(newMessageText) && selectedFile == null) return;
+        if (!selectedTeamId.HasValue) return;
+
+        isSending = true;
+        try
+        {
+            await StopTypingIndicator();
+
+            // If we have an attachment, use REST API
+            if (selectedFile != null)
+            {
+                var messageText = newMessageText?.Trim() ?? "";
+                var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText);
+
+                if (result.RateLimited)
+                {
+                    OnRateLimited(result.RetryAfterMs);
+                    return;
+                }
+
+                if (result.Success && result.Value != null)
+                {
+                    // Message appears via "ReceiveMessage" broadcast from server
+                    var messageId = result.Value.Id;
+                    var fileName = selectedFile.Name;
+                    var contentType = selectedFile.ContentType ?? "application/octet-stream";
+
+                    using var stream = selectedFile.OpenReadStream(maxAllowedSize: 26_214_400);
+                    await AttachmentClient.UploadAsync(messageId, stream, fileName, contentType);
+                    // Attachment appears via "AttachmentAdded" broadcast from server
+
+                    selectedFile = null;
+                }
+
+                newMessageText = string.Empty;
+            }
+            else if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                _lastAttemptedSendText = newMessageText;
+                await hubConnection.InvokeAsync("SendMessageToTeam", selectedTeamId.Value, newMessageText);
+                // Only clear if not rate-limited. If RateLimited event arrived during the
+                // await, IsInCooldown is already true and we preserve the user's text.
+                if (!IsInCooldown)
+                {
+                    newMessageText = string.Empty;
+                }
+            }
+        }
+        finally
+        {
+            isSending = false;
+            await FocusComposerInput();
+        }
+    }
+
+    private async Task TriggerFileInput()
+    {
+        if (fileInput?.Element != null)
+        {
+            await JS.InvokeVoidAsync("eval", $"document.querySelector('input[type=file]').click()");
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        StateHasChanged();
+        await FocusComposerInput();
+    }
+
+    private void RemoveAttachment()
+    {
+        selectedFile = null;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    // Emoji picker methods
+    private void ToggleEmojiPicker()
+    {
+        showGifPicker = false;
+        showEmojiPicker = !showEmojiPicker;
+        emojiSearch = "";
+    }
+
+    private async Task InsertEmoji(string emoji)
+    {
+        newMessageText += emoji;
+        showEmojiPicker = false;
+        emojiSearch = "";
+        await FocusComposerInput();
+    }
+
+    // GIF picker methods
+    private void ToggleGifPicker()
+    {
+        showEmojiPicker = false;
+        showGifPicker = !showGifPicker;
+        gifSearch = "";
+        gifResults.Clear();
+    }
+
+    private async Task HandleGifSearchKeydown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(gifSearch))
+        {
+            await SearchGifs();
+        }
+    }
+
+    private async Task SearchGifs()
+    {
+        if (string.IsNullOrWhiteSpace(gifSearch)) return;
+
+        isLoadingGifs = true;
+        StateHasChanged();
+
+        try
+        {
+            // Using Tenor API v1 (no key required for basic search)
+            var url = $"https://g.tenor.com/v1/search?q={Uri.EscapeDataString(gifSearch)}&limit=20&media_filter=minimal";
+
+            using var http = new HttpClient();
+            http.DefaultRequestHeaders.Add("Accept", "application/json");
+            var response = await http.GetStringAsync(url);
+            var json = System.Text.Json.JsonDocument.Parse(response);
+
+            gifResults.Clear();
+            foreach (var result in json.RootElement.GetProperty("results").EnumerateArray())
+            {
+                var media = result.GetProperty("media").EnumerateArray().FirstOrDefault();
+                if (media.ValueKind != System.Text.Json.JsonValueKind.Undefined)
+                {
+                    var gif = media.GetProperty("gif");
+                    var tinygif = media.GetProperty("tinygif");
+                    var gifUrl = gif.GetProperty("url").GetString();
+                    var previewUrl = tinygif.GetProperty("url").GetString();
+
+                    if (!string.IsNullOrEmpty(gifUrl) && !string.IsNullOrEmpty(previewUrl))
+                    {
+                        gifResults.Add(new GifResult(gifUrl, previewUrl));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"GIF search error: {ex.Message}");
+            gifResults.Clear();
+        }
+        finally
+        {
+            isLoadingGifs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task InsertGif(string gifUrl)
+    {
+        newMessageText += $" {gifUrl} ";
+        showGifPicker = false;
+        gifSearch = "";
+        gifResults.Clear();
+        await FocusComposerInput();
+    }
+
+    private async Task FocusComposerInput()
+    {
+        await JS.InvokeVoidAsync("focusComposerInput");
+    }
+
+    private void CloseAllPickers()
+    {
+        showEmojiPicker = false;
+        showGifPicker = false;
+    }
+
+    [JSInvokable]
+    public Task CloseAllPopups()
+    {
+        showStatusMenu = false;
+        showEmojiPicker = false;
+        showGifPicker = false;
+        showPinnedDropdown = false;
+        showHeaderMoreMenu = false;
+        openFriendMenuId = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SetJumpToBottomVisible(bool visible)
+    {
+        if (showJumpToBottomButton != visible)
+        {
+            showJumpToBottomButton = visible;
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task JumpToPresent()
+    {
+        await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
+        showJumpToBottomButton = false;
+    }
+
+    private void OnRateLimited(int retryAfterMs)
+    {
+        cooldownUntilUtc = DateTime.UtcNow.AddMilliseconds(retryAfterMs);
+        StartCooldownTimer();
+
+        // Restore the message text if the input was cleared optimistically by the SignalR send path
+        if (string.IsNullOrWhiteSpace(newMessageText) && !string.IsNullOrWhiteSpace(_lastAttemptedSendText))
+        {
+            newMessageText = _lastAttemptedSendText;
+        }
+        _lastAttemptedSendText = string.Empty;
+    }
+
+    private void StartCooldownTimer()
+    {
+        _cooldownTickTimer?.Stop();
+        _cooldownTickTimer = new System.Timers.Timer(250);
+        _cooldownTickTimer.Elapsed += async (_, _) =>
+        {
+            if (cooldownUntilUtc.HasValue && DateTime.UtcNow >= cooldownUntilUtc.Value)
+            {
+                cooldownUntilUtc = null;
+                _cooldownTickTimer?.Stop();
+            }
+            await InvokeAsync(StateHasChanged);
+        };
+        _cooldownTickTimer.Start();
+    }
+
+    private bool IsInCooldown => cooldownUntilUtc.HasValue && DateTime.UtcNow < cooldownUntilUtc.Value;
+
+    private int RemainingCooldownSec => cooldownUntilUtc.HasValue
+        ? Math.Max(0, (int)Math.Ceiling((cooldownUntilUtc.Value - DateTime.UtcNow).TotalSeconds))
+        : 0;
+
+    private void TriggerMessageFadeIn(Guid messageId)
+    {
+        animatingMessageIds.Add(messageId);
+        StateHasChanged();
+        _ = Task.Delay(500).ContinueWith(_ =>
+        {
+            animatingMessageIds.Remove(messageId);
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void ToggleMembersRail() => showMembersRail = !showMembersRail;
+
+    // Header methods
+    private async Task OpenHeaderSearch()
+    {
+        headerSearchMode = true;
+        headerSearchQuery = "";
+        showHeaderMoreMenu = false;
+        await Task.Delay(50);
+        await headerSearchInputRef.FocusAsync();
+    }
+
+    private void CloseHeaderSearch()
+    {
+        headerSearchMode = false;
+        headerSearchQuery = "";
+    }
+
+    private void HandleHeaderSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseHeaderSearch();
+    }
+
+    private int GetSearchMatchCount()
+    {
+        if (string.IsNullOrWhiteSpace(headerSearchQuery) || !messages.Any())
+            return 0;
+        return messages.Count(m => m.Text?.Contains(headerSearchQuery, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private void ToggleHeaderMoreMenu()
+    {
+        showHeaderMoreMenu = !showHeaderMoreMenu;
+    }
+
+    private async Task TogglePinnedDropdown()
+    {
+        showPinnedDropdown = !showPinnedDropdown;
+        showHeaderMoreMenu = false;
+
+        if (showPinnedDropdown && selectedTeamId.HasValue)
+        {
+            var result = await PinnedMessageClient.GetPinnedMessagesAsync(selectedTeamId.Value);
+            if (result.Success)
+                pinnedMessages = result.Value ?? [];
+        }
+    }
+
+    private async Task PinMessage(Guid messageId)
+    {
+        if (!selectedTeamId.HasValue) return;
+
+        var result = await PinnedMessageClient.PinMessageAsync(selectedTeamId.Value, messageId);
+        if (result.Success && result.Value != null)
+        {
+            pinnedMessages.Insert(0, result.Value);
+        }
+    }
+
+    private async Task UnpinMessage(Guid messageId)
+    {
+        if (!selectedTeamId.HasValue) return;
+
+        var result = await PinnedMessageClient.UnpinMessageAsync(selectedTeamId.Value, messageId);
+        if (result.Success)
+        {
+            pinnedMessages.RemoveAll(p => p.MessageId == messageId);
+        }
+    }
+
+    private void ClosePinnedDropdown()
+    {
+        showPinnedDropdown = false;
+    }
+
+    private void OpenTeamManageModal()
+    {
+        showHeaderMoreMenu = false;
+        isMemberModalOpen = true;
+        memberError = null;
+    }
+
+    private async Task LeaveTeamAction()
+    {
+        showHeaderMoreMenu = false;
+        if (!selectedTeamId.HasValue || string.IsNullOrEmpty(_userId)) return;
+
+        var result = await TeamClient.RemoveMemberAsync(selectedTeamId.Value, _userId);
+        if (result.Success)
+        {
+            teams.RemoveAll(t => t.Id == selectedTeamId.Value);
+            teamMessages.Remove(selectedTeamId.Value);
+            var leftTeamId = selectedTeamId.Value;
+            selectedTeamId = null;
+            selectedTeam = null;
+            teamDetails = null;
+            messages.Clear();
+
+            if (teams.Any())
+                await SelectTeam(teams.First().Id);
+        }
+    }
+
+    private void OpenMemberModal()
+    {
+        isMemberModalOpen = true;
+        memberError = null;
+    }
+
+    private void CloseMemberModal() => isMemberModalOpen = false;
+
+    private async Task PromoteMember(string userId)
+    {
+        memberError = null;
+        var result = await TeamClient.PromoteToAdminAsync(selectedTeamId!.Value, userId);
+        if (result.Success)
+            await LoadTeamDetails();
+        else
+            memberError = result.ErrorMessage;
+    }
+
+    private async Task RemoveMember(string userId)
+    {
+        memberError = null;
+        var result = await TeamClient.RemoveMemberAsync(selectedTeamId!.Value, userId);
+        if (result.Success)
+            await LoadTeamDetails();
+        else
+            memberError = result.ErrorMessage;
+    }
+
+    private void OpenNewTeamModal()
+    {
+        showNewTeamModal = true;
+        newTeamName = string.Empty;
+        newTeamError = null;
+    }
+
+    private async Task CreateTeam()
+    {
+        if (string.IsNullOrWhiteSpace(newTeamName))
+        {
+            newTeamError = "Team name is required.";
+            return;
+        }
+
+        isCreatingTeam = true;
+        newTeamError = null;
+
+        try
+        {
+            var result = await TeamClient.AddTeamAsync(
+                new[] { _userId! },
+                Array.Empty<string>(),
+                newTeamName.Trim());
+
+            if (result.Success)
+            {
+                showNewTeamModal = false;
+                await LoadTeams();
+                if (teams.Any())
+                {
+                    var newTeam = teams.FirstOrDefault(t => t.Name == newTeamName.Trim());
+                    if (newTeam != null)
+                        await SelectTeam(newTeam.Id);
+                }
+            }
+            else
+            {
+                newTeamError = result.ErrorMessage ?? "Failed to create team.";
+            }
+        }
+        finally
+        {
+            isCreatingTeam = false;
+        }
+    }
+
+    private async Task HandleCreateTeam((string Name, string Glyph, string Color, List<string> Members, string MessageLifetime) teamData)
+    {
+        var result = await TeamClient.AddTeamAsync(
+            new[] { _userId! },
+            teamData.Members.ToArray(),
+            teamData.Name,
+            teamData.Glyph,
+            teamData.Color,
+            teamData.MessageLifetime);
+
+        if (result.Success && result.Value != null)
+        {
+            await SelectTeam(result.Value.Id);
+        }
+    }
+
+    private List<NewTeamModal.FriendInfo> GetFriendsForModal()
+    {
+        return friends.Select(f => new NewTeamModal.FriendInfo(
+            f.UserId,
+            f.Name,
+            f.Handle,
+            f.ProfileImageUrl,
+            f.Status
+        )).ToList();
+    }
+
+    private async Task Logout()
+    {
+        await AuthClient.LogoutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    private async Task HandleQuickLogout()
+    {
+        showStatusMenu = false;
+        await Logout();
+    }
+
+    private string GetTeamInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private string GetTeamColor(string name)
+    {
+        var hue = GetTeamHue(name);
+        return $"oklch(0.55 0.14 {hue})";
+    }
+
+    private int GetTeamHue(string name)
+    {
+        var hash = name.GetHashCode();
+        return Math.Abs(hash % 360);
+    }
+
+    private string GetSecondaryColor(string color)
+    {
+        var hueMatch = System.Text.RegularExpressions.Regex.Match(color, @"(\d+)\)");
+        if (hueMatch.Success && int.TryParse(hueMatch.Groups[1].Value, out int hue))
+        {
+            return $"oklch(0.42 0.14 {(hue + 60) % 360})";
+        }
+        return "oklch(0.42 0.14 195)";
+    }
+
+    private string GetLastActiveTime(Guid teamId)
+    {
+        DateTime? lastTime = null;
+
+        if (lastMessageUpdates.TryGetValue(teamId, out var update) && update.Time.HasValue)
+        {
+            lastTime = update.Time;
+        }
+        else if (teamMessages.TryGetValue(teamId, out var msgs) && msgs.Any())
+        {
+            lastTime = msgs.Last().Date;
+        }
+        else
+        {
+            var team = teams.FirstOrDefault(t => t.Id == teamId);
+            if (team?.LastMessageTime.HasValue == true)
+                lastTime = team.LastMessageTime;
+        }
+
+        if (!lastTime.HasValue) return "";
+
+        var diff = DateTime.UtcNow - lastTime.Value;
+        if (diff.TotalMinutes < 1) return "now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h";
+        return lastTime.Value.ToLocalTime().ToString("MMM d");
+    }
+
+    private string GetLastMessagePreview(Guid teamId)
+    {
+        if (lastMessageUpdates.TryGetValue(teamId, out var update) && update.Preview != null)
+        {
+            var who = update.SenderName?.Split(' ')[0] ?? "Someone";
+            var text = update.Preview.Length > 30 ? update.Preview[..30] + "..." : update.Preview;
+            return $"{who}: {text}";
+        }
+
+        if (teamMessages.TryGetValue(teamId, out var msgs) && msgs.Any())
+        {
+            var last = msgs.Last();
+            var who = last.Sender?.Id == _userId ? "You" : (last.Sender?.Name?.Split(' ')[0] ?? "Someone");
+            var text = (last.Text ?? "").Replace("\n", " ").Trim();
+
+            if (string.IsNullOrWhiteSpace(text) && last.Attachments?.Any() == true)
+            {
+                var att = last.Attachments.First();
+                var isImage = att.MimeType?.StartsWith("image/") == true;
+                text = isImage ? "a envoyé une photo" : "a envoyé un fichier";
+                return $"{who} {text}";
+            }
+
+            if (text.Length > 30) text = text[..30] + "...";
+            return $"{who}: {text}";
+        }
+
+        var team = teams.FirstOrDefault(t => t.Id == teamId);
+        if (team?.LastMessagePreview != null)
+        {
+            var who = team.LastMessageSenderName?.Split(' ')[0] ?? "Someone";
+            return $"{who}: {team.LastMessagePreview}";
+        }
+
+        return "No messages yet";
+    }
+
+    private int GetUnreadCount(Guid teamId)
+    {
+        return unreadCounts.GetValueOrDefault(teamId, 0);
+    }
+
+    private string GetDmDisplayName(TeamClient.TeamDTOPublic dm)
+    {
+        // For DMs, extract the other person's name from "User1 & User2"
+        if (dm.Name.Contains(" & "))
+        {
+            var parts = dm.Name.Split(" & ");
+            foreach (var part in parts)
+            {
+                if (part.Trim() != currentUserName)
+                    return part.Trim();
+            }
+        }
+        return dm.Name;
+    }
+
+    private async Task StartDirectMessage(string friendId)
+    {
+        var result = await TeamClient.GetOrCreateDirectMessageAsync(friendId);
+        if (result.Success && result.Value != null)
+        {
+            // Add to teams list if not already there
+            if (!teams.Any(t => t.Id == result.Value.Id))
+            {
+                teams.Add(result.Value);
+            }
+            await SelectTeam(result.Value.Id);
+            activeNav = "chats";
+        }
+    }
+
+    private void MarkTeamAsRead(Guid teamId)
+    {
+        unreadCounts[teamId] = 0;
+        lastReadTime[teamId] = DateTime.UtcNow;
+    }
+
+    private void IncrementUnread(Guid teamId)
+    {
+        if (selectedTeamId == teamId) return; // Don't increment if we're viewing this team
+        unreadCounts[teamId] = unreadCounts.GetValueOrDefault(teamId, 0) + 1;
+    }
+
+    private string RenderMessageContent(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+
+        // Check if the message is only a GIF URL
+        var gifPattern = new System.Text.RegularExpressions.Regex(@"^\s*(https?://[^\s]+\.gif[^\s]*)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var gifMatch = gifPattern.Match(text);
+        if (gifMatch.Success)
+        {
+            var gifUrl = System.Net.WebUtility.HtmlEncode(gifMatch.Groups[1].Value);
+            return $"<img src=\"{gifUrl}\" alt=\"GIF\" class=\"message-gif\" loading=\"lazy\" />";
+        }
+
+        // Otherwise render with mentions
+        return RenderMessageWithMentions(text);
+    }
+
+    private string RenderMessageWithMentions(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+
+        // Escape HTML first
+        text = System.Net.WebUtility.HtmlEncode(text);
+
+        // Find GIF URLs inline and render them
+        var inlineGifPattern = new System.Text.RegularExpressions.Regex(@"(https?://[^\s]+\.gif[^\s]*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        text = inlineGifPattern.Replace(text, match =>
+        {
+            var url = match.Groups[1].Value;
+            return $"<img src=\"{url}\" alt=\"GIF\" class=\"message-gif-inline\" loading=\"lazy\" />";
+        });
+
+        // Find @mentions and highlight them
+        var mentionPattern = new System.Text.RegularExpressions.Regex(@"@(\w+)");
+        text = mentionPattern.Replace(text, match =>
+        {
+            var handle = match.Groups[1].Value.ToLowerInvariant();
+            var isCurrentUser = handle == currentUserHandle?.ToLowerInvariant() ||
+                               handle == currentUserName?.ToLowerInvariant().Replace(" ", "");
+            var cssClass = isCurrentUser ? "mention mention-me" : "mention";
+            return $"<span class=\"{cssClass}\">{match.Value}</span>";
+        });
+
+        return text;
+    }
+
+    private string GetAttachmentDownloadUrl(Guid attachmentId)
+    {
+        return $"{ApiBaseUrl}/api/attachment/{attachmentId}/download";
+    }
+
+    private static bool IsImageMimeType(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return false;
+        return mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MessageMentionsUser(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+
+        var mentionPattern = new System.Text.RegularExpressions.Regex(@"@(\w+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var matches = mentionPattern.Matches(text);
+
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            var handle = match.Groups[1].Value.ToLowerInvariant();
+            if (handle == currentUserHandle?.ToLowerInvariant() ||
+                handle == currentUserName?.ToLowerInvariant().Replace(" ", ""))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cooldownTickTimer?.Stop();
+        _cooldownTickTimer?.Dispose();
+        _cooldownTickTimer = null;
+
+        if (_popupListenerRegistered)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("popupRegistry.unregister", "chat-popups");
+            }
+            catch
+            {
+                // JS context might already be gone (page unload)
+            }
+            _popupListenerRegistered = false;
+        }
+        _dotNetRef?.Dispose();
+        _dotNetRef = null;
+
+        _signalRInitialized = false;
+        if (hubConnection != null)
+        {
+            try
+            {
+                if (selectedTeamId.HasValue)
+                    await hubConnection.InvokeAsync("LeaveTeam", selectedTeamId);
+                await hubConnection.DisposeAsync();
+            }
+            catch { }
+        }
+    }
+}

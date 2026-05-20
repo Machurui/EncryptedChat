@@ -9,12 +9,21 @@ public class ChatClient
 
     public class MessageDTOPublic
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string? Text { get; set; }
-        public TeamClient.UserDTOPublic? Sender { get; set; }
-        public TeamClient.TeamDTOPublic? Team { get; set; }
+        public SenderDTO? Sender { get; set; }
+        public Guid TeamId { get; set; }
         public DateTime Date { get; set; }
         public List<AttachmentClient.AttachmentDTOPublic>? Attachments { get; set; }
+    }
+
+    public class SenderDTO
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Handle { get; set; }
+        public string NameColor { get; set; } = "#FFFFFF";
+        public string? ProfileImageUrl { get; set; }
     }
 
     public ChatClient(HttpClient http)
@@ -27,15 +36,22 @@ public class ChatClient
         public bool Success { get; init; }
         public string? ErrorMessage { get; init; }
         public T? Value { get; init; }
+        public bool RateLimited { get; init; }
+        public int RetryAfterMs { get; init; }
 
         public static Result<T> Ok(T value) => new() { Success = true, Value = value };
         public static Result<T> Fail(string msg) => new() { Success = false, ErrorMessage = msg };
+        public static Result<T> Throttled(int retryAfterMs) =>
+            new() { Success = false, RateLimited = true, RetryAfterMs = retryAfterMs, ErrorMessage = "Rate limited" };
     }
 
-    // GET api/Message/team/{teamId}
-    public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(int teamId)
+    private record RateLimitedResponse(int RetryAfterMs);
+
+    // GET api/Message/team/{teamId}?page=N&pageSize=N
+    public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(
+        Guid teamId, int page = 1, int pageSize = 20)
     {
-        var res = await _http.GetAsync($"api/Message/team/{teamId}");
+        var res = await _http.GetAsync($"api/Message/team/{teamId}?page={page}&pageSize={pageSize}");
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
@@ -49,17 +65,16 @@ public class ChatClient
         return Result<List<MessageDTOPublic>>.Ok(msgs);
     }
 
-    // Optional: REST send via POST api/Message (even though SignalR will mainly be used)
-    private class MessageDTO
+    // POST api/Message - create message via REST (returns message with ID for attachments)
+    private class MessageCreateDTO
     {
         public string Text { get; set; } = string.Empty;
-        public string Sender { get; set; } = string.Empty;
-        public int Team { get; set; }
+        public Guid Team { get; set; }
     }
 
-    public async Task<Result<MessageDTOPublic>> SendMessageRestAsync(string senderId, int teamId, string text)
+    public async Task<Result<MessageDTOPublic>> CreateMessageAsync(Guid teamId, string text)
     {
-        var dto = new MessageDTO { Text = text, Sender = senderId, Team = teamId };
+        var dto = new MessageCreateDTO { Text = text, Team = teamId };
         var json = JsonSerializer.Serialize(dto);
 
         var req = new HttpRequestMessage(HttpMethod.Post, "api/Message")
@@ -69,6 +84,19 @@ public class ChatClient
 
         var res = await _http.SendAsync(req);
         var body = await res.Content.ReadAsStringAsync();
+
+        if ((int)res.StatusCode == 429)
+        {
+            int retryAfterMs = 1000;
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<RateLimitedResponse>(body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (parsed != null) retryAfterMs = parsed.RetryAfterMs;
+            }
+            catch { /* default 1000ms */ }
+            return Result<MessageDTOPublic>.Throttled(retryAfterMs);
+        }
 
         if (!res.IsSuccessStatusCode)
         {

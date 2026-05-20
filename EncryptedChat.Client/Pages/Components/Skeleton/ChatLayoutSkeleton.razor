@@ -1,0 +1,96 @@
+@* Full chat layout skeleton — used during initial auth/data loading *@
+
+<div class="app-background-static"></div>
+
+<div class="chat-floating-layout" aria-busy="true">
+
+    @* Sidebar skeleton *@
+    <GlassPanel Radius="24" Class="chat-sidebar-panel">
+        <div class="sidebar-header">
+            <div class="brand-row">
+                <SkeletonBox Width="32px" Height="32px" BorderRadius="8px" />
+                <div style="flex: 1;">
+                    <SkeletonBox Width="110px" Height="13px" />
+                    <SkeletonBox Width="65px" Height="9px" CssClass="skeleton-mt-4" />
+                </div>
+            </div>
+            <SkeletonBox Width="28px" Height="28px" BorderRadius="50%" />
+        </div>
+
+        <div class="nav-tabs">
+            <SkeletonBox Width="100%" Height="30px" BorderRadius="8px" />
+        </div>
+
+        <div class="sidebar-search">
+            <SkeletonBox Width="100%" Height="34px" BorderRadius="10px" />
+        </div>
+
+        <div class="team-list">
+            @for (int i = 0; i < 5; i++)
+            {
+                <SkeletonTeamRow />
+            }
+        </div>
+
+        @* Profile dock skeleton *@
+        <div class="profile-dock">
+            <div class="profile-dock-btn" style="cursor: default;">
+                <div class="profile-dock-avatar-wrapper">
+                    <SkeletonBox Width="32px" Height="32px" BorderRadius="50%" />
+                </div>
+                <div class="profile-dock-info">
+                    <SkeletonBox Width="80%" Height="12px" />
+                    <SkeletonBox Width="55%" Height="10px" CssClass="skeleton-mt-4" />
+                </div>
+            </div>
+        </div>
+    </GlassPanel>
+
+    @* Conversation column skeleton *@
+    <div class="conversation-column hide-mobile">
+        <GlassPanel Radius="20" Class="conversation-header-panel">
+            <div class="conversation-header">
+                <div class="conversation-header-left">
+                    <SkeletonBox Width="40px" Height="40px" BorderRadius="12px" />
+                    <div class="conversation-header-info">
+                        <SkeletonBox Width="140px" Height="14px" />
+                        <SkeletonBox Width="90px" Height="10px" CssClass="skeleton-mt-4" />
+                    </div>
+                </div>
+                <div class="conversation-header-right">
+                    <SkeletonBox Width="30px" Height="30px" BorderRadius="50%" />
+                    <SkeletonBox Width="30px" Height="30px" BorderRadius="50%" />
+                </div>
+            </div>
+        </GlassPanel>
+
+        <GlassPanel Radius="20" Class="messages-panel">
+            <div class="messages-container">
+                <SkeletonMessage IsOwn="false" BubbleWidth="240px" />
+                <SkeletonMessage IsOwn="true"  BubbleWidth="180px" />
+                <SkeletonMessage IsOwn="false" BubbleWidth="280px" />
+                <SkeletonMessage IsOwn="false" BubbleWidth="160px" />
+                <SkeletonMessage IsOwn="true"  BubbleWidth="220px" />
+                <SkeletonMessage IsOwn="false" BubbleWidth="200px" />
+            </div>
+            <div class="composer-wrapper">
+                <div class="composer">
+                    <SkeletonBox Width="100%" Height="36px" BorderRadius="10px" />
+                </div>
+            </div>
+        </GlassPanel>
+    </div>
+
+    @* Members rail skeleton *@
+    <GlassPanel Radius="24" Class="chat-members-panel hide-tablet-down">
+        <div class="members-header">
+            <SkeletonBox Width="80px" Height="13px" />
+        </div>
+        <div class="members-list">
+            @for (int i = 0; i < 4; i++)
+            {
+                <SkeletonMemberRow />
+            }
+        </div>
+    </GlassPanel>
+</div>

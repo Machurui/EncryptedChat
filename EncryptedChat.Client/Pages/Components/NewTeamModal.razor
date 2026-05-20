@@ -1,0 +1,708 @@
+@namespace EncryptedChat.Client.Pages.Components
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div @onclick:stopPropagation="true">
+            <GlassPanel Radius="24" Class="modal-responsive new-team-modal" Style="width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
+                <!-- Header with team preview -->
+                <div class="new-team-header modal-header">
+                    <div class="new-team-header-left">
+                        <div class="team-preview-glyph" style="background: linear-gradient(135deg, @selectedColor, @GetSecondaryColor(selectedColor));">
+                            @selectedGlyph
+                        </div>
+                        <div>
+                            <div class="new-team-label">New team</div>
+                            <div class="new-team-title">@(string.IsNullOrWhiteSpace(teamName) ? "Untitled team" : teamName)</div>
+                        </div>
+                    </div>
+                    <IconButton Title="Close" OnClick="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </IconButton>
+                </div>
+
+                <!-- Step pills -->
+                <div class="step-pills">
+                    @foreach (var s in stepInfo)
+                    {
+                        <div class="step-pill @(step == s.Num ? "current" : "") @(step > s.Num ? "completed" : "")">
+                            <span class="step-pill-num @(step >= s.Num ? "active" : "") @(step > s.Num ? "completed" : "")">
+                                @if (step > s.Num)
+                                {
+                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                }
+                                else
+                                {
+                                    @s.Num
+                                }
+                            </span>
+                            @s.Label
+                        </div>
+                    }
+                </div>
+
+                <!-- Content -->
+                <div class="new-team-content modal-body">
+                    @if (step == 1)
+                    {
+                        <!-- Step 1: Identity -->
+                        <div class="new-team-field">
+                            <label class="new-team-field-label">Team name</label>
+                            <GlassInput @bind-Value="teamName" Placeholder="Alpha Protocol, Quantum Research, ...">
+                                <Icon>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                        <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                    </svg>
+                                </Icon>
+                            </GlassInput>
+                        </div>
+
+                        <div class="new-team-field">
+                            <label class="new-team-field-label">Accent color</label>
+                            <div class="color-grid">
+                                @foreach (var color in accentColors)
+                                {
+                                    <button class="accent-option @(selectedColor == color ? "selected" : "")"
+                                            style="background: linear-gradient(135deg, @color, @GetSecondaryColor(color));"
+                                            @onclick="() => selectedColor = color"></button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="new-team-field">
+                            <label class="new-team-field-label">Glyph</label>
+                            <div class="glyph-grid">
+                                @foreach (var glyph in glyphOptions)
+                                {
+                                    <button class="glyph-option @(selectedGlyph == glyph ? "selected" : "")"
+                                            @onclick="() => selectedGlyph = glyph">@glyph</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (step == 2)
+                    {
+                        <!-- Step 2: Members -->
+                        <div class="new-team-field">
+                            <label class="new-team-field-label">Search friends</label>
+                            <GlassInput @bind-Value="inviteSearch" Placeholder="Search by name...">
+                                <Icon>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                    </svg>
+                                </Icon>
+                            </GlassInput>
+                        </div>
+
+                        @if (invitedMembers.Count > 0)
+                        {
+                            <div class="invited-section">
+                                <div class="new-team-field-label">Invited · @invitedMembers.Count</div>
+                                <div class="invited-members">
+                                    @foreach (var memberId in invitedMembers)
+                                    {
+                                        var friend = Friends.FirstOrDefault(f => f.UserId == memberId);
+                                        if (friend != null)
+                                        {
+                                            <span class="invited-chip">
+                                                <span class="invited-chip-avatar" style="@(friend.ProfileImageUrl != null ? $"background-image: url({friend.ProfileImageUrl}); background-size: cover;" : "")">
+                                                    @if (friend.ProfileImageUrl == null) { @friend.Name[0] }
+                                                </span>
+                                                @friend.Name
+                                                <button class="chip-remove" @onclick="() => RemoveInvitedMember(memberId)">
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                                    </svg>
+                                                </button>
+                                            </span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="contacts-section">
+                            <div class="new-team-field-label" style="margin-bottom: 8px;">From your friends</div>
+                            <div class="contacts-list">
+                                @if (FilteredFriends.Any())
+                                {
+                                    @foreach (var friend in FilteredFriends)
+                                    {
+                                        <div class="contact-row">
+                                            <div class="contact-avatar" style="@(friend.ProfileImageUrl != null ? $"background-image: url({friend.ProfileImageUrl}); background-size: cover;" : "")">
+                                                @if (friend.ProfileImageUrl == null) { @friend.Name[0] }
+                                            </div>
+                                            <div class="contact-info">
+                                                <div class="contact-name">@friend.Name</div>
+                                                <div class="contact-status @(friend.Status == "online" ? "online" : "")">
+                                                    @(friend.Status == "online" ? "Online" : "Offline")
+                                                </div>
+                                            </div>
+                                            <GlassButton Size="sm" OnClick="() => AddInvitedMember(friend.UserId)">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                                                </svg>
+                                                Add
+                                            </GlassButton>
+                                        </div>
+                                    }
+                                }
+                                else if (Friends.Any())
+                                {
+                                    <div class="empty-contacts">
+                                        All your friends have been invited.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="empty-contacts">
+                                        You don't have any friends yet. Add friends first to invite them to your team.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (step == 3)
+                    {
+                        <!-- Step 3: Security -->
+                        <div class="new-team-field">
+                            <label class="new-team-field-label">Message lifetime</label>
+                            <div class="new-team-field-desc">Messages will be automatically deleted after the selected duration.</div>
+                            <div class="lifetime-options">
+                                @foreach (var opt in lifetimeOptions)
+                                {
+                                    <button class="lifetime-option @(messageLifetime == opt.Key ? "selected" : "")"
+                                            @onclick="() => messageLifetime = opt.Key">
+                                        @opt.Value
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- E2EE Banner -->
+                        <div class="encryption-banner">
+                            <svg class="encryption-banner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                            <div>
+                                <div class="encryption-banner-title">End-to-end encryption active</div>
+                                <div class="encryption-banner-text">Only team members can read messages in this conversation.</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer -->
+                <div class="new-team-footer modal-footer">
+                    @if (step > 1)
+                    {
+                        <GlassButton OnClick="PrevStep">Back</GlassButton>
+                    }
+                    <div style="flex: 1;"></div>
+                    @if (step < 3)
+                    {
+                        <GlassButton Primary="true" OnClick="NextStep" Disabled="@(!CanProceed)">Continue</GlassButton>
+                    }
+                    else
+                    {
+                        <GlassButton Primary="true" OnClick="CreateTeam" Disabled="@isCreating">
+                            @(isCreating ? "Creating..." : "Create team")
+                        </GlassButton>
+                    }
+                </div>
+            </GlassPanel>
+        </div>
+    </div>
+}
+
+<style>
+    .new-team-header {
+        padding: 20px 26px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .new-team-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .team-preview-glyph {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: white;
+        font-size: 22px;
+        font-weight: 700;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px rgba(0,0,0,0.20);
+    }
+
+    .new-team-label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+    }
+
+    .new-team-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.015em;
+    }
+
+    .step-pills {
+        display: flex;
+        gap: 4px;
+        padding: 14px 26px 0;
+    }
+
+    .step-pill {
+        flex: 1;
+        padding: 8px 0;
+        text-align: center;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        background: transparent;
+        border: 0.5px solid transparent;
+        color: rgba(255,255,255,0.45);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .step-pill.current {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.16);
+        color: white;
+    }
+
+    .step-pill.completed {
+        color: white;
+    }
+
+    .step-pill-num {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.06);
+        display: grid;
+        place-items: center;
+        font-size: 9px;
+        color: white;
+        font-weight: 700;
+    }
+
+    .step-pill-num.active {
+        background: rgba(255,255,255,0.18);
+    }
+
+    .step-pill-num.completed {
+        background: oklch(0.65 0.16 165);
+    }
+
+    .new-team-content {
+        flex: 1;
+        padding: 20px 26px;
+        min-height: 320px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .new-team-field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .new-team-field-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.75);
+    }
+
+    .new-team-field-desc {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        margin-bottom: 4px;
+    }
+
+    .color-grid {
+        display: flex;
+        gap: 8px;
+    }
+
+    .accent-option {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 0.5px solid rgba(255,255,255,0.15);
+        cursor: pointer;
+        transition: all 0.15s;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20);
+    }
+
+    .accent-option:hover {
+        transform: scale(1.06);
+    }
+
+    .accent-option.selected {
+        border: 1.5px solid white;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.40), 0 0 0 3px rgba(255,255,255,0.15);
+    }
+
+    .glyph-grid {
+        display: flex;
+        gap: 8px;
+    }
+
+    .glyph-option {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        color: white;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition: all 0.15s;
+    }
+
+    .glyph-option:hover {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .glyph-option.selected {
+        background: rgba(255,255,255,0.14);
+        border-color: rgba(255,255,255,0.25);
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20);
+    }
+
+    .invited-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .invited-members {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .invited-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 4px 4px 4px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.08);
+        border: 0.5px solid rgba(255,255,255,0.14);
+        color: white;
+        font-size: 12px;
+    }
+
+    .invited-chip.owner {
+        background: rgba(100, 200, 170, 0.20);
+        border-color: rgba(100, 200, 170, 0.40);
+    }
+
+    .invited-chip-avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.15);
+        display: grid;
+        place-items: center;
+        font-size: 9px;
+        font-weight: 600;
+    }
+
+    .chip-remove {
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.60);
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .chip-remove:hover {
+        background: rgba(255,255,255,0.15);
+    }
+
+    .contacts-section {
+        margin-top: 8px;
+    }
+
+    .contacts-list {
+        max-height: 220px;
+        overflow: auto;
+    }
+
+    .empty-contacts {
+        font-size: 12px;
+        color: rgba(255,255,255,0.55);
+        padding: 14px 10px;
+        text-align: center;
+    }
+
+    .contact-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        transition: background 0.15s;
+    }
+
+    .contact-row:hover {
+        background: rgba(255,255,255,0.04);
+    }
+
+    .contact-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.15);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .contact-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .contact-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: white;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .contact-status {
+        font-size: 10.5px;
+        color: rgba(255,255,255,0.50);
+    }
+
+    .contact-status.online {
+        color: oklch(0.74 0.15 145);
+    }
+
+    .lifetime-options {
+        display: flex;
+        gap: 6px;
+    }
+
+    .lifetime-option {
+        flex: 1;
+        padding: 9px 0;
+        border-radius: 9px;
+        font-size: 12px;
+        font-weight: 600;
+        background: rgba(255,255,255,0.06);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        color: white;
+        font-family: inherit;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .lifetime-option:hover:not(.selected) {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .lifetime-option.selected {
+        background: linear-gradient(135deg, oklch(0.65 0.16 165), oklch(0.45 0.16 195));
+        border-color: transparent;
+        box-shadow: 0 4px 14px rgba(100, 200, 170, 0.25);
+    }
+
+    .encryption-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: rgba(16,185,129,0.08);
+        border: 0.5px solid rgba(16,185,129,0.25);
+        margin-top: 4px;
+    }
+
+    .encryption-banner-icon {
+        color: oklch(0.78 0.14 165);
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    .encryption-banner-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .encryption-banner-text {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.65);
+        margin-top: 4px;
+        line-height: 1.5;
+    }
+
+    .new-team-footer {
+        padding: 14px 22px;
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+        display: flex;
+        gap: 8px;
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<(string Name, string Glyph, string Color, List<string> Members, string MessageLifetime)> OnCreate { get; set; }
+    [Parameter] public List<FriendInfo> Friends { get; set; } = new();
+
+    public record FriendInfo(string UserId, string Name, string? Handle, string? ProfileImageUrl, string Status);
+
+    private int step = 1;
+    private string teamName = "";
+    private string selectedColor = "oklch(0.65 0.16 165)";
+    private string selectedGlyph = "◆";
+    private string inviteSearch = "";
+    private List<string> invitedMembers = new();
+    private string messageLifetime = "off";
+    private bool isCreating;
+
+    private IEnumerable<FriendInfo> FilteredFriends => Friends
+        .Where(f => !invitedMembers.Contains(f.UserId))
+        .Where(f => string.IsNullOrWhiteSpace(inviteSearch) ||
+                    f.Name.Contains(inviteSearch, StringComparison.OrdinalIgnoreCase) ||
+                    (f.Handle?.Contains(inviteSearch, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private readonly (int Num, string Label)[] stepInfo = new[]
+    {
+        (1, "Identity"),
+        (2, "Members"),
+        (3, "Security")
+    };
+
+    private readonly string[] accentColors = new[]
+    {
+        "oklch(0.65 0.16 230)",
+        "oklch(0.65 0.15 165)",
+        "oklch(0.65 0.16 305)",
+        "oklch(0.66 0.16 30)",
+        "oklch(0.70 0.15 75)",
+        "oklch(0.62 0.16 195)"
+    };
+
+    private readonly string[] glyphOptions = new[]
+    {
+        "◆", "◈", "✦", "⌘", "◇", "⬢"
+    };
+
+    private readonly Dictionary<string, string> lifetimeOptions = new()
+    {
+        { "off", "Off" },
+        { "24h", "24h" },
+        { "7d", "7 days" },
+        { "30d", "30 days" }
+    };
+
+    private string GetSecondaryColor(string color)
+    {
+        var hueMatch = System.Text.RegularExpressions.Regex.Match(color, @"(\d+)\)");
+        if (hueMatch.Success && int.TryParse(hueMatch.Groups[1].Value, out int hue))
+        {
+            return $"oklch(0.42 0.14 {(hue + 60) % 360})";
+        }
+        return "oklch(0.42 0.14 195)";
+    }
+
+    private bool CanProceed => step switch
+    {
+        1 => teamName.Trim().Length >= 2,
+        2 => true,
+        3 => true,
+        _ => false
+    };
+
+    private void NextStep()
+    {
+        if (step < 3 && CanProceed) step++;
+    }
+
+    private void PrevStep()
+    {
+        if (step > 1) step--;
+    }
+
+    private void AddInvitedMember(string userId)
+    {
+        if (!invitedMembers.Contains(userId))
+            invitedMembers.Add(userId);
+    }
+
+    private void RemoveInvitedMember(string userId)
+    {
+        invitedMembers.Remove(userId);
+    }
+
+    private async Task Close()
+    {
+        step = 1;
+        teamName = "";
+        selectedGlyph = "◆";
+        selectedColor = "oklch(0.65 0.16 165)";
+        inviteSearch = "";
+        invitedMembers.Clear();
+        messageLifetime = "off";
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task CreateTeam()
+    {
+        if (string.IsNullOrWhiteSpace(teamName)) return;
+
+        isCreating = true;
+        try
+        {
+            await OnCreate.InvokeAsync((teamName.Trim(), selectedGlyph, selectedColor, invitedMembers.ToList(), messageLifetime));
+            await Close();
+        }
+        finally
+        {
+            isCreating = false;
+        }
+    }
+}

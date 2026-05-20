@@ -1,0 +1,409 @@
+@namespace EncryptedChat.Client.Pages.Components
+@using EncryptedChat.Client.Services
+
+@if (IsOpen && Team != null)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div @onclick:stopPropagation="true">
+            <GlassPanel Radius="24" Class="modal-responsive team-manage-modal" Style="width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column;">
+                <!-- Header -->
+                <div class="team-modal-header modal-header">
+                    <div class="team-modal-header-left">
+                        <div class="team-glyph" style="width: 42px; height: 42px; font-size: 16px; background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));">
+                            @GetTeamInitials(Team.Name)
+                        </div>
+                        <div>
+                            <div class="team-modal-label">Team settings</div>
+                            <div class="team-modal-title">@Team.Name</div>
+                        </div>
+                    </div>
+                    <IconButton Title="Close" OnClick="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </IconButton>
+                </div>
+
+                <!-- Tabs -->
+                <div class="team-modal-tabs">
+                    <button class="team-tab @(activeTab == "members" ? "active" : "")" @onclick='() => activeTab = "members"'>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                        </svg>
+                        Members
+                    </button>
+                    <button class="team-tab @(activeTab == "keys" ? "active" : "")" @onclick='() => activeTab = "keys"'>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
+                        </svg>
+                        Encryption keys
+                    </button>
+                    <button class="team-tab @(activeTab == "general" ? "active" : "")" @onclick='() => activeTab = "general"'>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                        </svg>
+                        General
+                    </button>
+                </div>
+
+                <!-- Content -->
+                <div class="team-modal-content modal-body">
+                    @if (activeTab == "members")
+                    {
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="error-banner">@errorMessage</div>
+                        }
+
+                        <div class="team-section">
+                            <div class="team-section-label">Current members</div>
+                            <div class="members-list">
+                                @if (Members != null)
+                                {
+                                    @foreach (var member in Members.OrderByDescending(m => m.Role == "Admin"))
+                                    {
+                                        <div class="member-row">
+                                            <Avatar Name="@member.User?.Name" Size="36" />
+                                            <div class="member-info">
+                                                <div class="member-name">@member.User?.Name</div>
+                                                <div class="member-role @(member.Role == "Admin" ? "admin" : "")">@member.Role</div>
+                                            </div>
+                                            @if (IsAdmin && member.User?.Id != CurrentUserId && member.Role != "Admin")
+                                            {
+                                                <div class="member-actions">
+                                                    <GlassButton Size="sm" OnClick="() => PromoteMember(member.User!.Id)">Promote</GlassButton>
+                                                    <GlassButton Size="sm" OnClick="() => RemoveMember(member.User!.Id)" Style="color: oklch(0.78 0.14 25);">Remove</GlassButton>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (activeTab == "keys")
+                    {
+                        <div class="team-section">
+                            <div class="encryption-banner">
+                                <svg class="encryption-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                <div>
+                                    <div class="encryption-banner-title">All keys verified</div>
+                                    <div class="encryption-banner-text">All members' encryption keys have been automatically verified.</div>
+                                </div>
+                            </div>
+
+                            <div class="team-section-label">Safety numbers</div>
+                            <div class="safety-numbers">
+                                <div class="safety-number-grid">
+                                    @for (int i = 0; i < 12; i++)
+                                    {
+                                        <span class="safety-number">@(12345 + i * 1111)</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="info-box">
+                                Compare these numbers with team members in person to verify their identity. If they match, you can be confident your communication is secure.
+                            </div>
+                        </div>
+                    }
+                    else if (activeTab == "general")
+                    {
+                        <div class="team-section">
+                            <div class="team-field">
+                                <label class="team-field-label">Team name</label>
+                                <GlassInput @bind-Value="editTeamName" Placeholder="Team name" />
+                            </div>
+
+                            @if (IsAdmin)
+                            {
+                                <div class="divider"></div>
+
+                                <div class="danger-zone">
+                                    <div class="danger-label">Danger zone</div>
+                                    <div class="danger-desc">Deleting this team will permanently remove all messages and members. This cannot be undone.</div>
+                                    <GlassButton Style="background: rgba(220,40,40,0.15); border-color: rgba(220,40,40,0.30); color: oklch(0.72 0.18 28);">
+                                        Delete team
+                                    </GlassButton>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer -->
+                <div class="team-modal-footer modal-footer">
+                    <GlassButton OnClick="Close">Close</GlassButton>
+                    @if (activeTab == "general" && IsAdmin)
+                    {
+                        <GlassButton Primary="true" OnClick="SaveChanges">Save changes</GlassButton>
+                    }
+                </div>
+            </GlassPanel>
+        </div>
+    </div>
+}
+
+<style>
+    .team-modal-header {
+        padding: 18px 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .team-modal-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .team-modal-label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.55);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+    }
+
+    .team-modal-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.015em;
+    }
+
+    .team-modal-tabs {
+        display: flex;
+        gap: 2px;
+        padding: 12px 22px 0;
+    }
+
+    .team-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border: none;
+        cursor: pointer;
+        background: transparent;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.65);
+        font-family: inherit;
+        transition: all 0.2s;
+    }
+
+    .team-tab:hover {
+        background: rgba(255,255,255,0.06);
+    }
+
+    .team-tab.active {
+        background: rgba(255,255,255,0.10);
+        color: white;
+        font-weight: 600;
+    }
+
+    .team-modal-content {
+        flex: 1;
+        overflow: auto;
+        padding: 16px 22px;
+    }
+
+    .team-section {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .team-section-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.45);
+    }
+
+    .members-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .member-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 12px;
+    }
+
+    .member-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .member-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .member-role {
+        font-size: 11px;
+        color: rgba(255,255,255,0.50);
+    }
+
+    .member-role.admin {
+        color: oklch(0.78 0.14 75);
+    }
+
+    .member-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    .error-banner {
+        padding: 10px 12px;
+        background: rgba(220,60,60,0.15);
+        border: 0.5px solid rgba(220,60,60,0.30);
+        border-radius: 10px;
+        font-size: 12px;
+        color: oklch(0.78 0.14 25);
+        margin-bottom: 14px;
+    }
+
+    .safety-numbers {
+        padding: 16px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        border-radius: 12px;
+    }
+
+    .safety-number-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        text-align: center;
+    }
+
+    .safety-number {
+        font-family: ui-monospace, SF Mono, Menlo, monospace;
+        font-size: 13px;
+        color: rgba(255,255,255,0.75);
+        letter-spacing: 0.05em;
+    }
+
+    .info-box {
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.08);
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.65);
+        line-height: 1.5;
+    }
+
+    .team-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .team-field-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.75);
+    }
+
+    .danger-zone {
+        padding: 14px;
+        background: rgba(220,40,40,0.08);
+        border: 0.5px solid rgba(220,40,40,0.20);
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .danger-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: oklch(0.72 0.18 28);
+    }
+
+    .danger-desc {
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.55);
+        line-height: 1.4;
+    }
+
+    .team-modal-footer {
+        padding: 14px 22px;
+        border-top: 0.5px solid rgba(255,255,255,0.10);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public TeamClient.TeamDTOPublic? Team { get; set; }
+    [Parameter] public List<TeamClient.MemberDTOPublic>? Members { get; set; }
+    [Parameter] public string? CurrentUserId { get; set; }
+    [Parameter] public bool IsAdmin { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnPromote { get; set; }
+    [Parameter] public EventCallback<string> OnRemove { get; set; }
+
+    private string activeTab = "members";
+    private string editTeamName = "";
+    private string? errorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (Team != null)
+        {
+            editTeamName = Team.Name;
+        }
+    }
+
+    private string GetTeamInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private async Task Close()
+    {
+        activeTab = "members";
+        errorMessage = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task PromoteMember(string userId)
+    {
+        errorMessage = null;
+        await OnPromote.InvokeAsync(userId);
+    }
+
+    private async Task RemoveMember(string userId)
+    {
+        errorMessage = null;
+        await OnRemove.InvokeAsync(userId);
+    }
+
+    private Task SaveChanges()
+    {
+        return Task.CompletedTask;
+    }
+}

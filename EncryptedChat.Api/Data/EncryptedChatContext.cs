@@ -11,6 +11,9 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<Session> Sessions => Set<Session>();
+    public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -62,6 +65,56 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
 
         modelBuilder.Entity<Attachment>()
             .HasIndex(a => a.MessageId);
+
+        modelBuilder.Entity<Friendship>()
+            .HasOne(f => f.Requester)
+            .WithMany()
+            .HasForeignKey(f => f.RequesterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Friendship>()
+            .HasOne(f => f.Addressee)
+            .WithMany()
+            .HasForeignKey(f => f.AddresseeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Friendship>()
+            .HasIndex(f => new { f.RequesterId, f.AddresseeId })
+            .IsUnique();
+
+        modelBuilder.Entity<Session>()
+            .HasOne(s => s.User)
+            .WithMany(u => u.Sessions)
+            .HasForeignKey(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Session>()
+            .HasIndex(s => s.TokenHash);
+
+        modelBuilder.Entity<Session>()
+            .HasIndex(s => new { s.UserId, s.IsRevoked });
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasOne(p => p.Team)
+            .WithMany()
+            .HasForeignKey(p => p.TeamId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasOne(p => p.Message)
+            .WithMany()
+            .HasForeignKey(p => p.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasOne(p => p.PinnedBy)
+            .WithMany()
+            .HasForeignKey(p => p.PinnedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PinnedMessage>()
+            .HasIndex(p => new { p.TeamId, p.MessageId })
+            .IsUnique();
 
         modelBuilder.Entity<IdentityRole>().HasData(
             new IdentityRole

@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using EncryptedChat.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
 namespace EncryptedChat.Controllers
@@ -10,9 +12,10 @@ namespace EncryptedChat.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public class TeamController(ITeamService teamService) : ControllerBase
+    public class TeamController(ITeamService teamService, IHubContext<ChatHub> hubContext) : ControllerBase
     {
         private readonly ITeamService _teamService = teamService;
+        private readonly IHubContext<ChatHub> _hubContext = hubContext;
 
         private string? GetCurrentUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -42,6 +45,26 @@ namespace EncryptedChat.Controllers
             return team;
         }
 
+        // GET: api/Team/5/details - For team members
+        [HttpGet("{id}/details")]
+        [Authorize(Roles = "User")]
+        public async Task<ActionResult<TeamDTOPublic?>> GetTeamDetails(Guid id)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            bool isMember = await _teamService.IsMemberAsync(userId, id);
+            if (!isMember)
+                return Forbid();
+
+            TeamDTOPublic? team = await _teamService.GetByIdAsync(id);
+            if (team is null)
+                return NotFound();
+
+            return Ok(team);
+        }
+
         // POST: api/Team
         [HttpPost]
         [Authorize(Roles = "User")]
@@ -56,6 +79,12 @@ namespace EncryptedChat.Controllers
             if (team is null)
                 return BadRequest(new { Message = "Données invalides" });
 
+            var memberIds = await _teamService.GetMemberUserIdsAsync(team.Id);
+            if (memberIds.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIds).SendAsync("TeamCreated", team);
+            }
+
             return CreatedAtAction(nameof(GetTeam), new { id = team.Id }, team);
         }
 
@@ -68,11 +97,17 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
-            TeamDTOPublic? teamUpdated = await _teamService.UpdateNameAsync(id, dto.Name, userId);
+            TeamDTOPublic? teamUpdated = await _teamService.UpdatePartialAsync(id, dto, userId);
             if (teamUpdated is null)
                 return NotFound();
 
-            return NoContent();
+            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            if (memberIds.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIds).SendAsync("TeamUpdated", teamUpdated);
+            }
+
+            return Ok(teamUpdated);
         }
 
         // DELETE: api/Team/5
@@ -84,9 +119,16 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
+            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+
             TeamDTOPublic? deleted = await _teamService.DeleteAsync(id, userId);
             if (deleted is null)
                 return NotFound();
+
+            if (memberIds.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIds).SendAsync("TeamDeleted", new { TeamId = id });
+            }
 
             return NoContent();
         }
@@ -106,6 +148,16 @@ namespace EncryptedChat.Controllers
             if (!success)
                 return NotFound();
 
+            var team = await _teamService.GetByIdAsync(id);
+            if (team != null)
+            {
+                var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+                if (memberIds.Count > 0)
+                {
+                    await _hubContext.Clients.Users(memberIds).SendAsync("TeamMemberAdded", new { TeamId = id, UserId = dto.UserId, Team = team });
+                }
+            }
+
             return NoContent();
         }
 
@@ -121,9 +173,16 @@ namespace EncryptedChat.Controllers
             if (userId == currentUserId)
                 return BadRequest(new { Message = "You cannot remove yourself. Use leave or transfer ownership." });
 
+            var memberIdsBefore = await _teamService.GetMemberUserIdsAsync(id);
+
             bool success = await _teamService.RemoveMemberAsync(id, userId, currentUserId);
             if (!success)
                 return NotFound();
+
+            if (memberIdsBefore.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIdsBefore).SendAsync("TeamMemberRemoved", new { TeamId = id, UserId = userId });
+            }
 
             return NoContent();
         }
@@ -161,6 +220,28 @@ namespace EncryptedChat.Controllers
                 return NotFound();
 
             return NoContent();
+        }
+
+        // POST: api/Team/dm/{friendId} - Get or create a DM with a friend
+        [HttpPost("dm/{friendId}")]
+        [Authorize(Roles = "User")]
+        public async Task<ActionResult<TeamDTOPublic>> GetOrCreateDirectMessage(string friendId)
+        {
+            string? currentUserId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(currentUserId))
+                return Unauthorized();
+
+            var (dm, isNew) = await _teamService.GetOrCreateDirectMessageWithStatusAsync(currentUserId, friendId);
+            if (dm == null)
+                return BadRequest(new { Message = "Could not create direct message channel." });
+
+            // Notify the friend via SignalR if this is a new DM
+            if (isNew)
+            {
+                await _hubContext.Clients.User(friendId).SendAsync("DirectMessageCreated", dm);
+            }
+
+            return Ok(dm);
         }
     }
 

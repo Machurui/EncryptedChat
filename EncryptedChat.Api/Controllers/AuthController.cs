@@ -29,7 +29,12 @@ public class AuthController(IAuthService authService) : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDTO model)
     {
-        LoginResult result = await _auth.LoginAsync(model);
+        string userAgent = Request.Headers.UserAgent.ToString();
+        string deviceInfo = ParseDeviceInfo(userAgent);
+        string deviceKind = DetectDeviceKind(userAgent);
+        string? ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        LoginResult result = await _auth.LoginAsync(model, deviceInfo, deviceKind, ipAddress);
 
         if (!result.Succeeded)
             return BadRequest(new { Message = "Invalid login attempt" });
@@ -42,6 +47,61 @@ public class AuthController(IAuthService authService) : ControllerBase
             expiresUtc = result.ExpiresUtc,
             message = "Login successful"
         });
+    }
+
+    private static string ParseDeviceInfo(string userAgent)
+    {
+        if (string.IsNullOrEmpty(userAgent))
+            return "Unknown device";
+
+        string browser = "Unknown";
+        string os = "Unknown";
+
+        if (userAgent.Contains("Chrome") && !userAgent.Contains("Edg"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Chrome/(\d+)");
+            browser = match.Success ? $"Chrome {match.Groups[1].Value}" : "Chrome";
+        }
+        else if (userAgent.Contains("Firefox"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Firefox/(\d+)");
+            browser = match.Success ? $"Firefox {match.Groups[1].Value}" : "Firefox";
+        }
+        else if (userAgent.Contains("Safari") && !userAgent.Contains("Chrome"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Version/(\d+)");
+            browser = match.Success ? $"Safari {match.Groups[1].Value}" : "Safari";
+        }
+        else if (userAgent.Contains("Edg"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Edg/(\d+)");
+            browser = match.Success ? $"Edge {match.Groups[1].Value}" : "Edge";
+        }
+
+        if (userAgent.Contains("Windows"))
+            os = "Windows";
+        else if (userAgent.Contains("Mac OS X") || userAgent.Contains("Macintosh"))
+            os = "macOS";
+        else if (userAgent.Contains("Linux") && !userAgent.Contains("Android"))
+            os = "Linux";
+        else if (userAgent.Contains("Android"))
+            os = "Android";
+        else if (userAgent.Contains("iPhone") || userAgent.Contains("iPad"))
+            os = "iOS";
+
+        return $"{os} · {browser}";
+    }
+
+    private static string DetectDeviceKind(string userAgent)
+    {
+        if (string.IsNullOrEmpty(userAgent))
+            return "web";
+
+        if (userAgent.Contains("Mobile") || userAgent.Contains("Android") ||
+            userAgent.Contains("iPhone") || userAgent.Contains("iPad"))
+            return "mobile";
+
+        return "web";
     }
 
     [HttpPost("logout")]
@@ -67,7 +127,13 @@ public class AuthController(IAuthService authService) : ControllerBase
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Unauthorized(new { Message = "No refresh token" });
 
-        LoginResult result = await _auth.RefreshAsync(refreshToken);
+        string? oldAccessToken = Request.Cookies["ec.accessToken"];
+        string userAgent = Request.Headers.UserAgent.ToString();
+        string deviceInfo = ParseDeviceInfo(userAgent);
+        string deviceKind = DetectDeviceKind(userAgent);
+        string? ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        LoginResult result = await _auth.RefreshAsync(refreshToken, oldAccessToken, deviceInfo, deviceKind, ipAddress);
 
         if (!result.Succeeded)
             return Unauthorized(new { Message = "Invalid refresh token" });
@@ -99,6 +165,17 @@ public class AuthController(IAuthService authService) : ControllerBase
     public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
     {
         throw new NotImplementedException();
+    }
+
+    [HttpGet("signalr-token")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public IActionResult GetSignalRToken()
+    {
+        string? accessToken = Request.Cookies["ec.accessToken"];
+        if (string.IsNullOrEmpty(accessToken))
+            return Unauthorized(new { Message = "No access token" });
+
+        return Ok(new { Token = accessToken });
     }
 
     private void SetAccessTokenCookie(string token, DateTime expiresUtc)

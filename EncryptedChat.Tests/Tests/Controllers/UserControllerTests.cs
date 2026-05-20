@@ -1,9 +1,12 @@
 using EncryptedChat.Controllers;
+using EncryptedChat.Hubs;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using FluentAssertions;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Moq;
 using System.Security.Claims;
 
@@ -16,7 +19,23 @@ public class UserControllerTests
 
     private static UserController CreateController(Mock<IUserService> mockService, string? userId = TestUserId)
     {
-        UserController controller = new(mockService.Object);
+        Mock<IFriendService> mockFriendService = new();
+        Mock<IHubContext<ChatHub>> mockHubContext = new();
+        Mock<IWebHostEnvironment> mockEnv = new();
+
+        mockFriendService
+            .Setup(s => s.GetFriendsAsync(It.IsAny<string>()))
+            .ReturnsAsync(new List<FriendDTO>());
+
+        mockFriendService
+            .Setup(s => s.GetPendingRequestUserIdsAsync(It.IsAny<string>()))
+            .ReturnsAsync(new List<string>());
+
+        mockService
+            .Setup(s => s.GetUserTeamsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<UserTeamDTO>());
+
+        UserController controller = new(mockService.Object, mockFriendService.Object, mockHubContext.Object, mockEnv.Object);
 
         List<Claim> claims = [];
         if (userId != null)

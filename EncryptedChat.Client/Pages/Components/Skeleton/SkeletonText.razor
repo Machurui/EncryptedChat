@@ -1,0 +1,13 @@
+<div class="skeleton-text-group">
+    @for (int i = 0; i < Lines; i++)
+    {
+        var isLast = i == Lines - 1;
+        <div class="skeleton skeleton-text"
+             style="width: @(isLast && Lines > 1 ? LastLineWidth : "100%");"></div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Lines { get; set; } = 1;
+    [Parameter] public string LastLineWidth { get; set; } = "65%";
+}

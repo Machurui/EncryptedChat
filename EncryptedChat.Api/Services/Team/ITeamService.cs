@@ -17,6 +17,8 @@ namespace EncryptedChat.Services
 
         Task<TeamDTOPublic?> UpdateNameAsync(Guid id, string name, string actorId);
 
+        Task<TeamDTOPublic?> UpdatePartialAsync(Guid id, TeamUpdateDTO dto, string actorId);
+
         Task<TeamDTOPublic?> DeleteAsync(Guid id, string actorId);
 
         Task<bool> IsAdminAsync(string userId, Guid teamId);
@@ -30,5 +32,11 @@ namespace EncryptedChat.Services
         Task<bool> PromoteToAdminAsync(Guid teamId, string userId, string actorId);
 
         Task<bool> DemoteFromAdminAsync(Guid teamId, string userId, string actorId);
+
+        Task<IReadOnlyList<string>> GetMemberUserIdsAsync(Guid teamId);
+
+        Task<TeamDTOPublic?> GetOrCreateDirectMessageAsync(string userId, string friendId);
+
+        Task<(TeamDTOPublic? Dm, bool IsNew)> GetOrCreateDirectMessageWithStatusAsync(string userId, string friendId);
     }
 }

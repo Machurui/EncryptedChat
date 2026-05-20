@@ -11,4 +11,5 @@ public interface IAttachmentService
     Task<(byte[] Content, string FileName, string MimeType)?> DownloadAsync(Guid id, string userId);
     Task<bool> DeleteAsync(Guid id, string userId);
     Task<bool> CanAccessMessageAsync(Guid messageId, string userId);
+    Task<Guid?> GetTeamIdForMessageAsync(Guid messageId);
 }

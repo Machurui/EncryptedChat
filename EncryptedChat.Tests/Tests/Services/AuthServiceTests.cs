@@ -21,6 +21,7 @@ public sealed class AuthServiceTests : IDisposable
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly Mock<SignInManager<User>> _signInManager;
+    private readonly Mock<ISessionService> _sessionService;
     private readonly AuthService _service;
 
     public AuthServiceTests()
@@ -33,12 +34,14 @@ public sealed class AuthServiceTests : IDisposable
         _userManager = CreateUserManager(_context);
         _roleManager = CreateRoleManager(_context);
         _signInManager = CreateSignInManager(_userManager);
+        _sessionService = new Mock<ISessionService>();
         _service = new AuthService(
             _userManager,
             _signInManager.Object,
             _roleManager,
             new JwtTokenService(CreateConfiguration()),
-            _context);
+            _context,
+            _sessionService.Object);
     }
 
     public void Dispose()

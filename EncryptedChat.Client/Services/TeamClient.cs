@@ -13,9 +13,21 @@ public class TeamClient
     }
 
     // DTO match API
-    public record TeamDTO(ICollection<string> Admins, ICollection<string> Members, string Name);
-    public record UserDTOPublic(string Id, string Name, string Email, int Level);
-    public record TeamDTOPublic(int Id, List<UserDTOPublic> Admins, List<UserDTOPublic> Members, string Name);
+    public record TeamDTO(ICollection<string> Admins, ICollection<string> Members, string Name, string? Glyph = null, string? Color = null, string? MessageLifetime = null);
+    public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null, string Status = "offline");
+    public record TeamDTOPublic(
+        Guid Id,
+        string Name,
+        string Slug,
+        string Role,
+        string Glyph = "◆",
+        string Color = "oklch(0.65 0.16 165)",
+        string MessageLifetime = "off",
+        bool IsDirect = false,
+        string? LastMessagePreview = null,
+        DateTime? LastMessageTime = null,
+        string? LastMessageSenderName = null);
+    public record TeamUpdateDTO(string? Name = null, string? Glyph = null, string? Color = null, string? MessageLifetime = null);
 
     public class Result
     {
@@ -44,15 +56,65 @@ public class TeamClient
     }
 
     // ---------- New Team ----------
-    public async Task<Result> AddTeamAsync(ICollection<string> admins, ICollection<string> members, string name)
+    public async Task<Result<TeamDTOPublic>> AddTeamAsync(ICollection<string> admins, ICollection<string> members, string name, string? glyph = null, string? color = null, string? messageLifetime = null)
     {
-        var res = await _http.PostAsJsonAsync("api/team", new TeamDTO(admins, members, name));
+        var res = await _http.PostAsJsonAsync("api/team", new TeamDTO(admins, members, name, glyph, color, messageLifetime));
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
-            return Result.Fail(ParseMessage(body) ?? "The function failed.");
+            return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "The function failed.");
 
-        return Result.Ok();
+        var team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        if (team == null)
+            return Result<TeamDTOPublic>.Fail("Invalid response.");
+
+        return Result<TeamDTOPublic>.Ok(team);
+    }
+
+    // ---------- Update Team ----------
+    public async Task<Result<TeamDTOPublic>> UpdateTeamAsync(Guid teamId, TeamUpdateDTO dto)
+    {
+        try
+        {
+            var res = await _http.PatchAsJsonAsync($"api/team/{teamId}", dto);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "Failed to update team.");
+
+            var team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (team == null)
+                return Result<TeamDTOPublic>.Fail("Invalid response.");
+
+            return Result<TeamDTOPublic>.Ok(team);
+        }
+        catch (Exception)
+        {
+            return Result<TeamDTOPublic>.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Delete Team ----------
+    public async Task<Result> DeleteTeamAsync(Guid teamId)
+    {
+        try
+        {
+            var res = await _http.DeleteAsync($"api/team/{teamId}");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result.Fail(ParseMessage(body) ?? "Failed to delete team.");
+
+            return Result.Ok();
+        }
+        catch (Exception)
+        {
+            return Result.Fail("Unexpected error.");
+        }
     }
 
     // ---------- Get Team of the user ----------
@@ -63,7 +125,7 @@ public class TeamClient
             if (string.IsNullOrWhiteSpace(userId))
                 return Result<List<TeamDTOPublic>>.Fail("User id is required.");
 
-            var res = await _http.GetAsync($"api/user/{userId}/teams");
+            var res = await _http.GetAsync("api/user/me/teams");
             var body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
@@ -87,6 +149,116 @@ public class TeamClient
         catch (Exception)
         {
             return Result<List<TeamDTOPublic>>.Fail("Unexpected error while fetching teams.");
+        }
+    }
+
+    // ---------- Get Team Details (with members) ----------
+    public record MemberDTOPublic(UserDTOPublic? User, string Role);
+    public record TeamDetailDTO(Guid Id, string Name, string Slug, string Glyph, string Color, string MessageLifetime, bool IsDirect, List<MemberDTOPublic>? Members);
+
+    public async Task<Result<TeamDetailDTO>> GetTeamDetailsAsync(Guid teamId)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"api/team/{teamId}/details");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<TeamDetailDTO>.Fail(ParseMessage(body) ?? "Failed to fetch team details.");
+
+            var team = JsonSerializer.Deserialize<TeamDetailDTO>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (team == null)
+                return Result<TeamDetailDTO>.Fail("Invalid response.");
+
+            return Result<TeamDetailDTO>.Ok(team);
+        }
+        catch (Exception)
+        {
+            return Result<TeamDetailDTO>.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Add Member ----------
+    public async Task<Result> AddMemberAsync(Guid teamId, string userId)
+    {
+        try
+        {
+            var res = await _http.PostAsJsonAsync($"api/team/{teamId}/members", new { UserId = userId });
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result.Fail(ParseMessage(body) ?? "Failed to add member.");
+
+            return Result.Ok();
+        }
+        catch (Exception)
+        {
+            return Result.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Remove Member ----------
+    public async Task<Result> RemoveMemberAsync(Guid teamId, string userId)
+    {
+        try
+        {
+            var res = await _http.DeleteAsync($"api/team/{teamId}/members/{userId}");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result.Fail(ParseMessage(body) ?? "Failed to remove member.");
+
+            return Result.Ok();
+        }
+        catch (Exception)
+        {
+            return Result.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Promote to Admin ----------
+    public async Task<Result> PromoteToAdminAsync(Guid teamId, string userId)
+    {
+        try
+        {
+            var res = await _http.PostAsJsonAsync($"api/team/{teamId}/admins", new { UserId = userId });
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result.Fail(ParseMessage(body) ?? "Failed to promote member.");
+
+            return Result.Ok();
+        }
+        catch (Exception)
+        {
+            return Result.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Get or Create DM ----------
+    public async Task<Result<TeamDTOPublic>> GetOrCreateDirectMessageAsync(string friendId)
+    {
+        try
+        {
+            var res = await _http.PostAsync($"api/team/dm/{friendId}", null);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "Failed to create direct message.");
+
+            var dm = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (dm == null)
+                return Result<TeamDTOPublic>.Fail("Invalid response.");
+
+            return Result<TeamDTOPublic>.Ok(dm);
+        }
+        catch (Exception)
+        {
+            return Result<TeamDTOPublic>.Fail("Unexpected error.");
         }
     }
 

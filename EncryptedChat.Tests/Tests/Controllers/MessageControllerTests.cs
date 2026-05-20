@@ -13,6 +13,8 @@ public class MessageControllerTests
 {
     private readonly Mock<IMessageService> _mockMessageService;
     private readonly Mock<ITeamService> _mockTeamService;
+    private readonly Mock<IRealtimeService> _mockRealtimeService;
+    private readonly Mock<IRateLimitService> _mockRateLimitService;
     private readonly string _userId = Guid.NewGuid().ToString();
     private readonly Guid _teamId = Guid.NewGuid();
     private readonly Guid _messageId = Guid.NewGuid();
@@ -21,11 +23,15 @@ public class MessageControllerTests
     {
         _mockMessageService = new Mock<IMessageService>();
         _mockTeamService = new Mock<ITeamService>();
+        _mockRealtimeService = new Mock<IRealtimeService>();
+        _mockRateLimitService = new Mock<IRateLimitService>();
+        _mockRateLimitService.Setup(r => r.CheckAndRecord(It.IsAny<string>()))
+            .Returns(new RateLimitResult(true, 0));
     }
 
     private MessageController CreateController(string? userId = null)
     {
-        var controller = new MessageController(_mockMessageService.Object, _mockTeamService.Object);
+        var controller = new MessageController(_mockMessageService.Object, _mockTeamService.Object, _mockRealtimeService.Object, _mockRateLimitService.Object);
         var claims = new List<Claim>();
 
         if (userId != null)
@@ -198,6 +204,7 @@ public class MessageControllerTests
         };
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
+        _mockTeamService.Setup(s => s.GetMemberUserIdsAsync(_teamId)).ReturnsAsync(new List<string> { _userId });
         _mockMessageService.Setup(s => s.CreateAsync(It.Is<MessageDTO>(m =>
             m.Text == "Hello team!" && m.Team == _teamId
         ), _userId)).ReturnsAsync(createdMessage);
@@ -256,6 +263,7 @@ public class MessageControllerTests
         string? capturedSenderId = null;
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
+        _mockTeamService.Setup(s => s.GetMemberUserIdsAsync(_teamId)).ReturnsAsync(new List<string> { _userId });
         _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>(), It.IsAny<string>()))
             .Callback<MessageDTO, string>((dto, senderId) => capturedSenderId = senderId)
             .ReturnsAsync(new MessageDTOPublic { Id = _messageId, Text = "Hello", TeamId = _teamId });

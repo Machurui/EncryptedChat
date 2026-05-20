@@ -1,0 +1,12 @@
+@page "/Team/{TeamId:guid}"
+@inject NavigationManager Navigation
+
+@code {
+    [Parameter]
+    public Guid TeamId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo($"/chat/{TeamId}", replace: true);
+    }
+}
