@@ -2971,6 +2971,7 @@
     // Anti-spam cooldown
     private DateTime? cooldownUntilUtc;
     private System.Timers.Timer? _cooldownTickTimer;
+    private string _lastAttemptedSendText = string.Empty;
 
     private bool showJumpToBottomButton;
     private HashSet<Guid> animatingMessageIds = new();
@@ -4328,6 +4329,7 @@
             }
             else if (hubConnection?.State == HubConnectionState.Connected)
             {
+                _lastAttemptedSendText = newMessageText;
                 await hubConnection.InvokeAsync("SendMessageToTeam", selectedTeamId.Value, newMessageText);
                 newMessageText = string.Empty;
             }
@@ -4500,6 +4502,13 @@
     {
         cooldownUntilUtc = DateTime.UtcNow.AddMilliseconds(retryAfterMs);
         StartCooldownTimer();
+
+        // Restore the message text if the input was cleared optimistically by the SignalR send path
+        if (string.IsNullOrWhiteSpace(newMessageText) && !string.IsNullOrWhiteSpace(_lastAttemptedSendText))
+        {
+            newMessageText = _lastAttemptedSendText;
+        }
+        _lastAttemptedSendText = string.Empty;
     }
 
     private void StartCooldownTimer()
