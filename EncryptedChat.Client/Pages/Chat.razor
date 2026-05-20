@@ -4331,7 +4331,12 @@
             {
                 _lastAttemptedSendText = newMessageText;
                 await hubConnection.InvokeAsync("SendMessageToTeam", selectedTeamId.Value, newMessageText);
-                newMessageText = string.Empty;
+                // Only clear if not rate-limited. If RateLimited event arrived during the
+                // await, IsInCooldown is already true and we preserve the user's text.
+                if (!IsInCooldown)
+                {
+                    newMessageText = string.Empty;
+                }
             }
         }
         finally
