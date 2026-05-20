@@ -2872,6 +2872,12 @@
     private string? membersError;
     private string? profileError;
 
+    // Messages pagination
+    private const int MessagesPageSize = 20;
+    private int currentPage = 1;
+    private bool hasMoreMessages = true;
+    private bool isLoadingOlderMessages;
+
     // Click-outside popup registry
     private DotNetObjectReference<Chat>? _dotNetRef;
     private bool _popupListenerRegistered;
@@ -3549,10 +3555,13 @@
 
         messagesState = LoadState.Loading;
         messagesError = null;
+        currentPage = 1;
+        hasMoreMessages = true;
 
         try
         {
-            var result = await ChatClient.GetMessagesByTeamAsync(selectedTeamId.Value);
+            var result = await ChatClient.GetMessagesByTeamAsync(
+                selectedTeamId.Value, page: 1, pageSize: MessagesPageSize);
             if (!result.Success)
             {
                 messagesState = LoadState.Error;
@@ -3560,8 +3569,10 @@
                 return;
             }
 
-            messages = (result.Value ?? []).OrderBy(m => m.Date).ToList();
+            var fetched = result.Value ?? [];
+            messages = fetched.OrderBy(m => m.Date).ToList();
             teamMessages[selectedTeamId.Value] = messages;
+            hasMoreMessages = fetched.Count == MessagesPageSize;
             messagesState = messages.Any() ? LoadState.Success : LoadState.Empty;
 
             if (scrollToBottom)
@@ -3578,6 +3589,58 @@
             messagesError = ex.Message;
         }
     }
+
+    private async Task LoadOlderMessages()
+    {
+        if (!selectedTeamId.HasValue || !hasMoreMessages || isLoadingOlderMessages)
+            return;
+
+        isLoadingOlderMessages = true;
+        StateHasChanged();
+
+        try
+        {
+            var scrollHeightBefore = await JS.InvokeAsync<double>("getScrollHeight", "messages-container");
+
+            var nextPage = currentPage + 1;
+            var result = await ChatClient.GetMessagesByTeamAsync(
+                selectedTeamId.Value, page: nextPage, pageSize: MessagesPageSize);
+
+            if (!result.Success)
+            {
+                return; // silent: retry on next scroll
+            }
+
+            var fetched = result.Value ?? [];
+            if (fetched.Count == 0)
+            {
+                hasMoreMessages = false;
+                return;
+            }
+
+            if (fetched.Count < MessagesPageSize)
+                hasMoreMessages = false;
+
+            var olderSorted = fetched.OrderBy(m => m.Date).ToList();
+            messages = olderSorted.Concat(messages).ToList();
+            teamMessages[selectedTeamId.Value] = messages;
+            currentPage = nextPage;
+
+            StateHasChanged();
+
+            await Task.Yield();
+            await JS.InvokeVoidAsync("preserveScrollAfterPrepend",
+                "messages-container", scrollHeightBefore);
+        }
+        finally
+        {
+            isLoadingOlderMessages = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task LoadOlderMessagesJs() => await LoadOlderMessages();
 
     private async Task InitializeSignalR()
     {
