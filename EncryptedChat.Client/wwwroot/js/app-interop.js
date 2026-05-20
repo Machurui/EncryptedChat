@@ -89,3 +89,48 @@ window.popupRegistry = {
         }
     }
 };
+
+window.getScrollHeight = (elementId) => {
+    const el = document.getElementById(elementId);
+    return el ? el.scrollHeight : 0;
+};
+
+window.preserveScrollAfterPrepend = (elementId, oldScrollHeight) => {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const newScrollHeight = el.scrollHeight;
+    const delta = newScrollHeight - oldScrollHeight;
+    el.scrollTop = el.scrollTop + delta;
+};
+
+window.setupMessagesScrollListener = (elementId, dotNetRef, loadOlderMethod, jumpVisibleMethod) => {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+
+    let paginationThrottled = false;
+    let lastJumpVisible = null;
+
+    container.addEventListener('scroll', async () => {
+        if (!paginationThrottled && container.scrollTop <= 100) {
+            paginationThrottled = true;
+            try {
+                await dotNetRef.invokeMethodAsync(loadOlderMethod);
+            } catch (err) {
+                console.warn('LoadOlderMessages call failed:', err);
+            } finally {
+                setTimeout(() => { paginationThrottled = false; }, 300);
+            }
+        }
+
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const farFromBottom = distanceFromBottom >= 200;
+        if (farFromBottom !== lastJumpVisible) {
+            lastJumpVisible = farFromBottom;
+            try {
+                await dotNetRef.invokeMethodAsync(jumpVisibleMethod, farFromBottom);
+            } catch (err) {
+                console.warn('SetJumpToBottomVisible call failed:', err);
+            }
+        }
+    });
+};
