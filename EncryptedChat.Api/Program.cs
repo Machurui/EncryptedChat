@@ -197,6 +197,9 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
 builder.Services.AddHostedService<RateLimitCleanupService>();
 
+// Presence tracking (SignalR connection state)
+builder.Services.AddSingleton<IPresenceService, PresenceService>();
+
 // Token generator
 builder.Services.AddScoped<JwtTokenService>();
 
