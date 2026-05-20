@@ -36,10 +36,16 @@ public class ChatClient
         public bool Success { get; init; }
         public string? ErrorMessage { get; init; }
         public T? Value { get; init; }
+        public bool RateLimited { get; init; }
+        public int RetryAfterMs { get; init; }
 
         public static Result<T> Ok(T value) => new() { Success = true, Value = value };
         public static Result<T> Fail(string msg) => new() { Success = false, ErrorMessage = msg };
+        public static Result<T> Throttled(int retryAfterMs) =>
+            new() { Success = false, RateLimited = true, RetryAfterMs = retryAfterMs, ErrorMessage = "Rate limited" };
     }
+
+    private record RateLimitedResponse(int RetryAfterMs);
 
     // GET api/Message/team/{teamId}?page=N&pageSize=N
     public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(
@@ -78,6 +84,19 @@ public class ChatClient
 
         var res = await _http.SendAsync(req);
         var body = await res.Content.ReadAsStringAsync();
+
+        if ((int)res.StatusCode == 429)
+        {
+            int retryAfterMs = 1000;
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<RateLimitedResponse>(body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (parsed != null) retryAfterMs = parsed.RetryAfterMs;
+            }
+            catch { /* default 1000ms */ }
+            return Result<MessageDTOPublic>.Throttled(retryAfterMs);
+        }
 
         if (!res.IsSuccessStatusCode)
         {
