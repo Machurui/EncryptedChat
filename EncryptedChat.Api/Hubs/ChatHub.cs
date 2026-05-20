@@ -20,15 +20,17 @@ public class ChatHub : Hub
     private readonly IUserService _userService;
     private readonly IFriendService _friendService;
     private readonly IRealtimeService _realtimeService;
+    private readonly IRateLimitService _rateLimitService;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, ILogger<ChatHub> logger)
+    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IRateLimitService rateLimitService, ILogger<ChatHub> logger)
     {
         _messageService = messageService;
         _teamService = teamService;
         _userService = userService;
         _friendService = friendService;
         _realtimeService = realtimeService;
+        _rateLimitService = rateLimitService;
         _logger = logger;
     }
 
@@ -178,6 +180,13 @@ public class ChatHub : Hub
         string? senderId = GetUserId();
         if (string.IsNullOrWhiteSpace(senderId))
             return;
+
+        var rateCheck = _rateLimitService.CheckAndRecord(senderId);
+        if (!rateCheck.Allowed)
+        {
+            await Clients.Caller.SendAsync("RateLimited", rateCheck.RetryAfterMs);
+            return;
+        }
 
         bool isMember = await _teamService.IsMemberAsync(senderId, teamId);
         if (!isMember)

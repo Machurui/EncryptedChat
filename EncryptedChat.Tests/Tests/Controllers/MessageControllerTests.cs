@@ -14,6 +14,7 @@ public class MessageControllerTests
     private readonly Mock<IMessageService> _mockMessageService;
     private readonly Mock<ITeamService> _mockTeamService;
     private readonly Mock<IRealtimeService> _mockRealtimeService;
+    private readonly Mock<IRateLimitService> _mockRateLimitService;
     private readonly string _userId = Guid.NewGuid().ToString();
     private readonly Guid _teamId = Guid.NewGuid();
     private readonly Guid _messageId = Guid.NewGuid();
@@ -23,11 +24,14 @@ public class MessageControllerTests
         _mockMessageService = new Mock<IMessageService>();
         _mockTeamService = new Mock<ITeamService>();
         _mockRealtimeService = new Mock<IRealtimeService>();
+        _mockRateLimitService = new Mock<IRateLimitService>();
+        _mockRateLimitService.Setup(r => r.CheckAndRecord(It.IsAny<string>()))
+            .Returns(new RateLimitResult(true, 0));
     }
 
     private MessageController CreateController(string? userId = null)
     {
-        var controller = new MessageController(_mockMessageService.Object, _mockTeamService.Object, _mockRealtimeService.Object);
+        var controller = new MessageController(_mockMessageService.Object, _mockTeamService.Object, _mockRealtimeService.Object, _mockRateLimitService.Object);
         var claims = new List<Claim>();
 
         if (userId != null)

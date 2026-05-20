@@ -9,11 +9,12 @@ namespace EncryptedChat.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class MessageController(IMessageService messageService, ITeamService teamService, IRealtimeService realtimeService) : ControllerBase
+public class MessageController(IMessageService messageService, ITeamService teamService, IRealtimeService realtimeService, IRateLimitService rateLimitService) : ControllerBase
 {
     private readonly IMessageService _messageService = messageService;
     private readonly ITeamService _teamService = teamService;
     private readonly IRealtimeService _realtimeService = realtimeService;
+    private readonly IRateLimitService _rateLimitService = rateLimitService;
 
     private string? GetCurrentUserId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -60,6 +61,13 @@ public class MessageController(IMessageService messageService, ITeamService team
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
+
+        var rateCheck = _rateLimitService.CheckAndRecord(userId);
+        if (!rateCheck.Allowed)
+        {
+            Response.Headers["Retry-After"] = Math.Ceiling(rateCheck.RetryAfterMs / 1000.0).ToString();
+            return StatusCode(429, new { error = "RateLimited", retryAfterMs = rateCheck.RetryAfterMs });
+        }
 
         bool isMember = await _teamService.IsMemberAsync(userId, dto.Team);
         if (!isMember)
