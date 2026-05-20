@@ -193,6 +193,10 @@ builder.Services.AddScoped<IRealtimeService, RealtimeService>();
 // Auth service
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Rate limiting (anti-spam)
+builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
+builder.Services.AddHostedService<RateLimitCleanupService>();
+
 // Token generator
 builder.Services.AddScoped<JwtTokenService>();
 
