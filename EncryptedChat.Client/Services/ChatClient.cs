@@ -41,10 +41,11 @@ public class ChatClient
         public static Result<T> Fail(string msg) => new() { Success = false, ErrorMessage = msg };
     }
 
-    // GET api/Message/team/{teamId}
-    public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(Guid teamId)
+    // GET api/Message/team/{teamId}?page=N&pageSize=N
+    public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(
+        Guid teamId, int page = 1, int pageSize = 20)
     {
-        var res = await _http.GetAsync($"api/Message/team/{teamId}");
+        var res = await _http.GetAsync($"api/Message/team/{teamId}?page={page}&pageSize={pageSize}");
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
