@@ -104,33 +104,58 @@ window.preserveScrollAfterPrepend = (elementId, oldScrollHeight) => {
 };
 
 window.setupMessagesScrollListener = (elementId, dotNetRef, loadOlderMethod, jumpVisibleMethod) => {
-    const container = document.getElementById(elementId);
-    if (!container) return;
+    // Track which elements already have a listener attached to avoid duplicates
+    if (!window._messagesScrollListeners) window._messagesScrollListeners = new WeakSet();
 
-    let paginationThrottled = false;
-    let lastJumpVisible = null;
+    const attach = (container) => {
+        if (window._messagesScrollListeners.has(container)) return;
+        window._messagesScrollListeners.add(container);
 
-    container.addEventListener('scroll', async () => {
-        if (!paginationThrottled && container.scrollTop <= 100) {
-            paginationThrottled = true;
-            try {
-                await dotNetRef.invokeMethodAsync(loadOlderMethod);
-            } catch (err) {
-                console.warn('LoadOlderMessages call failed:', err);
-            } finally {
-                setTimeout(() => { paginationThrottled = false; }, 300);
+        let paginationThrottled = false;
+        let lastJumpVisible = null;
+
+        container.addEventListener('scroll', async () => {
+            if (!paginationThrottled && container.scrollTop <= 100) {
+                paginationThrottled = true;
+                try {
+                    await dotNetRef.invokeMethodAsync(loadOlderMethod);
+                } catch (err) {
+                    console.warn('LoadOlderMessages call failed:', err);
+                } finally {
+                    setTimeout(() => { paginationThrottled = false; }, 300);
+                }
             }
-        }
 
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        const farFromBottom = distanceFromBottom >= 200;
-        if (farFromBottom !== lastJumpVisible) {
-            lastJumpVisible = farFromBottom;
-            try {
-                await dotNetRef.invokeMethodAsync(jumpVisibleMethod, farFromBottom);
-            } catch (err) {
-                console.warn('SetJumpToBottomVisible call failed:', err);
+            const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            const farFromBottom = distanceFromBottom >= 200;
+            if (farFromBottom !== lastJumpVisible) {
+                lastJumpVisible = farFromBottom;
+                try {
+                    await dotNetRef.invokeMethodAsync(jumpVisibleMethod, farFromBottom);
+                } catch (err) {
+                    console.warn('SetJumpToBottomVisible call failed:', err);
+                }
             }
+        });
+    };
+
+    // Try immediately
+    const existing = document.getElementById(elementId);
+    if (existing) {
+        attach(existing);
+        return;
+    }
+
+    // Otherwise watch the DOM for the element to appear
+    const observer = new MutationObserver(() => {
+        const el = document.getElementById(elementId);
+        if (el) {
+            observer.disconnect();
+            attach(el);
         }
     });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Safety timeout (10s) — give up if container never appears
+    setTimeout(() => observer.disconnect(), 10000);
 };
