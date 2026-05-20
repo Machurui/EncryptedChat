@@ -2872,6 +2872,10 @@
     private string? membersError;
     private string? profileError;
 
+    // Click-outside popup registry
+    private DotNetObjectReference<Chat>? _dotNetRef;
+    private bool _popupListenerRegistered;
+
     // File attachment
     private InputFile? fileInput;
     private IBrowserFile? selectedFile;
@@ -3090,6 +3094,11 @@
         if (firstRender)
         {
             await JS.InvokeVoidAsync("setupMobileComposerScroll", "composer-input", "messages-container");
+
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("popupRegistry.register",
+                "chat-popups", _dotNetRef, nameof(CloseAllPopups), ".popup-container");
+            _popupListenerRegistered = true;
         }
 
         if (_shouldScrollToBottom)
@@ -4278,6 +4287,19 @@
         showGifPicker = false;
     }
 
+    [JSInvokable]
+    public Task CloseAllPopups()
+    {
+        showStatusMenu = false;
+        showEmojiPicker = false;
+        showGifPicker = false;
+        showPinnedDropdown = false;
+        showHeaderMoreMenu = false;
+        openFriendMenuId = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
     private void ToggleMembersRail() => showMembersRail = !showMembersRail;
 
     // Header methods
@@ -4716,6 +4738,21 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_popupListenerRegistered)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("popupRegistry.unregister", "chat-popups");
+            }
+            catch
+            {
+                // JS context might already be gone (page unload)
+            }
+            _popupListenerRegistered = false;
+        }
+        _dotNetRef?.Dispose();
+        _dotNetRef = null;
+
         _signalRInitialized = false;
         if (hubConnection != null)
         {

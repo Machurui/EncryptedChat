@@ -48,3 +48,44 @@ window.setupMobileComposerScroll = (inputId, messagesId) => {
         setTimeout(scrollToBottom, 300);
     });
 };
+
+window.popupRegistry = {
+    handlers: new Map(),
+    documentListenerAttached: false,
+    _listener: null,
+
+    register(popupId, dotNetRef, methodName, containerSelector) {
+        this.handlers.set(popupId, { dotNetRef, methodName, containerSelector });
+        this.attachListenerIfNeeded();
+    },
+
+    unregister(popupId) {
+        this.handlers.delete(popupId);
+        if (this.handlers.size === 0 && this.documentListenerAttached) {
+            document.removeEventListener('mousedown', this._listener, true);
+            this.documentListenerAttached = false;
+            this._listener = null;
+        }
+    },
+
+    attachListenerIfNeeded() {
+        if (this.documentListenerAttached) return;
+        this._listener = (e) => this.onDocumentClick(e);
+        document.addEventListener('mousedown', this._listener, true);
+        this.documentListenerAttached = true;
+    },
+
+    async onDocumentClick(e) {
+        for (const [, { dotNetRef, methodName, containerSelector }] of this.handlers) {
+            const containers = document.querySelectorAll(containerSelector);
+            const insideAny = Array.from(containers).some(c => c.contains(e.target));
+            if (!insideAny) {
+                try {
+                    await dotNetRef.invokeMethodAsync(methodName);
+                } catch (err) {
+                    console.warn('Popup callback failed:', err);
+                }
+            }
+        }
+    }
+};
