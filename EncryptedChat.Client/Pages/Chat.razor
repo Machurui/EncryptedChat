@@ -1445,12 +1445,11 @@
     }
 
     .profile-status-text {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: 5px;
         font-size: 10px;
         color: rgba(255,255,255,0.55);
-        max-width: 100%;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1830,14 +1829,20 @@
 
     .conversation-header-panel {
         flex: 0 0 auto;
-        overflow: visible;
-        z-index: 10;
+        overflow: visible !important;
+        position: relative;
+        z-index: 50;
     }
 
     .conversation-header-panel .glass-backdrop,
     .conversation-header-panel .glass-tint,
     .conversation-header-panel .glass-shine {
         border-radius: var(--glass-radius, 20px);
+    }
+
+    .messages-panel {
+        position: relative;
+        z-index: 1;
     }
 
     .conversation-header {
@@ -2775,13 +2780,14 @@
         /* Emoji/GIF pickers : center on mobile, max-width viewport */
         .emoji-picker,
         .gif-picker {
-            position: fixed;
-            bottom: 80px;
-            left: 8px;
-            right: 8px;
-            width: auto;
-            max-width: calc(100vw - 16px);
-            margin: 0 auto;
+            position: fixed !important;
+            bottom: 80px !important;
+            left: 8px !important;
+            right: 8px !important;
+            top: auto !important;
+            width: auto !important;
+            max-width: calc(100vw - 16px) !important;
+            margin: 0 auto !important;
         }
     }
 </style>
