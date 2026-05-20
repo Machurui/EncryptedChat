@@ -595,13 +595,19 @@
                             </div>
                         </EmptyTemplate>
                         <SuccessTemplate>
+                            @if (isLoadingOlderMessages)
+                            {
+                                <SkeletonMessage IsOwn="false" BubbleWidth="200px" />
+                                <SkeletonMessage IsOwn="false" BubbleWidth="260px" />
+                                <SkeletonMessage IsOwn="true"  BubbleWidth="180px" />
+                            }
                             @foreach (var (msg, index) in FilteredMessages.Select((m, i) => (m, i)))
                             {
                                 var prevMsg = index > 0 ? FilteredMessages.ElementAtOrDefault(index - 1) : null;
                                 var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
                                 var isOwn = msg.Sender?.Id == _userId;
 
-                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "")">
+                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "") @(animatingMessageIds.Contains(msg.Id) ? "fade-in" : "")">
                                     @if (!sameAuthor && !isOwn)
                                     {
                                         <div class="message-avatar">
@@ -676,6 +682,15 @@
                     </LoadingState>
                     <div id="messages-end"></div>
                 </div>
+
+                @if (showJumpToBottomButton)
+                {
+                    <button class="jump-to-bottom-btn" @onclick="JumpToPresent" title="Jump to present" aria-label="Jump to present">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                }
 
                 @* Typing Indicator *@
                 @{
@@ -2726,6 +2741,53 @@
         }
     }
 
+    .jump-to-bottom-btn {
+        position: absolute;
+        bottom: 80px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(20, 25, 35, 0.92);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 0.5px solid rgba(255, 255, 255, 0.15);
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        transition: opacity 0.2s, transform 0.2s, background 0.2s;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .jump-to-bottom-btn:hover {
+        transform: translateY(-2px);
+        background: rgba(30, 35, 45, 0.95);
+    }
+
+    @@keyframes fade-in-message {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .message.fade-in {
+        animation: fade-in-message 250ms ease-out;
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .message.fade-in {
+            animation: none;
+        }
+    }
+
     /* ── Mobile (max-width: 767px) ── */
     @@media (max-width: 767px) {
         .chat-floating-layout { padding: 0; gap: 0; }
@@ -2788,6 +2850,11 @@
             width: auto !important;
             max-width: calc(100vw - 16px) !important;
             margin: 0 auto !important;
+        }
+
+        .jump-to-bottom-btn {
+            bottom: 76px;
+            right: 12px;
         }
     }
 </style>
@@ -2877,6 +2944,8 @@
     private int currentPage = 1;
     private bool hasMoreMessages = true;
     private bool isLoadingOlderMessages;
+    private bool showJumpToBottomButton;
+    private HashSet<Guid> animatingMessageIds = new();
 
     // Click-outside popup registry
     private DotNetObjectReference<Chat>? _dotNetRef;
@@ -3105,6 +3174,12 @@
             await JS.InvokeVoidAsync("popupRegistry.register",
                 "chat-popups", _dotNetRef, nameof(CloseAllPopups), ".popup-container");
             _popupListenerRegistered = true;
+
+            await JS.InvokeVoidAsync("setupMessagesScrollListener",
+                "messages-container",
+                _dotNetRef,
+                nameof(LoadOlderMessagesJs),
+                nameof(SetJumpToBottomVisible));
         }
 
         if (_shouldScrollToBottom)
@@ -3685,6 +3760,7 @@
                 {
                     Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
                     messages.Add(message);
+                    TriggerMessageFadeIn(message.Id);
                     Console.WriteLine("[Scroll] ReceiveMessage: setting flag");
                     _shouldScrollToBottom = true;
                     await InvokeAsync(StateHasChanged);
@@ -4361,6 +4437,34 @@
         openFriendMenuId = null;
         StateHasChanged();
         return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SetJumpToBottomVisible(bool visible)
+    {
+        if (showJumpToBottomButton != visible)
+        {
+            showJumpToBottomButton = visible;
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task JumpToPresent()
+    {
+        await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
+        showJumpToBottomButton = false;
+    }
+
+    private void TriggerMessageFadeIn(Guid messageId)
+    {
+        animatingMessageIds.Add(messageId);
+        StateHasChanged();
+        _ = Task.Delay(500).ContinueWith(_ =>
+        {
+            animatingMessageIds.Remove(messageId);
+            InvokeAsync(StateHasChanged);
+        });
     }
 
     private void ToggleMembersRail() => showMembersRail = !showMembersRail;
