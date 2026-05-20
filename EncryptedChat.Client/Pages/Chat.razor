@@ -843,10 +843,19 @@
                         </div>
 
                         @* Send button *@
-                        <button class="send-btn @(CanSend ? "active" : "")" @onclick="SendMessage" disabled="@(!CanSend || isSending)">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                            </svg>
+                        <button class="send-btn @(CanSend && !IsInCooldown ? "active" : "") @(IsInCooldown ? "cooldown" : "")"
+                                @onclick="SendMessage"
+                                disabled="@(!CanSend || isSending || IsInCooldown)">
+                            @if (IsInCooldown)
+                            {
+                                <span class="send-btn-countdown">Wait @RemainingCooldownSec\s</span>
+                            }
+                            else
+                            {
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                </svg>
+                            }
                         </button>
                     </div>
                 </div>
@@ -2266,6 +2275,20 @@
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 4px 14px var(--accent-glow);
     }
 
+    .send-btn.cooldown {
+        background: rgba(255, 100, 100, 0.15);
+        color: rgba(255, 200, 200, 0.85);
+        cursor: not-allowed;
+        font-size: 11px;
+        font-weight: 600;
+        min-width: 60px;
+        padding: 0 10px;
+    }
+
+    .send-btn-countdown {
+        white-space: nowrap;
+    }
+
     /* ── Picker containers ── */
     .picker-container {
         position: relative;
@@ -2944,6 +2967,11 @@
     private int currentPage = 1;
     private bool hasMoreMessages = true;
     private bool isLoadingOlderMessages;
+
+    // Anti-spam cooldown
+    private DateTime? cooldownUntilUtc;
+    private System.Timers.Timer? _cooldownTickTimer;
+
     private bool showJumpToBottomButton;
     private HashSet<Guid> animatingMessageIds = new();
 
@@ -4076,6 +4104,12 @@
                 }
             });
 
+            hubConnection.On<int>("RateLimited", retryAfterMs =>
+            {
+                OnRateLimited(retryAfterMs);
+                return InvokeAsync(StateHasChanged);
+            });
+
             await hubConnection.StartAsync();
             Console.WriteLine($"[SignalR] Connected! ConnectionId={hubConnection.ConnectionId}");
 
@@ -4270,6 +4304,12 @@
                 var messageText = newMessageText?.Trim() ?? "";
                 var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText);
 
+                if (result.RateLimited)
+                {
+                    OnRateLimited(result.RetryAfterMs);
+                    return;
+                }
+
                 if (result.Success && result.Value != null)
                 {
                     // Message appears via "ReceiveMessage" broadcast from server
@@ -4455,6 +4495,34 @@
         await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
         showJumpToBottomButton = false;
     }
+
+    private void OnRateLimited(int retryAfterMs)
+    {
+        cooldownUntilUtc = DateTime.UtcNow.AddMilliseconds(retryAfterMs);
+        StartCooldownTimer();
+    }
+
+    private void StartCooldownTimer()
+    {
+        _cooldownTickTimer?.Stop();
+        _cooldownTickTimer = new System.Timers.Timer(250);
+        _cooldownTickTimer.Elapsed += async (_, _) =>
+        {
+            if (cooldownUntilUtc.HasValue && DateTime.UtcNow >= cooldownUntilUtc.Value)
+            {
+                cooldownUntilUtc = null;
+                _cooldownTickTimer?.Stop();
+            }
+            await InvokeAsync(StateHasChanged);
+        };
+        _cooldownTickTimer.Start();
+    }
+
+    private bool IsInCooldown => cooldownUntilUtc.HasValue && DateTime.UtcNow < cooldownUntilUtc.Value;
+
+    private int RemainingCooldownSec => cooldownUntilUtc.HasValue
+        ? Math.Max(0, (int)Math.Ceiling((cooldownUntilUtc.Value - DateTime.UtcNow).TotalSeconds))
+        : 0;
 
     private void TriggerMessageFadeIn(Guid messageId)
     {
@@ -4905,6 +4973,10 @@
 
     public async ValueTask DisposeAsync()
     {
+        _cooldownTickTimer?.Stop();
+        _cooldownTickTimer?.Dispose();
+        _cooldownTickTimer = null;
+
         if (_popupListenerRegistered)
         {
             try
