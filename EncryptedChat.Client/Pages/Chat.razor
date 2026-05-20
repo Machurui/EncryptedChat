@@ -313,7 +313,7 @@
                                             <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
                                         </svg>
                                     </button>
-                                    <div class="friend-more-menu">
+                                    <div class="friend-more-menu popup-container">
                                         <button class="icon-btn" title="More" @onclick="() => ToggleFriendMenu(friend.UserId)" @onclick:stopPropagation="true">
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
@@ -346,7 +346,7 @@
         }
 
         @* Profile dock *@
-        <div class="profile-dock">
+        <div class="profile-dock popup-container">
             @if (profileState == LoadState.Success)
             {
                 <button class="profile-dock-btn @(showStatusMenu ? "active" : "")" @onclick="ToggleStatusMenu">
@@ -471,7 +471,7 @@
                             <button class="icon-btn" @onclick="OpenHeaderSearch" title="Search">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             </button>
-                            <div class="header-menu-container">
+                            <div class="header-menu-container popup-container">
                                 <button class="icon-btn @(showPinnedDropdown ? "active" : "")" @onclick="TogglePinnedDropdown" title="Pinned messages">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
@@ -527,7 +527,7 @@
                                     </div>
                                 }
                             </div>
-                            <div class="header-menu-container">
+                            <div class="header-menu-container popup-container">
                                 <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
                                 </button>
@@ -768,7 +768,7 @@
                                @bind="newMessageText" @bind:event="oninput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
 
                         @* Emoji button *@
-                        <div class="picker-container">
+                        <div class="picker-container popup-container">
                             <button class="icon-btn @(showEmojiPicker ? "active" : "")" title="Emoji" @onclick="ToggleEmojiPicker" @onclick:stopPropagation="true">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
@@ -791,7 +791,7 @@
                         </div>
 
                         @* GIF button *@
-                        <div class="picker-container">
+                        <div class="picker-container popup-container">
                             <button class="icon-btn @(showGifPicker ? "active" : "")" title="GIF" @onclick="ToggleGifPicker" @onclick:stopPropagation="true">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
@@ -971,7 +971,7 @@
 @if (showStatusMenu)
 {
     <div class="modal-overlay status-menu-overlay" @onclick="() => showStatusMenu = false">
-        <div class="status-menu-anchor" @onclick:stopPropagation="true">
+        <div class="status-menu-anchor popup-container" @onclick:stopPropagation="true">
             <GlassPanel Radius="16" Class="status-menu-panel">
                 <div class="status-menu-header">Set status</div>
 
