@@ -1,13 +1,13 @@
 using EncryptedChat.Data;
-using EncryptedChat.Hubs;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-public class FriendService(EncryptedChatContext context) : IFriendService
+public class FriendService(EncryptedChatContext context, IPresenceService presenceService) : IFriendService
 {
     private readonly EncryptedChatContext _context = context;
+    private readonly IPresenceService _presenceService = presenceService;
 
     public async Task<IReadOnlyList<FriendDTO>> GetFriendsAsync(string userId)
     {
@@ -25,7 +25,7 @@ public class FriendService(EncryptedChatContext context) : IFriendService
             var rawStatus = string.IsNullOrEmpty(friend!.Status) ? "online" : friend.Status;
 
             // Check if user is actually connected via SignalR
-            var isConnected = ChatHub.IsUserOnline(friend.Id);
+            var isConnected = _presenceService.IsOnline(friend.Id);
 
             // If not connected, show as offline regardless of profile status
             // If connected but invisible, show as offline

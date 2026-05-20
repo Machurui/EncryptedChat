@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Claims;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
@@ -13,30 +12,28 @@ public class ChatHub : Hub
 {
     private const int MaxMessageLength = 4000;
 
-    private static readonly ConcurrentDictionary<string, HashSet<string>> _connectedUsers = new();
-
     private readonly IMessageService _messageService;
     private readonly ITeamService _teamService;
     private readonly IUserService _userService;
     private readonly IFriendService _friendService;
     private readonly IRealtimeService _realtimeService;
+    private readonly IPresenceService _presenceService;
     private readonly IRateLimitService _rateLimitService;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IRateLimitService rateLimitService, ILogger<ChatHub> logger)
+    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IPresenceService presenceService, IRateLimitService rateLimitService, ILogger<ChatHub> logger)
     {
         _messageService = messageService;
         _teamService = teamService;
         _userService = userService;
         _friendService = friendService;
         _realtimeService = realtimeService;
+        _presenceService = presenceService;
         _rateLimitService = rateLimitService;
         _logger = logger;
     }
 
     private static string TeamGroup(Guid teamId) => $"team-{teamId}";
-
-    public static bool IsUserOnline(string userId) => _connectedUsers.ContainsKey(userId) && _connectedUsers[userId].Count > 0;
 
     private string? GetUserId() => Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
@@ -48,11 +45,7 @@ public class ChatHub : Hub
         if (!string.IsNullOrWhiteSpace(userId))
         {
             // Track this connection
-            _connectedUsers.AddOrUpdate(
-                userId,
-                _ => new HashSet<string> { Context.ConnectionId },
-                (_, connections) => { connections.Add(Context.ConnectionId); return connections; }
-            );
+            _presenceService.AddConnection(userId, Context.ConnectionId);
 
             // Notify friends that this user is online
             await NotifyFriendsOfStatusChange(userId, "online");
@@ -68,15 +61,11 @@ public class ChatHub : Hub
         string? userId = GetUserId();
         if (!string.IsNullOrWhiteSpace(userId))
         {
-            if (_connectedUsers.TryGetValue(userId, out var connections))
+            bool wasLast = _presenceService.RemoveConnection(userId, Context.ConnectionId);
+            if (wasLast)
             {
-                connections.Remove(Context.ConnectionId);
-                if (connections.Count == 0)
-                {
-                    _connectedUsers.TryRemove(userId, out _);
-                    await _userService.UpdateLastSeenAsync(userId);
-                    await NotifyFriendsOfStatusChange(userId, "offline");
-                }
+                await _userService.UpdateLastSeenAsync(userId);
+                await NotifyFriendsOfStatusChange(userId, "offline");
             }
         }
         await base.OnDisconnectedAsync(exception);
@@ -88,7 +77,7 @@ public class ChatHub : Hub
 
         foreach (var friend in friends)
         {
-            if (IsUserOnline(friend.UserId))
+            if (_presenceService.IsOnline(friend.UserId))
             {
                 var profile = await _userService.GetOwnProfileAsync(friend.UserId);
                 if (profile == null) continue;

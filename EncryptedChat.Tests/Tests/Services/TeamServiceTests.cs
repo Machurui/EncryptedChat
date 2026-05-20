@@ -12,6 +12,7 @@ public class TeamServiceTests : IDisposable
     private readonly EncryptedChatContext _context;
     private readonly TeamService _service;
     private readonly Mock<IFriendService> _friendServiceMock;
+    private readonly Mock<IPresenceService> _presenceServiceMock;
 
     public TeamServiceTests()
     {
@@ -23,7 +24,9 @@ public class TeamServiceTests : IDisposable
         _friendServiceMock = new Mock<IFriendService>();
         _friendServiceMock.Setup(f => f.AreFriendsAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(true);
-        _service = new TeamService(_context, _friendServiceMock.Object);
+        _presenceServiceMock = new Mock<IPresenceService>();
+        _presenceServiceMock.Setup(p => p.IsOnline(It.IsAny<string>())).Returns(false);
+        _service = new TeamService(_context, _friendServiceMock.Object, _presenceServiceMock.Object);
     }
 
     public void Dispose()

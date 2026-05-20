@@ -9,34 +9,36 @@ public class TeamService : ITeamService
 {
     private readonly EncryptedChatContext _context;
     private readonly IFriendService _friendService;
+    private readonly IPresenceService _presenceService;
 
-    public TeamService(EncryptedChatContext context, IFriendService friendService)
+    public TeamService(EncryptedChatContext context, IFriendService friendService, IPresenceService presenceService)
     {
         _context = context;
         _friendService = friendService;
+        _presenceService = presenceService;
     }
 
     public async Task<IEnumerable<TeamDTOPublic?>?> GetAllAsync()
     {
         // Return a list of teams
-        return await _context.Teams
+        var teams = await _context.Teams
         .Include(t => t.Members)
             .ThenInclude(m => m.User)
         .AsNoTracking()
-        .Select(team => ItemToDTO(team))
         .ToListAsync();
+        return teams.Select(team => ItemToDTO(team));
     }
 
     public async Task<TeamDTOPublic?> GetByIdAsync(Guid id)
     {
         // Return a team by id
-        return await _context.Teams
+        var team = await _context.Teams
         .Include(t => t.Members)
             .ThenInclude(m => m.User)
         .AsNoTracking()
         .Where(t => t.Id == id)
-        .Select(team => ItemToDTO(team))
         .SingleOrDefaultAsync();
+        return team is null ? null : ItemToDTO(team);
     }
 
     public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam, string creatorId)
@@ -592,19 +594,25 @@ public class TeamService : ITeamService
         return _context.Teams.Any(e => e.Id == id);
     }
 
-    private static TeamDTOPublic ItemToDTO(Team team)
+    private TeamDTOPublic ItemToDTO(Team team)
     {
-        static UserDTOPublic MapUser(User user) => new UserDTOPublic
+        UserDTOPublic MapUser(User user)
         {
-            Id = user.Id,
-            Name = user.Name,
-            Handle = user.Handle,
-            Level = user.Level,
-            NameColor = user.NameColor,
-            ProfileImageUrl = user.ProfileImageUrl
-        };
+            bool isOnline = _presenceService.IsOnline(user.Id);
+            return new UserDTOPublic
+            {
+                Id = user.Id,
+                Name = user.Name,
+                Handle = user.Handle,
+                Level = user.Level,
+                NameColor = user.NameColor,
+                ProfileImageUrl = user.ProfileImageUrl,
+                Status = StatusHelper.EffectiveStatus(user.Status, isOnline),
+                StatusMessage = (!isOnline || user.Status == "invisible") ? null : user.StatusMessage
+            };
+        }
 
-        static MemberDTOPublic MapMember(Member member) => new()
+        MemberDTOPublic MapMember(Member member) => new()
         {
             User = member.User is null ? null : MapUser(member.User),
             Role = member.Role

@@ -7,11 +7,12 @@ using System.Security.Cryptography;
 
 namespace EncryptedChat.Services;
 
-public class UserService(EncryptedChatContext context, UserManager<User> userManager, ICryptoService crypto) : IUserService
+public class UserService(EncryptedChatContext context, UserManager<User> userManager, ICryptoService crypto, IPresenceService presenceService) : IUserService
 {
     private readonly EncryptedChatContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
     private readonly ICryptoService _crypto = crypto;
+    private readonly IPresenceService _presenceService = presenceService;
 
     public async Task<UserProfileDTO?> GetOwnProfileAsync(string id)
     {
@@ -69,6 +70,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         if (user == null)
             return null;
 
+        bool isOnline = _presenceService.IsOnline(user.Id);
         return new UserDTOPublic
         {
             Id = user.Id,
@@ -77,8 +79,8 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             Level = user.Level,
             NameColor = user.NameColor,
             ProfileImageUrl = user.ProfileImageUrl,
-            Status = user.Status,
-            StatusMessage = user.StatusMessage
+            Status = StatusHelper.EffectiveStatus(user.Status, isOnline),
+            StatusMessage = (!isOnline || user.Status == "invisible") ? null : user.StatusMessage
         };
     }
 
@@ -194,6 +196,13 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
                 StatusMessage = u.StatusMessage
             })
             .ToListAsync();
+
+        foreach (var u in users)
+        {
+            bool isOnline = _presenceService.IsOnline(u.Id);
+            u.Status = StatusHelper.EffectiveStatus(u.Status, isOnline);
+            if (!isOnline || u.Status == "offline") u.StatusMessage = null;
+        }
 
         return users;
     }

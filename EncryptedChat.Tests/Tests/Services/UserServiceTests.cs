@@ -18,6 +18,7 @@ public class UserServiceTests : IDisposable
     private readonly UserManager<User> _userManager;
     private readonly UserService _service;
     private readonly Mock<ICryptoService> _cryptoMock;
+    private readonly Mock<IPresenceService> _presenceServiceMock;
 
     public UserServiceTests()
     {
@@ -30,7 +31,9 @@ public class UserServiceTests : IDisposable
         _cryptoMock = new Mock<ICryptoService>();
         _cryptoMock.Setup(c => c.Decrypt(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns("Test message");
-        _service = new UserService(_context, _userManager, _cryptoMock.Object);
+        _presenceServiceMock = new Mock<IPresenceService>();
+        _presenceServiceMock.Setup(p => p.IsOnline(It.IsAny<string>())).Returns(false);
+        _service = new UserService(_context, _userManager, _cryptoMock.Object, _presenceServiceMock.Object);
     }
 
     public void Dispose()
