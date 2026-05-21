@@ -605,10 +605,12 @@
                             {
                                 var prevMsg = index > 0 ? FilteredMessages.ElementAtOrDefault(index - 1) : null;
                                 var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
+                                var timeGap = prevMsg != null ? (msg.Date - prevMsg.Date) : TimeSpan.MaxValue;
+                                var sameGroup = sameAuthor && timeGap.TotalMinutes < 3;
                                 var isOwn = msg.Sender?.Id == _userId;
 
-                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "") @(animatingMessageIds.Contains(msg.Id) ? "fade-in" : "") @(IsMessagePinned(msg.Id) ? "pinned" : "")">
-                                    @if (!sameAuthor && !isOwn)
+                                <div class="message @(isOwn ? "own" : "") @(sameGroup ? "same" : "") @(animatingMessageIds.Contains(msg.Id) ? "fade-in" : "") @(IsMessagePinned(msg.Id) ? "pinned" : "")">
+                                    @if (!sameGroup && !isOwn)
                                     {
                                         <div class="message-avatar">
                                             <Avatar Name="@msg.Sender?.Name" ImageUrl="@GetFullImageUrl(msg.Sender?.ProfileImageUrl)" Size="30" />
@@ -619,11 +621,11 @@
                                         <div class="message-avatar-spacer"></div>
                                     }
                                     <div class="message-content">
-                                        @if (!sameAuthor)
+                                        @if (!sameGroup)
                                         {
                                             <div class="message-header">
                                                 <span class="message-author" style="color: @(msg.Sender?.NameColor ?? "#FFFFFF");">@msg.Sender?.Name</span>
-                                                <span class="message-time">@msg.Date.ToLocalTime().ToString("HH:mm")</span>
+                                                <span class="message-time">@FormatMessageTimestamp(msg.Date)</span>
                                             </div>
                                         }
                                         @if (!string.IsNullOrWhiteSpace(msg.Text))
@@ -3146,6 +3148,23 @@
         if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
         if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
         return date.ToLocalTime().ToString("MMM d");
+    }
+
+    private string FormatMessageTimestamp(DateTime utcDate)
+    {
+        var local = utcDate.ToLocalTime();
+        var nowLocal = DateTime.Now;
+        int daysDiff = (nowLocal.Date - local.Date).Days;
+
+        if (daysDiff <= 0)
+            return local.ToString("HH:mm");
+        if (daysDiff == 1)
+            return $"Yesterday {local:HH:mm}";
+        if (daysDiff < 7)
+            return local.ToString("ddd HH:mm");
+        if (local.Year == nowLocal.Year)
+            return local.ToString("MMM d");
+        return local.ToString("MMM d, yyyy");
     }
 
     private void OpenAddFriendModal() => showAddFriendModal = true;
