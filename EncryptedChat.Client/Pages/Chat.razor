@@ -607,7 +607,7 @@
                                 var sameAuthor = prevMsg?.Sender?.Id == msg.Sender?.Id;
                                 var isOwn = msg.Sender?.Id == _userId;
 
-                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "") @(animatingMessageIds.Contains(msg.Id) ? "fade-in" : "")">
+                                <div class="message @(isOwn ? "own" : "") @(sameAuthor ? "same" : "") @(animatingMessageIds.Contains(msg.Id) ? "fade-in" : "") @(IsMessagePinned(msg.Id) ? "pinned" : "")">
                                     @if (!sameAuthor && !isOwn)
                                     {
                                         <div class="message-avatar">
@@ -2016,6 +2016,31 @@
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px var(--accent-glow);
     }
 
+    /* Pinned message indicator */
+    .message.pinned .message-bubble {
+        border-color: oklch(0.75 0.15 75 / 0.65);
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20), 0 0 0 1px oklch(0.75 0.15 75 / 0.45);
+    }
+
+    .message.pinned .message-bubble::before {
+        content: "";
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        width: 12px;
+        height: 12px;
+        background: oklch(0.75 0.15 75);
+        mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'><path d='M12 17v5'/><path d='M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z'/></svg>") center / contain no-repeat;
+        -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'><path d='M12 17v5'/><path d='M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z'/></svg>") center / contain no-repeat;
+        opacity: 0.85;
+        pointer-events: none;
+    }
+
+    .message.pinned .message-bubble {
+        position: relative;
+        padding-right: 28px;
+    }
+
     /* Pin / message actions */
     .message-actions {
         display: flex;
@@ -3106,6 +3131,9 @@
     private static bool IsStatusOnline(string? status) =>
         status == "online" || status == "away" || status == "busy";
 
+    private bool IsMessagePinned(Guid messageId) =>
+        pinnedMessages.Any(p => p.MessageId == messageId);
+
     private IEnumerable<FriendClient.FriendDTO> GetFilteredFriendsByTab()
     {
         var filtered = FilteredFriends;
@@ -3679,6 +3707,11 @@
             teamMessages[selectedTeamId.Value] = messages;
             hasMoreMessages = fetched.Count == MessagesPageSize;
             messagesState = messages.Any() ? LoadState.Success : LoadState.Empty;
+
+            // Load pinned messages alongside so we can highlight them in the messages list
+            var pinsResult = await PinnedMessageClient.GetPinnedMessagesAsync(selectedTeamId.Value);
+            if (pinsResult.Success)
+                pinnedMessages = pinsResult.Value ?? [];
 
             if (scrollToBottom)
             {
