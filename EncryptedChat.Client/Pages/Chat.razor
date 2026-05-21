@@ -2891,6 +2891,7 @@
     private record TeamLastMessageEvent(Guid TeamId, string? LastMessagePreview, DateTime? LastMessageTime, string? LastMessageSenderName);
     private record UserTypingEvent(Guid TeamId, string UserId, string UserName);
     private record UserStoppedTypingEvent(Guid TeamId, string UserId);
+    private record TeamMemberStatusUpdate(string UserId, string Status);
 
     [Parameter]
     public Guid? TeamId { get; set; }
@@ -4109,6 +4110,24 @@
             {
                 OnRateLimited(retryAfterMs);
                 return InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<TeamMemberStatusUpdate>("TeamMemberStatusChanged", update =>
+            {
+                if (teamDetails?.Members != null)
+                {
+                    var member = teamDetails.Members.FirstOrDefault(m => m.User?.Id == update.UserId);
+                    if (member?.User != null)
+                    {
+                        var updatedUser = member.User with { Status = update.Status };
+                        var idx = teamDetails.Members.ToList().IndexOf(member);
+                        var membersList = teamDetails.Members.ToList();
+                        membersList[idx] = member with { User = updatedUser };
+                        teamDetails = teamDetails with { Members = membersList };
+                        return InvokeAsync(StateHasChanged);
+                    }
+                }
+                return Task.CompletedTask;
             });
 
             await hubConnection.StartAsync();

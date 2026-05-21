@@ -21,6 +21,7 @@ public class UserControllerTests
     {
         Mock<IFriendService> mockFriendService = new();
         Mock<IHubContext<ChatHub>> mockHubContext = new();
+        Mock<IPresenceService> mockPresenceService = new();
         Mock<IWebHostEnvironment> mockEnv = new();
 
         mockFriendService
@@ -35,7 +36,11 @@ public class UserControllerTests
             .Setup(s => s.GetUserTeamsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new List<UserTeamDTO>());
 
-        UserController controller = new(mockService.Object, mockFriendService.Object, mockHubContext.Object, mockEnv.Object);
+        mockPresenceService
+            .Setup(s => s.IsOnline(It.IsAny<string>()))
+            .Returns(false);
+
+        UserController controller = new(mockService.Object, mockFriendService.Object, mockHubContext.Object, mockPresenceService.Object, mockEnv.Object);
 
         List<Claim> claims = [];
         if (userId != null)

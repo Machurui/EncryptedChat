@@ -52,6 +52,9 @@ public class ChatHub : Hub
 
             // Send this user the status of their online friends
             await SendOnlineFriendsStatus(userId);
+
+            // Broadcast status to all team groups this user belongs to
+            await BroadcastStatusToUserTeams(userId, isOnline: true);
         }
         await base.OnConnectedAsync();
     }
@@ -66,6 +69,7 @@ public class ChatHub : Hub
             {
                 await _userService.UpdateLastSeenAsync(userId);
                 await NotifyFriendsOfStatusChange(userId, "offline");
+                await BroadcastStatusToUserTeams(userId, isOnline: false);
             }
         }
         await base.OnDisconnectedAsync(exception);
@@ -128,6 +132,20 @@ public class ChatHub : Hub
         if (friendIds.Count > 0)
         {
             await Clients.Users(friendIds).SendAsync("FriendProfileUpdated", statusUpdate);
+        }
+    }
+
+    private async Task BroadcastStatusToUserTeams(string userId, bool isOnline)
+    {
+        var profile = await _userService.GetOwnProfileAsync(userId);
+        var effective = StatusHelper.EffectiveStatus(profile?.Status, isOnline);
+
+        var teams = await _userService.GetUserTeamsAsync(userId, userId);
+        foreach (var team in teams)
+        {
+            await Clients.Group($"team-{team.Id}").SendAsync(
+                "TeamMemberStatusChanged",
+                new { UserId = userId, Status = effective });
         }
     }
 

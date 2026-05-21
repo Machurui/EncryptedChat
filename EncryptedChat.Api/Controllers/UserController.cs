@@ -15,11 +15,13 @@ public class UserController(
     IUserService userService,
     IFriendService friendService,
     IHubContext<ChatHub> hubContext,
+    IPresenceService presenceService,
     IWebHostEnvironment env) : ControllerBase
 {
     private readonly IUserService _service = userService;
     private readonly IFriendService _friendService = friendService;
     private readonly IHubContext<ChatHub> _hubContext = hubContext;
+    private readonly IPresenceService _presenceService = presenceService;
     private readonly IWebHostEnvironment _env = env;
 
     private string? GetCurrentUserId() =>
@@ -52,6 +54,20 @@ public class UserController(
         {
             // Notify friends of profile update
             await NotifyFriendsOfProfileUpdate(userId, result.User);
+
+            // Broadcast status change to team groups if status was updated
+            if (dto.Status != null)
+            {
+                var effectiveStatus = StatusHelper.EffectiveStatus(result.User.Status, _presenceService.IsOnline(userId));
+                var teams = await _service.GetUserTeamsAsync(userId, userId);
+                foreach (var team in teams)
+                {
+                    await _hubContext.Clients.Group($"team-{team.Id}").SendAsync(
+                        "TeamMemberStatusChanged",
+                        new { UserId = userId, Status = effectiveStatus });
+                }
+            }
+
             return Ok(result.User);
         }
 
