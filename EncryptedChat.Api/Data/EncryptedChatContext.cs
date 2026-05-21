@@ -98,7 +98,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             .HasOne(p => p.Team)
             .WithMany()
             .HasForeignKey(p => p.TeamId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<PinnedMessage>()
             .HasOne(p => p.Message)

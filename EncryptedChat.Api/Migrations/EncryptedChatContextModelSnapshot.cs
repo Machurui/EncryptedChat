@@ -729,7 +729,7 @@ namespace EncryptedChat.Migrations
                     b.HasOne("EncryptedChat.Models.Team", "Team")
                         .WithMany()
                         .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("Message");
