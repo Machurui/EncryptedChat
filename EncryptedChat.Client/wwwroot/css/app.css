@@ -1301,68 +1301,52 @@ textarea:-webkit-autofill {
     box-shadow: 0 0 6px var(--accent);
 }
 
-/* Message Actions */
-.message {
-    position: relative;
+/* Inline pin button next to message bubble */
+.message-bubble-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
 }
 
-.message-actions {
-    position: absolute;
-    top: 50%;
-    right: 12px;
-    transform: translateY(-50%);
-    display: flex;
-    gap: 4px;
+.message.own .message-bubble-row {
+    flex-direction: row-reverse;
+}
+
+.msg-pin-btn {
+    background: none;
+    border: none;
     padding: 4px;
-    background: rgba(20, 25, 35, 0.92);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 0.5px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.55);
     opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.12s;
-    z-index: 4;
-}
-
-.message.own .message-actions {
-    right: auto;
-    left: 12px;
-}
-
-.message:hover .message-actions {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.message-action-btn {
+    transition: opacity 0.12s, color 0.12s, background 0.12s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
     border-radius: 6px;
-    border: none;
-    background: rgba(255,255,255,0.06);
-    color: rgba(255,255,255,0.55);
-    cursor: pointer;
-    transition: all 0.12s;
+    flex: 0 0 auto;
 }
 
-.message-action-btn:hover {
-    background: rgba(255,255,255,0.12);
+.message:hover .msg-pin-btn {
+    opacity: 0.6;
+}
+
+.message:hover .msg-pin-btn:hover {
+    opacity: 1;
     color: white;
+    background: rgba(255, 255, 255, 0.06);
 }
 
-.message-action-btn.active {
-    background: oklch(0.75 0.15 75 / 0.25);
+.msg-pin-btn.pinned {
+    opacity: 1;
     color: oklch(0.85 0.15 75);
 }
 
-.message-action-btn.active:hover {
-    background: oklch(0.75 0.15 75 / 0.35);
+.msg-pin-btn.pinned:hover {
+    background: oklch(0.75 0.15 75 / 0.15);
 }
+
 
 /* Search Highlight */
 .search-highlight {

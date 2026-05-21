@@ -628,27 +628,28 @@
                                         }
                                         @if (!string.IsNullOrWhiteSpace(msg.Text))
                                         {
-                                            <div class="message-bubble @(isOwn ? "own" : "")">
-                                                @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
-                                                {
-                                                    @((MarkupString)HighlightSearchTerm(msg.Text))
-                                                }
-                                                else
-                                                {
-                                                    @((MarkupString)RenderMessageContent(msg.Text))
-                                                }
+                                            <div class="message-bubble-row">
+                                                <div class="message-bubble @(isOwn ? "own" : "")">
+                                                    @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
+                                                    {
+                                                        @((MarkupString)HighlightSearchTerm(msg.Text))
+                                                    }
+                                                    else
+                                                    {
+                                                        @((MarkupString)RenderMessageContent(msg.Text))
+                                                    }
+                                                </div>
+                                                <button class="msg-pin-btn @(IsMessagePinned(msg.Id) ? "pinned" : "")"
+                                                        @onclick="() => TogglePinMessage(msg.Id)"
+                                                        @onclick:stopPropagation="true"
+                                                        title="@(IsMessagePinned(msg.Id) ? "Unpin message" : "Pin message")"
+                                                        aria-label="@(IsMessagePinned(msg.Id) ? "Unpin message" : "Pin message")">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                                    </svg>
+                                                </button>
                                             </div>
                                         }
-                                        <div class="message-actions">
-                                            <button class="message-action-btn @(IsMessagePinned(msg.Id) ? "active" : "")"
-                                                    @onclick="() => TogglePinMessage(msg.Id)"
-                                                    @onclick:stopPropagation="true"
-                                                    title="@(IsMessagePinned(msg.Id) ? "Unpin message" : "Pin message")">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
-                                                </svg>
-                                            </button>
-                                        </div>
                                         @if (msg.Attachments?.Any() == true)
                                         {
                                             <div class="message-attachments">
@@ -2042,41 +2043,6 @@
     .message.pinned .message-bubble {
         position: relative;
         padding-right: 28px;
-    }
-
-    /* Pin / message actions */
-    .message-actions {
-        display: flex;
-        gap: 4px;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.15s ease;
-        margin-top: 2px;
-    }
-
-    .message:hover .message-actions {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    .message-action-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 22px;
-        height: 22px;
-        border-radius: 6px;
-        border: none;
-        background: rgba(255,255,255,0.10);
-        color: rgba(255,255,255,0.60);
-        cursor: pointer;
-        transition: background 0.15s ease, color 0.15s ease;
-        padding: 0;
-    }
-
-    .message-action-btn:hover {
-        background: rgba(255,255,255,0.20);
-        color: rgba(255,255,255,0.95);
     }
 
     /* GIF in messages */
