@@ -30,4 +30,7 @@ public class TeamDTOPublic
     public string MessageLifetime { get; set; } = "off";
 
     public bool IsDirect { get; set; } = false;
+
+    [MaxLength(16)]
+    public string UrlToken { get; set; } = string.Empty;
 }

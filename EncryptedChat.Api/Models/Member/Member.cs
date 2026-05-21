@@ -29,4 +29,8 @@ public class Member
 
     [Required]
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
+
+    [Required]
+    [MaxLength(16)]
+    public string UrlToken { get; set; } = string.Empty;
 }
