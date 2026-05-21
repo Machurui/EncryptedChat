@@ -38,5 +38,7 @@ namespace EncryptedChat.Services
         Task<TeamDTOPublic?> GetOrCreateDirectMessageAsync(string userId, string friendId);
 
         Task<(TeamDTOPublic? Dm, bool IsNew)> GetOrCreateDirectMessageWithStatusAsync(string userId, string friendId);
+
+        Task<TeamDTOPublic?> GetTeamByUrlTokenAsync(string token, string userId);
     }
 }

@@ -41,6 +41,22 @@ public class TeamService : ITeamService
         return team is null ? null : ItemToDTO(team);
     }
 
+    public async Task<TeamDTOPublic?> GetTeamByUrlTokenAsync(string token, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        var member = await _context.Members
+            .Include(m => m.Team)
+                .ThenInclude(t => t!.Members)
+                    .ThenInclude(mm => mm.User)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.UrlToken == token && m.UserId == userId);
+
+        if (member?.Team == null) return null;
+        return ItemToDTO(member.Team, userId);
+    }
+
     public async Task<TeamDTOPublic?> CreateAsync(TeamDTO newTeam, string creatorId)
     {
         User? creator = await _context.Users.FindAsync(creatorId);
@@ -97,7 +113,8 @@ public class TeamService : ITeamService
                 Team = team,
                 User = admin,
                 UserId = admin.Id,
-                Role = Member.AdminRole
+                Role = Member.AdminRole,
+                UrlToken = await GenerateUniqueUrlTokenAsync()
             });
         }
 
@@ -108,7 +125,8 @@ public class TeamService : ITeamService
                 Team = team,
                 User = member,
                 UserId = member.Id,
-                Role = Member.MemberRole
+                Role = Member.MemberRole,
+                UrlToken = await GenerateUniqueUrlTokenAsync()
             });
         }
 
@@ -161,7 +179,8 @@ public class TeamService : ITeamService
                 UserId = admin.Id,
                 Role = Member.AdminRole,
                 CreatedAt = DateTime.UtcNow,
-                ModifiedAt = DateTime.UtcNow
+                ModifiedAt = DateTime.UtcNow,
+                UrlToken = await GenerateUniqueUrlTokenAsync()
             });
         }
 
@@ -174,7 +193,8 @@ public class TeamService : ITeamService
                 UserId = member.Id,
                 Role = Member.MemberRole,
                 CreatedAt = DateTime.UtcNow,
-                ModifiedAt = DateTime.UtcNow
+                ModifiedAt = DateTime.UtcNow,
+                UrlToken = await GenerateUniqueUrlTokenAsync()
             });
         }
 
@@ -303,7 +323,8 @@ public class TeamService : ITeamService
             UserId = userId,
             Role = Member.MemberRole,
             CreatedAt = DateTime.UtcNow,
-            ModifiedAt = DateTime.UtcNow
+            ModifiedAt = DateTime.UtcNow,
+            UrlToken = await GenerateUniqueUrlTokenAsync()
         });
 
         await _context.SaveChangesAsync();
@@ -515,7 +536,8 @@ public class TeamService : ITeamService
             Id = Guid.NewGuid(),
             TeamId = dm.Id,
             UserId = userId,
-            Role = Member.MemberRole
+            Role = Member.MemberRole,
+            UrlToken = await GenerateUniqueUrlTokenAsync()
         });
 
         _context.Members.Add(new Member
@@ -523,7 +545,8 @@ public class TeamService : ITeamService
             Id = Guid.NewGuid(),
             TeamId = dm.Id,
             UserId = friendId,
-            Role = Member.MemberRole
+            Role = Member.MemberRole,
+            UrlToken = await GenerateUniqueUrlTokenAsync()
         });
 
         await _context.SaveChangesAsync();
@@ -577,8 +600,8 @@ public class TeamService : ITeamService
         };
 
         _context.Teams.Add(dm);
-        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = dm.Id, UserId = userId, Role = Member.MemberRole });
-        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = dm.Id, UserId = friendId, Role = Member.MemberRole });
+        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = dm.Id, UserId = userId, Role = Member.MemberRole, UrlToken = await GenerateUniqueUrlTokenAsync() });
+        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = dm.Id, UserId = friendId, Role = Member.MemberRole, UrlToken = await GenerateUniqueUrlTokenAsync() });
         await _context.SaveChangesAsync();
 
         var created = await _context.Teams
@@ -594,7 +617,7 @@ public class TeamService : ITeamService
         return _context.Teams.Any(e => e.Id == id);
     }
 
-    private TeamDTOPublic ItemToDTO(Team team)
+    private TeamDTOPublic ItemToDTO(Team team, string? currentUserId = null)
     {
         UserDTOPublic MapUser(User user)
         {
@@ -618,7 +641,7 @@ public class TeamService : ITeamService
             Role = member.Role
         };
 
-        return new TeamDTOPublic
+        var dto = new TeamDTOPublic
         {
             Id = team.Id,
             Name = team.Name,
@@ -629,6 +652,25 @@ public class TeamService : ITeamService
             IsDirect = team.IsDirect,
             Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)]
         };
+
+        if (!string.IsNullOrEmpty(currentUserId))
+        {
+            var myMember = team.Members?.FirstOrDefault(m => m.UserId == currentUserId);
+            if (myMember != null) dto.UrlToken = myMember.UrlToken;
+        }
+
+        return dto;
+    }
+
+    private async Task<string> GenerateUniqueUrlTokenAsync()
+    {
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            var token = TokenGenerator.Generate(10);
+            bool exists = await _context.Members.AnyAsync(m => m.UrlToken == token);
+            if (!exists) return token;
+        }
+        throw new InvalidOperationException("Could not generate unique URL token after 5 attempts.");
     }
 
     private async Task<string> CreateUniqueSlugAsync(string? name, Guid? excludeTeamId = null)
