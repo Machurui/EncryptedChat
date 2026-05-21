@@ -1355,6 +1355,15 @@ textarea:-webkit-autofill {
     color: white;
 }
 
+.message-action-btn.active {
+    background: oklch(0.75 0.15 75 / 0.25);
+    color: oklch(0.85 0.15 75);
+}
+
+.message-action-btn.active:hover {
+    background: oklch(0.75 0.15 75 / 0.35);
+}
+
 /* Search Highlight */
 .search-highlight {
     background: oklch(0.65 0.16 165 / 0.35);
