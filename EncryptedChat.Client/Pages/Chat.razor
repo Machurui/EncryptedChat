@@ -1,5 +1,5 @@
 @page "/chat"
-@page "/chat/{TeamId:guid}"
+@page "/chat/c/{UrlToken}"
 @layout EmptyLayout
 @attribute [Authorize]
 
@@ -2889,8 +2889,7 @@
     private record UserStoppedTypingEvent(Guid TeamId, string UserId);
     private record TeamMemberStatusUpdate(string UserId, string Status);
 
-    [Parameter]
-    public Guid? TeamId { get; set; }
+    [Parameter] public string? UrlToken { get; set; }
 
     private const string ApiBaseUrl = "https://localhost:7294";
 
@@ -3192,11 +3191,7 @@
         await LoadTeams();
         await LoadFriends();
 
-        if (TeamId.HasValue)
-        {
-            await SelectTeam(TeamId.Value);
-        }
-        else if (teams.Any())
+        if (teams.Any())
         {
             await SelectTeam(teams.First().Id);
         }
@@ -3204,9 +3199,19 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (TeamId.HasValue && TeamId != selectedTeamId)
+        if (!string.IsNullOrWhiteSpace(UrlToken))
         {
-            await SelectTeam(TeamId.Value);
+            var result = await TeamClient.GetTeamByTokenAsync(UrlToken);
+            if (!result.Success || result.Value == null)
+            {
+                Navigation.NavigateTo("/chat", replace: true);
+                return;
+            }
+
+            if (selectedTeamId != result.Value.Id)
+            {
+                await SelectTeam(result.Value.Id);
+            }
         }
     }
 
@@ -3626,7 +3631,10 @@
                 await InitializeSignalR();
             }
 
-            Navigation.NavigateTo($"/chat/{teamId}", replace: true);
+            if (selectedTeam != null && !string.IsNullOrEmpty(selectedTeam.UrlToken))
+            {
+                Navigation.NavigateTo($"/chat/c/{selectedTeam.UrlToken}", replace: true);
+            }
         }
         finally
         {
