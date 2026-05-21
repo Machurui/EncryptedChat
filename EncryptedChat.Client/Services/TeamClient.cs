@@ -26,7 +26,8 @@ public class TeamClient
         bool IsDirect = false,
         string? LastMessagePreview = null,
         DateTime? LastMessageTime = null,
-        string? LastMessageSenderName = null);
+        string? LastMessageSenderName = null,
+        string UrlToken = "");
     public record TeamUpdateDTO(string? Name = null, string? Glyph = null, string? Color = null, string? MessageLifetime = null);
 
     public class Result
@@ -155,6 +156,20 @@ public class TeamClient
     // ---------- Get Team Details (with members) ----------
     public record MemberDTOPublic(UserDTOPublic? User, string Role);
     public record TeamDetailDTO(Guid Id, string Name, string Slug, string Glyph, string Color, string MessageLifetime, bool IsDirect, List<MemberDTOPublic>? Members);
+
+    public async Task<Result<TeamDTOPublic>> GetTeamByTokenAsync(string token)
+    {
+        var res = await _http.GetAsync($"api/team/by-token/{token}");
+        if (!res.IsSuccessStatusCode)
+            return Result<TeamDTOPublic>.Fail($"Team not found ({res.StatusCode}).");
+
+        var body = await res.Content.ReadAsStringAsync();
+        var team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        return team != null
+            ? Result<TeamDTOPublic>.Ok(team)
+            : Result<TeamDTOPublic>.Fail("Invalid response.");
+    }
 
     public async Task<Result<TeamDetailDTO>> GetTeamDetailsAsync(Guid teamId)
     {

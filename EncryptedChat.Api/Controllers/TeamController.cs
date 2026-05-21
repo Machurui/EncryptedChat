@@ -45,6 +45,21 @@ namespace EncryptedChat.Controllers
             return team;
         }
 
+        // GET: api/Team/by-token/{token} - Resolve URL token to team for the current user
+        [HttpGet("by-token/{token}")]
+        public async Task<IActionResult> GetTeamByToken(string token)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var team = await _teamService.GetTeamByUrlTokenAsync(token, userId);
+            if (team == null)
+                return NotFound();
+
+            return Ok(team);
+        }
+
         // GET: api/Team/5/details - For team members
         [HttpGet("{id}/details")]
         [Authorize(Roles = "User")]
