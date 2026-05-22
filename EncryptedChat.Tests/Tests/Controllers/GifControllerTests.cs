@@ -105,4 +105,65 @@ public class GifControllerTests
             s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    [Fact]
+    public async Task Trending_ReturnsOk_WithResults()
+    {
+        var fakeResults = new List<GifResultDTO>
+        {
+            new("https://x/t1.gif", "https://x/t1-tiny.gif"),
+        };
+        _mockGifService
+            .Setup(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fakeResults);
+
+        var controller = CreateController(_userId);
+        var result = await controller.Trending(20, 0, CancellationToken.None);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(fakeResults);
+    }
+
+    [Fact]
+    public async Task Trending_Returns400_WhenLimitTooHigh()
+    {
+        var controller = CreateController(_userId);
+        var result = await controller.Trending(51, 0, CancellationToken.None);
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Trending_Returns400_WhenOffsetNegative()
+    {
+        var controller = CreateController(_userId);
+        var result = await controller.Trending(20, -1, CancellationToken.None);
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Categories_ReturnsOk_WithCategories()
+    {
+        var fakeCategories = new List<GifCategoryDTO>
+        {
+            new("Reactions", "https://x/r.gif"),
+            new("Love", "https://x/l.gif"),
+        };
+        _mockGifService
+            .Setup(s => s.CategoriesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fakeCategories);
+
+        var controller = CreateController(_userId);
+        var result = await controller.Categories(CancellationToken.None);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(fakeCategories);
+    }
+
+    [Fact]
+    public async Task Search_Returns400_WhenOffsetNegative()
+    {
+        var controller = CreateController(_userId);
+        var result = await controller.Search("cat", 20, -1, CancellationToken.None);
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
 }
