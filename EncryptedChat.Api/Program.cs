@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -212,8 +213,13 @@ builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 builder.Services.AddSingleton<MimeTypeValidator>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 
-// GIF search (Giphy proxy)
-builder.Services.AddHttpClient<IGifService, GiphyGifService>();
+// GIF search (Giphy proxy with in-memory cache for trending/categories)
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<GiphyGifService>();
+builder.Services.AddScoped<IGifService>(sp =>
+    new GifCacheDecorator(
+        sp.GetRequiredService<GiphyGifService>(),
+        sp.GetRequiredService<IMemoryCache>()));
 
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
