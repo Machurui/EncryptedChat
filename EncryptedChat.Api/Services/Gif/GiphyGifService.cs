@@ -15,7 +15,7 @@ public sealed class GiphyGifService : IGifService
         _apiKey = config["Giphy:ServiceApiKey"] ?? string.Empty;
     }
 
-    public async Task<List<GifResultDTO>> SearchAsync(string query, int limit, CancellationToken ct)
+    public async Task<List<GifResultDTO>> SearchAsync(string query, int limit, int offset, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(_apiKey))
             throw new InvalidOperationException("Giphy API key is not configured. Set Giphy:ServiceApiKey in configuration.");
@@ -23,6 +23,7 @@ public sealed class GiphyGifService : IGifService
         var url = $"{GiphyBaseUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
                   $"&q={Uri.EscapeDataString(query)}" +
                   $"&limit={limit}" +
+                  $"&offset={offset}" +
                   $"&rating=pg-13" +
                   $"&lang=fr";
 

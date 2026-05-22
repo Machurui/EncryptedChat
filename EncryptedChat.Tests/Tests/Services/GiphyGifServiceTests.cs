@@ -44,7 +44,7 @@ public class GiphyGifServiceTests
     {
         var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
 
-        await service.SearchAsync("cat", 20, CancellationToken.None);
+        await service.SearchAsync("cat", 20, 0, CancellationToken.None);
 
         handlerMock.Protected().Verify(
             "SendAsync",
@@ -88,7 +88,7 @@ public class GiphyGifServiceTests
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         });
 
-        var results = await service.SearchAsync("cat", 20, CancellationToken.None);
+        var results = await service.SearchAsync("cat", 20, 0, CancellationToken.None);
 
         results.Should().HaveCount(2);
         results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full.gif", "https://media.giphy.com/tiny.gif"));
@@ -103,7 +103,7 @@ public class GiphyGifServiceTests
             Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json")
         });
 
-        var results = await service.SearchAsync("zzzznoresult", 20, CancellationToken.None);
+        var results = await service.SearchAsync("zzzznoresult", 20, 0, CancellationToken.None);
 
         results.Should().BeEmpty();
     }
@@ -113,9 +113,25 @@ public class GiphyGifServiceTests
     {
         var (service, _) = CreateService(apiKey: "");
 
-        var act = async () => await service.SearchAsync("cat", 20, CancellationToken.None);
+        var act = async () => await service.SearchAsync("cat", 20, 0, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Giphy API key*");
+    }
+
+    [Fact]
+    public async Task SearchAsync_PassesOffsetParameter()
+    {
+        var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
+
+        await service.SearchAsync("cat", 20, 40, CancellationToken.None);
+
+        handlerMock.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(req =>
+                req.RequestUri!.Query.Contains("offset=40")
+            ),
+            ItExpr.IsAny<CancellationToken>());
     }
 }
