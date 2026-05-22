@@ -18,6 +18,7 @@
 @inject UserClient UserClient
 @inject PinnedMessageClient PinnedMessageClient
 @inject FriendClient FriendClient
+@inject GifClient GifClient
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -2167,6 +2168,13 @@
         border-top: 0.5px solid rgba(255,255,255,0.10);
     }
 
+    /* Picker anchor : desktop + tablet only ; mobile pickers use position:fixed */
+    @@media (min-width: 768px) {
+        .composer-wrapper {
+            position: relative;
+        }
+    }
+
     .attachment-preview {
         display: flex;
         align-items: center;
@@ -2286,10 +2294,6 @@
     }
 
     /* ── Picker containers ── */
-    .picker-container {
-        position: relative;
-    }
-
     .picker-container .icon-btn.active {
         background: rgba(255,255,255,0.12);
         color: var(--accent);
@@ -2299,8 +2303,9 @@
     .emoji-picker {
         position: absolute;
         bottom: calc(100% + 8px);
-        right: 0;
-        width: 320px;
+        right: 16px;
+        width: 340px;
+        max-width: calc(100% - 32px);
         max-height: 350px;
         background: rgba(18, 20, 26, 0.95);
         backdrop-filter: blur(20px);
@@ -2362,8 +2367,9 @@
     .gif-picker {
         position: absolute;
         bottom: calc(100% + 8px);
-        right: 0;
+        right: 16px;
         width: 340px;
+        max-width: calc(100% - 32px);
         max-height: 400px;
         background: rgba(18, 20, 26, 0.95);
         backdrop-filter: blur(20px);
@@ -2809,7 +2815,15 @@
 
     /* ── Mobile (max-width: 767px) ── */
     @@media (max-width: 767px) {
-        .chat-floating-layout { padding: 0; gap: 0; }
+        .chat-floating-layout {
+            padding: 0;
+            gap: 0;
+            position: fixed;
+            inset: 0;
+            height: 100vh;
+            height: 100dvh;
+            width: 100vw;
+        }
 
         .chat-sidebar-panel,
         .conversation-column,
@@ -4463,31 +4477,10 @@
 
         try
         {
-            // Using Tenor API v1 (no key required for basic search)
-            var url = $"https://g.tenor.com/v1/search?q={Uri.EscapeDataString(gifSearch)}&limit=20&media_filter=minimal";
-
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("Accept", "application/json");
-            var response = await http.GetStringAsync(url);
-            var json = System.Text.Json.JsonDocument.Parse(response);
-
-            gifResults.Clear();
-            foreach (var result in json.RootElement.GetProperty("results").EnumerateArray())
-            {
-                var media = result.GetProperty("media").EnumerateArray().FirstOrDefault();
-                if (media.ValueKind != System.Text.Json.JsonValueKind.Undefined)
-                {
-                    var gif = media.GetProperty("gif");
-                    var tinygif = media.GetProperty("tinygif");
-                    var gifUrl = gif.GetProperty("url").GetString();
-                    var previewUrl = tinygif.GetProperty("url").GetString();
-
-                    if (!string.IsNullOrEmpty(gifUrl) && !string.IsNullOrEmpty(previewUrl))
-                    {
-                        gifResults.Add(new GifResult(gifUrl, previewUrl));
-                    }
-                }
-            }
+            var clientResults = await GifClient.SearchAsync(gifSearch, 20);
+            gifResults = clientResults
+                .Select(r => new GifResult(r.Url, r.PreviewUrl))
+                .ToList();
         }
         catch (Exception ex)
         {
