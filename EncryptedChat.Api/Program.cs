@@ -212,8 +212,8 @@ builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 builder.Services.AddSingleton<MimeTypeValidator>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 
-// GIF search (Tenor v2 proxy)
-builder.Services.AddHttpClient<IGifService, TenorGifService>();
+// GIF search (Giphy proxy)
+builder.Services.AddHttpClient<IGifService, GiphyGifService>();
 
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 

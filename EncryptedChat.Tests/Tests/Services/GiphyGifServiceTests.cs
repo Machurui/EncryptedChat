@@ -9,9 +9,9 @@ using Moq.Protected;
 
 namespace EncryptedChat.Tests;
 
-public class TenorGifServiceTests
+public class GiphyGifServiceTests
 {
-    private static (TenorGifService service, Mock<HttpMessageHandler> handlerMock) CreateService(
+    private static (GiphyGifService service, Mock<HttpMessageHandler> handlerMock) CreateService(
         string apiKey = "test-key-123",
         HttpResponseMessage? response = null)
     {
@@ -24,23 +24,23 @@ public class TenorGifServiceTests
                 ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(response ?? new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("{\"results\":[]}", Encoding.UTF8, "application/json")
+                Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json")
             });
 
         var http = new HttpClient(handlerMock.Object);
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Gifs:TenorApiKey"] = apiKey
+                ["Gifs:GiphyApiKey"] = apiKey
             })
             .Build();
 
-        var service = new TenorGifService(http, config);
+        var service = new GiphyGifService(http, config);
         return (service, handlerMock);
     }
 
     [Fact]
-    public async Task SearchAsync_BuildsCorrectTenorUrl()
+    public async Task SearchAsync_BuildsCorrectGiphyUrl()
     {
         var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
 
@@ -51,14 +51,13 @@ public class TenorGifServiceTests
             Times.Once(),
             ItExpr.Is<HttpRequestMessage>(req =>
                 req.Method == HttpMethod.Get &&
-                req.RequestUri!.Host == "tenor.googleapis.com" &&
-                req.RequestUri.AbsolutePath == "/v2/search" &&
-                req.RequestUri.Query.Contains("key=my-secret-key") &&
+                req.RequestUri!.Host == "api.giphy.com" &&
+                req.RequestUri.AbsolutePath == "/v1/gifs/search" &&
+                req.RequestUri.Query.Contains("api_key=my-secret-key") &&
                 req.RequestUri.Query.Contains("q=cat") &&
                 req.RequestUri.Query.Contains("limit=20") &&
-                req.RequestUri.Query.Contains("locale=fr_FR") &&
-                req.RequestUri.Query.Contains("contentfilter=medium") &&
-                req.RequestUri.Query.Contains("media_filter=gif%2Ctinygif")
+                req.RequestUri.Query.Contains("rating=pg-13") &&
+                req.RequestUri.Query.Contains("lang=fr")
             ),
             ItExpr.IsAny<CancellationToken>());
     }
@@ -68,17 +67,17 @@ public class TenorGifServiceTests
     {
         var json = """
             {
-              "results": [
+              "data": [
                 {
-                  "media_formats": {
-                    "gif": { "url": "https://media.tenor.com/full.gif" },
-                    "tinygif": { "url": "https://media.tenor.com/tiny.gif" }
+                  "images": {
+                    "original": { "url": "https://media.giphy.com/full.gif" },
+                    "fixed_width_small": { "url": "https://media.giphy.com/tiny.gif" }
                   }
                 },
                 {
-                  "media_formats": {
-                    "gif": { "url": "https://media.tenor.com/full2.gif" },
-                    "tinygif": { "url": "https://media.tenor.com/tiny2.gif" }
+                  "images": {
+                    "original": { "url": "https://media.giphy.com/full2.gif" },
+                    "fixed_width_small": { "url": "https://media.giphy.com/tiny2.gif" }
                   }
                 }
               ]
@@ -92,16 +91,16 @@ public class TenorGifServiceTests
         var results = await service.SearchAsync("cat", 20, CancellationToken.None);
 
         results.Should().HaveCount(2);
-        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.tenor.com/full.gif", "https://media.tenor.com/tiny.gif"));
-        results[1].Should().BeEquivalentTo(new GifResultDTO("https://media.tenor.com/full2.gif", "https://media.tenor.com/tiny2.gif"));
+        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full.gif", "https://media.giphy.com/tiny.gif"));
+        results[1].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full2.gif", "https://media.giphy.com/tiny2.gif"));
     }
 
     [Fact]
-    public async Task SearchAsync_ReturnsEmpty_WhenTenorReturnsNoResults()
+    public async Task SearchAsync_ReturnsEmpty_WhenGiphyReturnsNoResults()
     {
         var (service, _) = CreateService(response: new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("{\"results\":[]}", Encoding.UTF8, "application/json")
+            Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json")
         });
 
         var results = await service.SearchAsync("zzzznoresult", 20, CancellationToken.None);
@@ -117,6 +116,6 @@ public class TenorGifServiceTests
         var act = async () => await service.SearchAsync("cat", 20, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Tenor API key*");
+            .WithMessage("*Giphy API key*");
     }
 }
