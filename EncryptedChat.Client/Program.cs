@@ -40,6 +40,7 @@ builder.Services.AddScoped<AttachmentClient>();
 builder.Services.AddScoped<FriendClient>();
 builder.Services.AddScoped<SecurityClient>();
 builder.Services.AddScoped(sp => new PinnedMessageClient(sp.GetRequiredService<HttpClient>()));
+builder.Services.AddScoped<GifClient>();
 
 // Flowbite Import
 builder.Services.AddScoped<IFlowbiteService, FlowbiteService>();
