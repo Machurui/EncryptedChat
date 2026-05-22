@@ -7,6 +7,7 @@ public sealed class GiphyGifService : IGifService
 {
     private const string GiphySearchUrl = "https://api.giphy.com/v1/gifs/search";
     private const string GiphyTrendingUrl = "https://api.giphy.com/v1/gifs/trending";
+    private const string GiphyCategoriesUrl = "https://api.giphy.com/v1/gifs/categories";
     private readonly HttpClient _http;
     private readonly string _apiKey;
 
@@ -36,6 +37,40 @@ public sealed class GiphyGifService : IGifService
                   $"&offset={offset}" +
                   $"&rating=pg-13";
         return await FetchAndParseGifsAsync(url, ct);
+    }
+
+    public async Task<List<GifCategoryDTO>> CategoriesAsync(CancellationToken ct)
+    {
+        EnsureApiKey();
+        var url = $"{GiphyCategoriesUrl}?api_key={Uri.EscapeDataString(_apiKey)}";
+
+        using var response = await _http.GetAsync(url, ct);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+
+        var results = new List<GifCategoryDTO>();
+        if (!doc.RootElement.TryGetProperty("data", out var dataArray))
+            return results;
+
+        foreach (var item in dataArray.EnumerateArray())
+        {
+            var name = item.TryGetProperty("name", out var n) ? n.GetString() : null;
+            string? previewUrl = null;
+            if (item.TryGetProperty("gif", out var gif) &&
+                gif.TryGetProperty("images", out var images) &&
+                images.TryGetProperty("fixed_width_small", out var fws) &&
+                fws.TryGetProperty("url", out var urlProp))
+            {
+                previewUrl = urlProp.GetString();
+            }
+
+            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(previewUrl))
+                results.Add(new GifCategoryDTO(name, previewUrl));
+        }
+
+        return results;
     }
 
     private void EnsureApiKey()

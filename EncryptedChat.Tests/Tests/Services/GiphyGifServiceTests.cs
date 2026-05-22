@@ -182,4 +182,55 @@ public class GiphyGifServiceTests
         results.Should().HaveCount(1);
         results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/t1.gif", "https://media.giphy.com/t1-tiny.gif"));
     }
+
+    [Fact]
+    public async Task CategoriesAsync_BuildsCorrectGiphyUrl()
+    {
+        var (service, handlerMock) = CreateService(apiKey: "my-secret-key", response: new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json")
+        });
+
+        await service.CategoriesAsync(CancellationToken.None);
+
+        handlerMock.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(req =>
+                req.Method == HttpMethod.Get &&
+                req.RequestUri!.Host == "api.giphy.com" &&
+                req.RequestUri.AbsolutePath == "/v1/gifs/categories" &&
+                req.RequestUri.Query.Contains("api_key=my-secret-key")
+            ),
+            ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CategoriesAsync_ReturnsParsedCategories_FromValidJson()
+    {
+        var json = """
+            {
+              "data": [
+                {
+                  "name": "Reactions",
+                  "gif": { "images": { "fixed_width_small": { "url": "https://media.giphy.com/r.gif" } } }
+                },
+                {
+                  "name": "Love",
+                  "gif": { "images": { "fixed_width_small": { "url": "https://media.giphy.com/l.gif" } } }
+                }
+              ]
+            }
+            """;
+        var (service, _) = CreateService(response: new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        });
+
+        var results = await service.CategoriesAsync(CancellationToken.None);
+
+        results.Should().HaveCount(2);
+        results[0].Should().BeEquivalentTo(new GifCategoryDTO("Reactions", "https://media.giphy.com/r.gif"));
+        results[1].Should().BeEquivalentTo(new GifCategoryDTO("Love", "https://media.giphy.com/l.gif"));
+    }
 }
