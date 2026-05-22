@@ -31,7 +31,7 @@ public class GiphyGifServiceTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Gifs:GiphyApiKey"] = apiKey
+                ["Giphy:ServiceApiKey"] = apiKey
             })
             .Build();
 

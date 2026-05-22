@@ -12,13 +12,13 @@ public sealed class GiphyGifService : IGifService
     public GiphyGifService(HttpClient http, IConfiguration config)
     {
         _http = http;
-        _apiKey = config["Gifs:GiphyApiKey"] ?? string.Empty;
+        _apiKey = config["Giphy:ServiceApiKey"] ?? string.Empty;
     }
 
     public async Task<List<GifResultDTO>> SearchAsync(string query, int limit, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(_apiKey))
-            throw new InvalidOperationException("Giphy API key is not configured. Set Gifs:GiphyApiKey in configuration.");
+            throw new InvalidOperationException("Giphy API key is not configured. Set Giphy:ServiceApiKey in configuration.");
 
         var url = $"{GiphyBaseUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
                   $"&q={Uri.EscapeDataString(query)}" +
