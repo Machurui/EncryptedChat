@@ -134,4 +134,52 @@ public class GiphyGifServiceTests
             ),
             ItExpr.IsAny<CancellationToken>());
     }
+
+    [Fact]
+    public async Task TrendingAsync_BuildsCorrectGiphyUrl()
+    {
+        var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
+
+        await service.TrendingAsync(20, 0, CancellationToken.None);
+
+        handlerMock.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(req =>
+                req.Method == HttpMethod.Get &&
+                req.RequestUri!.Host == "api.giphy.com" &&
+                req.RequestUri.AbsolutePath == "/v1/gifs/trending" &&
+                req.RequestUri.Query.Contains("api_key=my-secret-key") &&
+                req.RequestUri.Query.Contains("limit=20") &&
+                req.RequestUri.Query.Contains("offset=0") &&
+                req.RequestUri.Query.Contains("rating=pg-13")
+            ),
+            ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TrendingAsync_ReturnsParsedResults_FromValidJson()
+    {
+        var json = """
+            {
+              "data": [
+                {
+                  "images": {
+                    "original": { "url": "https://media.giphy.com/t1.gif" },
+                    "fixed_width_small": { "url": "https://media.giphy.com/t1-tiny.gif" }
+                  }
+                }
+              ]
+            }
+            """;
+        var (service, _) = CreateService(response: new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        });
+
+        var results = await service.TrendingAsync(20, 0, CancellationToken.None);
+
+        results.Should().HaveCount(1);
+        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/t1.gif", "https://media.giphy.com/t1-tiny.gif"));
+    }
 }

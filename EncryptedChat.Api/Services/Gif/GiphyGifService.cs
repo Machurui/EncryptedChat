@@ -5,7 +5,8 @@ namespace EncryptedChat.Services;
 
 public sealed class GiphyGifService : IGifService
 {
-    private const string GiphyBaseUrl = "https://api.giphy.com/v1/gifs/search";
+    private const string GiphySearchUrl = "https://api.giphy.com/v1/gifs/search";
+    private const string GiphyTrendingUrl = "https://api.giphy.com/v1/gifs/trending";
     private readonly HttpClient _http;
     private readonly string _apiKey;
 
@@ -17,16 +18,34 @@ public sealed class GiphyGifService : IGifService
 
     public async Task<List<GifResultDTO>> SearchAsync(string query, int limit, int offset, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(_apiKey))
-            throw new InvalidOperationException("Giphy API key is not configured. Set Giphy:ServiceApiKey in configuration.");
-
-        var url = $"{GiphyBaseUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
+        EnsureApiKey();
+        var url = $"{GiphySearchUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
                   $"&q={Uri.EscapeDataString(query)}" +
                   $"&limit={limit}" +
                   $"&offset={offset}" +
                   $"&rating=pg-13" +
                   $"&lang=fr";
+        return await FetchAndParseGifsAsync(url, ct);
+    }
 
+    public async Task<List<GifResultDTO>> TrendingAsync(int limit, int offset, CancellationToken ct)
+    {
+        EnsureApiKey();
+        var url = $"{GiphyTrendingUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
+                  $"&limit={limit}" +
+                  $"&offset={offset}" +
+                  $"&rating=pg-13";
+        return await FetchAndParseGifsAsync(url, ct);
+    }
+
+    private void EnsureApiKey()
+    {
+        if (string.IsNullOrEmpty(_apiKey))
+            throw new InvalidOperationException("Giphy API key is not configured. Set Giphy:ServiceApiKey in configuration.");
+    }
+
+    private async Task<List<GifResultDTO>> FetchAndParseGifsAsync(string url, CancellationToken ct)
+    {
         using var response = await _http.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
 
