@@ -1,0 +1,135 @@
+@namespace EncryptedChat.Client.Pages.Components
+@inject NavigationManager Navigation
+
+<div class="app-background-static"></div>
+
+<div class="not-found-layout">
+    <GlassPanel Radius="28" Class="not-found-panel">
+        <div class="not-found-content">
+            <div class="not-found-code">404</div>
+
+            <div class="not-found-icon">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+
+            <h1 class="not-found-title">Page not found</h1>
+            <p class="not-found-message">
+                The page you're looking for doesn't exist or you don't have access to it.
+            </p>
+
+            <div class="not-found-actions">
+                <button class="glass-btn glass-btn-primary glass-btn-lg" @onclick="GoHome">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                    </svg>
+                    Back to chat
+                </button>
+                <button class="glass-btn glass-btn-lg" @onclick="GoBack">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                    Go back
+                </button>
+            </div>
+        </div>
+    </GlassPanel>
+</div>
+
+@code {
+    private void GoHome() => Navigation.NavigateTo("/chat");
+    private void GoBack() => Navigation.NavigateTo("/chat");
+}
+
+<style>
+    .not-found-layout {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+
+    .not-found-panel {
+        width: 100%;
+        max-width: 480px;
+        padding: 40px 32px;
+    }
+
+    .not-found-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 14px;
+    }
+
+    .not-found-code {
+        font-size: 80px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        background: linear-gradient(135deg, var(--accent), oklch(0.55 0.16 145));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        margin-bottom: 4px;
+    }
+
+    .not-found-icon {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.06);
+        border: 0.5px solid rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.65);
+        margin-bottom: 4px;
+    }
+
+    .not-found-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: white;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .not-found-message {
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.65);
+        line-height: 1.5;
+        max-width: 340px;
+        margin: 0 0 12px;
+    }
+
+    .not-found-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
+
+    @@media (max-width: 767px) {
+        .not-found-panel {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 100dvh !important;
+            border-radius: 0 !important;
+            padding: 60px 24px 32px !important;
+        }
+        .not-found-actions {
+            flex-direction: column;
+        }
+        .not-found-actions .glass-btn {
+            width: 100%;
+        }
+    }
+</style>
