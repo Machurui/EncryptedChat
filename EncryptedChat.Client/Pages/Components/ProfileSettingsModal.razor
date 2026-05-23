@@ -2,6 +2,7 @@
 @inject UserClient UserClient
 @inject SecurityClient _securityClient
 @inject IJSRuntime JS
+@inject RecentNameColorsService RecentNameColors
 
 @{
     const string ApiBaseUrl = "https://localhost:7294";
@@ -373,11 +374,62 @@
 
                                 <div class="profile-field">
                                     <label class="profile-field-label">Name color</label>
-                                    <div class="color-input-wrapper">
-                                        <input type="color" class="color-input-native" value="@NameColor" @onchange="OnColorChange" />
-                                        <div class="color-preview" style="background: @NameColor;"></div>
-                                        <input type="text" class="color-hex-input" value="@NameColor" @onchange="OnHexChange" maxlength="7" />
+
+                                    <label class="name-color-preview" style="--ncc: @NameColor;">
+                                        <input type="color" class="name-color-native-input"
+                                               value="@SafeHexFor(NameColor)"
+                                               @onchange="OnNativePickerChange" />
+                                        <span class="name-color-glow"></span>
+                                        <div class="name-color-preview-row">
+                                            <Avatar Name="@Name" ImageUrl="@ProfileImageUrl" Size="36" />
+                                            <div class="name-color-preview-text">
+                                                <div class="name-color-preview-name" style="color: @NameColor;">@(string.IsNullOrWhiteSpace(Name) ? "Your name" : Name)</div>
+                                                <div class="name-color-preview-handle">@@@(string.IsNullOrWhiteSpace(Handle) ? "you" : Handle) · how others will see you</div>
+                                            </div>
+                                            <span class="name-color-pick-pill">
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 2.69 5.5 9.19a9.19 9.19 0 1 0 13 0Z" fill="currentColor" fill-opacity="0.18" />
+                                                </svg>
+                                                Pick
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    <div class="name-color-controls">
+                                        <div class="name-color-slider-track">
+                                            <input type="range" min="0" max="360" step="1"
+                                                   value="@GetHue(NameColor)"
+                                                   @oninput="OnHueChange"
+                                                   class="name-color-slider" />
+                                        </div>
+                                        <input type="text" class="name-color-text-input"
+                                               value="@NameColor"
+                                               @onchange="OnTextChange"
+                                               placeholder="#10B981"
+                                               spellcheck="false" />
                                     </div>
+
+                                    <div class="name-color-helper">
+                                        Click the preview for the system RGB picker, drag the rainbow to skim hues,
+                                        or paste any CSS color (hex, rgb, hsl, oklch).
+                                    </div>
+
+                                    @if (recentNameColors.Count > 0)
+                                    {
+                                        <div class="name-color-recent">
+                                            <div class="name-color-recent-label">Recent</div>
+                                            <div class="name-color-recent-swatches">
+                                                @foreach (var c in recentNameColors)
+                                                {
+                                                    var color = c;
+                                                    <button type="button" class="name-color-recent-swatch"
+                                                            style="background: @color;"
+                                                            @onclick="() => ApplyColor(color)"
+                                                            title="@color"></button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
 
                                 <div class="divider"></div>
@@ -1876,21 +1928,100 @@
         return $"oklch(0.65 0.15 {hue1}), oklch(0.45 0.12 {hue2})";
     }
 
-    private void OnColorChange(ChangeEventArgs e)
+    private static readonly System.Text.RegularExpressions.Regex CssColorRegex = new(
+        @"^(#[0-9A-Fa-f]{6}|rgba?\([^)]{1,80}\)|hsla?\([^)]{1,80}\)|okl(ch|ab)\([^)]{1,80}\))$",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex HexColorRegex = new(
+        @"^#[0-9A-Fa-f]{6}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Hex coercion for the native <input type="color"> (which only accepts hex).
+    // For non-hex values, fall back to a neutral default.
+    private string SafeHexFor(string cssColor)
     {
-        if (e.Value is string color && !string.IsNullOrEmpty(color))
+        if (string.IsNullOrEmpty(cssColor)) return "#888888";
+        return HexColorRegex.IsMatch(cssColor) ? cssColor : "#888888";
+    }
+
+    // Extract hue 0-360 from a CSS color so the rainbow slider position reflects it.
+    private int GetHue(string cssColor)
+    {
+        if (string.IsNullOrEmpty(cssColor)) return 165;
+
+        var oklchMatch = System.Text.RegularExpressions.Regex.Match(
+            cssColor,
+            @"^oklch\(\s*[\d.]+\s+[\d.]+\s+([\d.]+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (oklchMatch.Success && double.TryParse(
+                oklchMatch.Groups[1].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var h))
+        {
+            return ((int)Math.Round(h) % 360 + 360) % 360;
+        }
+
+        if (HexColorRegex.IsMatch(cssColor))
+            return HexToHue(cssColor);
+
+        return 165;
+    }
+
+    private static int HexToHue(string hex)
+    {
+        var r = Convert.ToInt32(hex.Substring(1, 2), 16) / 255.0;
+        var g = Convert.ToInt32(hex.Substring(3, 2), 16) / 255.0;
+        var b = Convert.ToInt32(hex.Substring(5, 2), 16) / 255.0;
+        var max = Math.Max(r, Math.Max(g, b));
+        var min = Math.Min(r, Math.Min(g, b));
+        var d = max - min;
+        if (d == 0) return 0;
+        double hueSegment;
+        if (max == r) hueSegment = ((g - b) / d) % 6;
+        else if (max == g) hueSegment = (b - r) / d + 2;
+        else hueSegment = (r - g) / d + 4;
+        var hueDeg = hueSegment * 60;
+        return ((int)Math.Round(hueDeg) % 360 + 360) % 360;
+    }
+
+    private async Task OnNativePickerChange(ChangeEventArgs e)
+    {
+        if (e.Value is string color && HexColorRegex.IsMatch(color))
         {
             NameColor = color.ToUpperInvariant();
+            await NameColorChanged.InvokeAsync(NameColor);
         }
     }
 
-    private void OnHexChange(ChangeEventArgs e)
+    private async Task OnHueChange(ChangeEventArgs e)
     {
-        if (e.Value is string hex && System.Text.RegularExpressions.Regex.IsMatch(hex, @"^#[0-9A-Fa-f]{6}$"))
+        if (int.TryParse(e.Value?.ToString(), out var hue))
         {
-            NameColor = hex.ToUpperInvariant();
+            NameColor = $"oklch(0.68 0.16 {hue})";
+            await NameColorChanged.InvokeAsync(NameColor);
         }
     }
+
+    private async Task OnTextChange(ChangeEventArgs e)
+    {
+        if (e.Value is string css && !string.IsNullOrWhiteSpace(css))
+        {
+            var trimmed = css.Trim();
+            if (CssColorRegex.IsMatch(trimmed))
+            {
+                NameColor = trimmed;
+                await NameColorChanged.InvokeAsync(NameColor);
+            }
+        }
+    }
+
+    private async Task ApplyColor(string color)
+    {
+        NameColor = color;
+        await NameColorChanged.InvokeAsync(NameColor);
+    }
+
+    private List<string> recentNameColors = new();
 
     private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
     {
