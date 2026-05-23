@@ -18,7 +18,7 @@ public class User : IdentityUser
     [Required]
     public string Secret { get; set; } = string.Empty;
 
-    [MaxLength(7)]
+    [MaxLength(50)]
     public string NameColor { get; set; } = "#FFFFFF";
 
     [MaxLength(500)]
