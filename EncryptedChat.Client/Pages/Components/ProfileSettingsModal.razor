@@ -2081,6 +2081,11 @@
         await OnClose.InvokeAsync();
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        recentNameColors = await RecentNameColors.GetAllAsync();
+    }
+
     private async Task Save()
     {
         await NameChanged.InvokeAsync(Name);
@@ -2092,6 +2097,10 @@
         await ReadReceiptsChanged.InvokeAsync(localReadReceipts);
         await TypingIndicatorsChanged.InvokeAsync(localTypingIndicators);
         await NotificationPreferenceChanged.InvokeAsync(localNotificationPreference);
+
+        // Persist the picked color to recents (only on explicit Save, not on every drag)
+        await RecentNameColors.AddAsync(NameColor);
+
         await OnSave.InvokeAsync();
         await OnClose.InvokeAsync();
     }
