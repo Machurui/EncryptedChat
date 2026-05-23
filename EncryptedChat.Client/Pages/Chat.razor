@@ -19,6 +19,7 @@
 @inject PinnedMessageClient PinnedMessageClient
 @inject FriendClient FriendClient
 @inject GifClient GifClient
+@inject RecentGifsService RecentGifs
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -3068,8 +3069,18 @@
 
     // GIF picker
     private bool showGifPicker;
+    private enum GifPickerMode { Trending, Category, Search, Recent }
+    private GifPickerMode currentGifMode = GifPickerMode.Trending;
     private string gifSearch = "";
+    private string selectedCategoryName = "";
     private bool isLoadingGifs;
+    private bool isLoadingMoreGifs;
+    private int gifOffset = 0;
+    private bool gifHasMore = true;
+    private int recentGifsCount = 0;
+    private List<GifClient.GifCategory> gifCategories = new();
+    private ElementReference gifLoadSentinelRef;
+    private DotNetObjectReference<Chat>? gifPickerDotNetRef;
     private List<GifResult> gifResults = new();
     private record GifResult(string Url, string PreviewUrl);
 
@@ -4496,45 +4507,221 @@
     }
 
     // GIF picker methods
-    private void ToggleGifPicker()
+    private async Task ToggleGifPicker()
     {
         showEmojiPicker = false;
         showGifPicker = !showGifPicker;
-        gifSearch = "";
-        gifResults.Clear();
+
+        if (showGifPicker)
+        {
+            // Refresh recents count so the chip appears/hides correctly
+            recentGifsCount = (await RecentGifs.GetAllAsync()).Count;
+
+            // Open: switch to trending if no active search, load if empty
+            if (string.IsNullOrWhiteSpace(gifSearch))
+            {
+                currentGifMode = GifPickerMode.Trending;
+                if (gifResults.Count == 0)
+                    await LoadTrendingPage(0);
+            }
+            // Fire-and-forget categories load (cached after first call)
+            _ = LoadCategoriesIfNeeded();
+        }
+        else
+        {
+            gifSearch = "";
+        }
     }
 
     private async Task HandleGifSearchKeydown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(gifSearch))
         {
-            await SearchGifs();
+            currentGifMode = GifPickerMode.Search;
+            selectedCategoryName = "";
+            await LoadSearchPage(0);
         }
     }
 
-    private async Task SearchGifs()
+    private async Task LoadTrendingPage(int offset)
     {
-        if (string.IsNullOrWhiteSpace(gifSearch)) return;
-
-        isLoadingGifs = true;
+        if (offset == 0)
+        {
+            isLoadingGifs = true;
+            gifOffset = 0;
+            gifHasMore = true;
+        }
+        else
+        {
+            isLoadingMoreGifs = true;
+        }
         StateHasChanged();
 
         try
         {
-            var clientResults = await GifClient.SearchAsync(gifSearch, 20);
-            gifResults = clientResults
-                .Select(r => new GifResult(r.Url, r.PreviewUrl))
-                .ToList();
+            var page = await GifClient.TrendingAsync(20, offset);
+            if (offset == 0)
+                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl)).ToList();
+            else
+                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl)));
+
+            gifOffset = offset + page.Count;
+            if (page.Count < 20) gifHasMore = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Trending load error: {ex.Message}");
+            if (offset == 0) gifResults.Clear();
+        }
+        finally
+        {
+            isLoadingGifs = false;
+            isLoadingMoreGifs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSearchPage(int offset)
+    {
+        if (string.IsNullOrWhiteSpace(gifSearch)) return;
+
+        if (offset == 0)
+        {
+            isLoadingGifs = true;
+            gifOffset = 0;
+            gifHasMore = true;
+        }
+        else
+        {
+            isLoadingMoreGifs = true;
+        }
+        StateHasChanged();
+
+        try
+        {
+            var page = await GifClient.SearchAsync(gifSearch, 20, offset);
+            if (offset == 0)
+                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl)).ToList();
+            else
+                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl)));
+
+            gifOffset = offset + page.Count;
+            if (page.Count < 20) gifHasMore = false;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"GIF search error: {ex.Message}");
-            gifResults.Clear();
+            if (offset == 0) gifResults.Clear();
+        }
+        finally
+        {
+            isLoadingGifs = false;
+            isLoadingMoreGifs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadCategoryPage(string categoryName, int offset)
+    {
+        if (offset == 0)
+        {
+            isLoadingGifs = true;
+            gifOffset = 0;
+            gifHasMore = true;
+        }
+        else
+        {
+            isLoadingMoreGifs = true;
+        }
+        StateHasChanged();
+
+        try
+        {
+            var page = await GifClient.SearchAsync(categoryName, 20, offset);
+            if (offset == 0)
+                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl)).ToList();
+            else
+                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl)));
+
+            gifOffset = offset + page.Count;
+            if (page.Count < 20) gifHasMore = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Category load error: {ex.Message}");
+            if (offset == 0) gifResults.Clear();
+        }
+        finally
+        {
+            isLoadingGifs = false;
+            isLoadingMoreGifs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadRecents()
+    {
+        isLoadingGifs = true;
+        gifHasMore = false;
+        StateHasChanged();
+
+        try
+        {
+            var list = await RecentGifs.GetAllAsync();
+            gifResults = list.Select(r => new GifResult(r.Url, r.PreviewUrl)).ToList();
         }
         finally
         {
             isLoadingGifs = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task LoadCategoriesIfNeeded()
+    {
+        if (gifCategories.Count > 0) return;
+        try
+        {
+            gifCategories = await GifClient.CategoriesAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Categories load error: {ex.Message}");
+        }
+    }
+
+    private async Task SelectChipTrending()
+    {
+        currentGifMode = GifPickerMode.Trending;
+        gifSearch = "";
+        selectedCategoryName = "";
+        await LoadTrendingPage(0);
+    }
+
+    private async Task SelectChipRecents()
+    {
+        currentGifMode = GifPickerMode.Recent;
+        gifSearch = "";
+        selectedCategoryName = "";
+        await LoadRecents();
+    }
+
+    private async Task SelectChipCategory(string categoryName)
+    {
+        currentGifMode = GifPickerMode.Category;
+        gifSearch = "";
+        selectedCategoryName = categoryName;
+        await LoadCategoryPage(categoryName, 0);
+    }
+
+    private async Task HandleGifSearchInput(ChangeEventArgs e)
+    {
+        gifSearch = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(gifSearch))
+        {
+            currentGifMode = GifPickerMode.Trending;
+            await LoadTrendingPage(0);
         }
     }
 
