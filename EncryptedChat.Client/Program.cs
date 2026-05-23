@@ -42,6 +42,7 @@ builder.Services.AddScoped<SecurityClient>();
 builder.Services.AddScoped(sp => new PinnedMessageClient(sp.GetRequiredService<HttpClient>()));
 builder.Services.AddScoped<GifClient>();
 builder.Services.AddScoped<RecentGifsService>();
+builder.Services.AddScoped<RecentNameColorsService>();
 
 // Flowbite Import
 builder.Services.AddScoped<IFlowbiteService, FlowbiteService>();
