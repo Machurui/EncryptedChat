@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "flowbite/src/themes/default";
+@plugin "flowbite/plugin";
+@source "../../node_modules/flowbite";
+
+/* Disable focus rings globally */
+@layer base {
+    *:focus,
+    *:focus-visible {
+        outline: none !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+    }
+}
