@@ -1,0 +1,14 @@
+{
+  "ConnectionStrings": {
+    "Default": "Server=localhost,1433;Database=EncryptedChat;User Id=sa;Password=YOUR_PASSWORD_HERE;TrustServerCertificate=True;"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "Giphy": {
+    "ServiceApiKey": "YOUR_GIPHY_KEY_HERE_OR_USE_DOTNET_USER_SECRETS"
+  }
+}
