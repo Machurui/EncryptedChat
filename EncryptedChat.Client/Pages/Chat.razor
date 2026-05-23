@@ -824,9 +824,32 @@
                             {
                                 <div class="gif-picker" @onclick:stopPropagation="true">
                                     <div class="gif-picker-header">
-                                        <input type="text" class="gif-search" placeholder="Search GIFs..." @bind="gifSearch" @bind:event="oninput" @onkeydown="HandleGifSearchKeydown" />
+                                        <input type="text" class="gif-search" placeholder="Search GIFs..."
+                                               value="@gifSearch"
+                                               @oninput="HandleGifSearchInput"
+                                               @onkeydown="HandleGifSearchKeydown" />
                                     </div>
-                                    @if (isLoadingGifs)
+
+                                    @* Chips bar: Trending / Recents / Category list *@
+                                    <div class="gif-chips">
+                                        <button class="gif-chip @(currentGifMode == GifPickerMode.Trending ? "active" : "")"
+                                                @onclick="SelectChipTrending">🔥 Trending</button>
+
+                                        @if (recentGifsCount > 0)
+                                        {
+                                            <button class="gif-chip @(currentGifMode == GifPickerMode.Recent ? "active" : "")"
+                                                    @onclick="SelectChipRecents">🕒 Récents</button>
+                                        }
+
+                                        @foreach (var cat in gifCategories)
+                                        {
+                                            var name = cat.Name;
+                                            <button class="gif-chip @(currentGifMode == GifPickerMode.Category && selectedCategoryName == name ? "active" : "")"
+                                                    @onclick="() => SelectChipCategory(name)">@name</button>
+                                        }
+                                    </div>
+
+                                    @if (isLoadingGifs && gifResults.Count == 0)
                                     {
                                         <div class="gif-loading">Loading...</div>
                                     }
@@ -835,15 +858,23 @@
                                         <div class="gif-grid">
                                             @foreach (var gif in gifResults)
                                             {
-                                                <button class="gif-item" @onclick="() => InsertGif(gif.Url)">
+                                                <button class="gif-item" @onclick="() => InsertGif(gif)">
                                                     <img src="@gif.PreviewUrl" alt="GIF" loading="lazy" />
                                                 </button>
+                                            }
+                                            @if (gifHasMore)
+                                            {
+                                                <div class="gif-load-sentinel" @ref="gifLoadSentinelRef"></div>
+                                            }
+                                            @if (isLoadingMoreGifs)
+                                            {
+                                                <div class="gif-load-spinner">Loading more...</div>
                                             }
                                         </div>
                                     }
                                     else
                                     {
-                                        <div class="gif-empty">Search for GIFs</div>
+                                        <div class="gif-empty">No GIFs found</div>
                                     }
                                     <div class="gif-powered">Powered by GIPHY</div>
                                 </div>
@@ -4725,13 +4756,27 @@
         }
     }
 
-    private async Task InsertGif(string gifUrl)
+    private async Task InsertGif(GifResult gif)
     {
-        newMessageText += $" {gifUrl} ";
+        // Close picker first (UX: feels instant)
         showGifPicker = false;
         gifSearch = "";
-        gifResults.Clear();
-        await FocusComposerInput();
+
+        // Preserve pending input text in case the user typed something
+        var pending = newMessageText;
+        newMessageText = gif.Url;
+
+        await SendMessage();
+
+        // SendMessage clears newMessageText on success.
+        // If a rate-limit happened, newMessageText stays = gif.Url (existing IsInCooldown logic).
+        // Only restore pending if the send went through (input is empty).
+        if (string.IsNullOrEmpty(newMessageText))
+            newMessageText = pending;
+
+        // Record in recent GIFs (LocalStorage). Done after send so a failed send doesn't pollute history.
+        await RecentGifs.AddAsync(new RecentGifsService.RecentGif(gif.Url, gif.PreviewUrl));
+        recentGifsCount = (await RecentGifs.GetAllAsync()).Count;
     }
 
     private async Task FocusComposerInput()
