@@ -95,15 +95,25 @@ public sealed class GiphyGifService : IGifService
         {
             if (!item.TryGetProperty("images", out var images)) continue;
             if (!images.TryGetProperty("original", out var original)) continue;
-            if (!images.TryGetProperty("fixed_width_small", out var preview)) continue;
+            if (!images.TryGetProperty("fixed_width", out var preview)) continue;
 
             var gifUrl = original.TryGetProperty("url", out var ou) ? ou.GetString() : null;
             var previewUrl = preview.TryGetProperty("url", out var pu) ? pu.GetString() : null;
+            int width = ParseDimension(preview, "width");
+            int height = ParseDimension(preview, "height");
 
             if (!string.IsNullOrEmpty(gifUrl) && !string.IsNullOrEmpty(previewUrl))
-                results.Add(new GifResultDTO(gifUrl, previewUrl));
+                results.Add(new GifResultDTO(gifUrl, previewUrl, width, height));
         }
 
         return results;
+    }
+
+    private static int ParseDimension(JsonElement parent, string propertyName)
+    {
+        // Giphy returns dimensions as strings (e.g. "200") inside the rendition object.
+        if (!parent.TryGetProperty(propertyName, out var prop)) return 0;
+        var raw = prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
+        return int.TryParse(raw, out var n) && n > 0 ? n : 0;
     }
 }

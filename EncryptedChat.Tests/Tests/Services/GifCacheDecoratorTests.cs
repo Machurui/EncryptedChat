@@ -21,7 +21,7 @@ public class GifCacheDecoratorTests
     {
         var (decorator, inner) = Create();
         inner.Setup(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()))
-             .ReturnsAsync(new List<GifResultDTO> { new("a", "b") });
+             .ReturnsAsync(new List<GifResultDTO> { new("a", "b", 100, 100) });
 
         await decorator.TrendingAsync(20, 0, CancellationToken.None);
         await decorator.TrendingAsync(20, 0, CancellationToken.None);

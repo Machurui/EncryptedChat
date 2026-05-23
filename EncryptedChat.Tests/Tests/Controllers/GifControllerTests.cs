@@ -33,8 +33,8 @@ public class GifControllerTests
     {
         var fakeResults = new List<GifResultDTO>
         {
-            new("https://x/a.gif", "https://x/a-tiny.gif"),
-            new("https://x/b.gif", "https://x/b-tiny.gif"),
+            new("https://x/a.gif", "https://x/a-tiny.gif", 200, 200),
+            new("https://x/b.gif", "https://x/b-tiny.gif", 200, 200),
         };
         _mockGifService
             .Setup(s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()))
@@ -111,7 +111,7 @@ public class GifControllerTests
     {
         var fakeResults = new List<GifResultDTO>
         {
-            new("https://x/t1.gif", "https://x/t1-tiny.gif"),
+            new("https://x/t1.gif", "https://x/t1-tiny.gif", 200, 200),
         };
         _mockGifService
             .Setup(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()))

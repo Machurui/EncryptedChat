@@ -71,13 +71,13 @@ public class GiphyGifServiceTests
                 {
                   "images": {
                     "original": { "url": "https://media.giphy.com/full.gif" },
-                    "fixed_width_small": { "url": "https://media.giphy.com/tiny.gif" }
+                    "fixed_width": { "url": "https://media.giphy.com/tiny.gif", "width": "200", "height": "150" }
                   }
                 },
                 {
                   "images": {
                     "original": { "url": "https://media.giphy.com/full2.gif" },
-                    "fixed_width_small": { "url": "https://media.giphy.com/tiny2.gif" }
+                    "fixed_width": { "url": "https://media.giphy.com/tiny2.gif", "width": "200", "height": "180" }
                   }
                 }
               ]
@@ -91,8 +91,8 @@ public class GiphyGifServiceTests
         var results = await service.SearchAsync("cat", 20, 0, CancellationToken.None);
 
         results.Should().HaveCount(2);
-        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full.gif", "https://media.giphy.com/tiny.gif"));
-        results[1].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full2.gif", "https://media.giphy.com/tiny2.gif"));
+        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full.gif", "https://media.giphy.com/tiny.gif", 200, 150));
+        results[1].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full2.gif", "https://media.giphy.com/tiny2.gif", 200, 180));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class GiphyGifServiceTests
                 {
                   "images": {
                     "original": { "url": "https://media.giphy.com/t1.gif" },
-                    "fixed_width_small": { "url": "https://media.giphy.com/t1-tiny.gif" }
+                    "fixed_width": { "url": "https://media.giphy.com/t1-tiny.gif", "width": "200", "height": "200" }
                   }
                 }
               ]
@@ -180,7 +180,7 @@ public class GiphyGifServiceTests
         var results = await service.TrendingAsync(20, 0, CancellationToken.None);
 
         results.Should().HaveCount(1);
-        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/t1.gif", "https://media.giphy.com/t1-tiny.gif"));
+        results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/t1.gif", "https://media.giphy.com/t1-tiny.gif", 200, 200));
     }
 
     [Fact]
