@@ -11,7 +11,7 @@ public sealed class GifClient
         _http = http;
     }
 
-    public sealed record GifResult(string Url, string PreviewUrl);
+    public sealed record GifResult(string Url, string PreviewUrl, int Width, int Height);
     public sealed record GifCategory(string Name, string PreviewGifUrl);
 
     public async Task<List<GifResult>> SearchAsync(string query, int limit = 20, int offset = 0, CancellationToken ct = default)

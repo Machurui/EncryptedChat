@@ -633,16 +633,25 @@
                                         @if (!string.IsNullOrWhiteSpace(msg.Text))
                                         {
                                             <div class="message-bubble-row">
-                                                <div class="message-bubble @(isOwn ? "own" : "")">
-                                                    @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
-                                                    {
-                                                        @((MarkupString)HighlightSearchTerm(msg.Text))
-                                                    }
-                                                    else
-                                                    {
-                                                        @((MarkupString)RenderMessageContent(msg.Text))
-                                                    }
-                                                </div>
+                                                @if (IsPureGifUrl(msg.Text))
+                                                {
+                                                    <div class="message-gif-only">
+                                                        <img src="@msg.Text.Trim()" alt="GIF" loading="lazy" />
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="message-bubble @(isOwn ? "own" : "")">
+                                                        @if (headerSearchMode && !string.IsNullOrWhiteSpace(headerSearchQuery))
+                                                        {
+                                                            @((MarkupString)HighlightSearchTerm(msg.Text))
+                                                        }
+                                                        else
+                                                        {
+                                                            @((MarkupString)RenderMessageContent(msg.Text))
+                                                        }
+                                                    </div>
+                                                }
                                                 <button class="msg-pin-btn @(IsMessagePinned(msg.Id) ? "pinned" : "")"
                                                         @onclick="() => TogglePinMessage(msg.Id)"
                                                         @onclick:stopPropagation="true"
@@ -855,13 +864,31 @@
                                     }
                                     else if (gifResults.Any())
                                     {
-                                        <div class="gif-grid">
-                                            @foreach (var gif in gifResults)
-                                            {
-                                                <button class="gif-item" @onclick="() => InsertGif(gif)">
-                                                    <img src="@gif.PreviewUrl" alt="GIF" loading="lazy" />
-                                                </button>
-                                            }
+                                        <div class="gif-scroll">
+                                            <div class="gif-grid">
+                                                <div class="gif-col">
+                                                    @for (var i = 0; i < gifResults.Count; i += 2)
+                                                    {
+                                                        var gif = gifResults[i];
+                                                        <button class="gif-item" @onclick="() => InsertGif(gif)">
+                                                            <img src="@gif.PreviewUrl" alt="GIF"
+                                                                 width="@gif.Width" height="@gif.Height"
+                                                                 loading="lazy" />
+                                                        </button>
+                                                    }
+                                                </div>
+                                                <div class="gif-col">
+                                                    @for (var i = 1; i < gifResults.Count; i += 2)
+                                                    {
+                                                        var gif = gifResults[i];
+                                                        <button class="gif-item" @onclick="() => InsertGif(gif)">
+                                                            <img src="@gif.PreviewUrl" alt="GIF"
+                                                                 width="@gif.Width" height="@gif.Height"
+                                                                 loading="lazy" />
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
                                             @if (gifHasMore)
                                             {
                                                 <div class="gif-load-sentinel" @ref="gifLoadSentinelRef"></div>
@@ -2080,7 +2107,21 @@
         padding-right: 28px;
     }
 
-    /* GIF in messages */
+    /* GIF in messages — rendered as standalone (no bubble) when text is just a GIF URL */
+    .message-gif-only {
+        display: block;
+        max-width: 300px;
+    }
+
+    .message-gif-only img {
+        width: 100%;
+        height: auto;
+        max-height: 300px;
+        border-radius: 12px;
+        display: block;
+    }
+
+    /* Legacy: inline GIF inside a bubble (kept for backward-compat with old messages) */
     .message-gif {
         max-width: 100%;
         max-height: 300px;
@@ -2338,7 +2379,8 @@
         right: 16px;
         width: 420px;
         max-width: calc(100% - 32px);
-        max-height: 520px;
+        height: 520px;
+        max-height: calc(100vh - 120px);
         background: rgba(18, 20, 26, 0.95);
         backdrop-filter: blur(20px);
         border: 0.5px solid rgba(255,255,255,0.15);
@@ -2402,7 +2444,8 @@
         right: 16px;
         width: 420px;
         max-width: calc(100% - 32px);
-        max-height: 520px;
+        height: 520px;
+        max-height: calc(100vh - 120px);
         background: rgba(18, 20, 26, 0.95);
         backdrop-filter: blur(20px);
         border: 0.5px solid rgba(255,255,255,0.15);
@@ -2434,13 +2477,24 @@
         color: rgba(255,255,255,0.4);
     }
 
-    .gif-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-        padding: 10px;
+    .gif-scroll {
         overflow-y: auto;
+        flex: 1 1 0;
+        min-height: 0;
+        padding: 8px;
+    }
+
+    .gif-grid {
+        display: flex;
+        gap: 4px;
+    }
+
+    .gif-col {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
         flex: 1;
+        min-width: 0;
     }
 
     .gif-item {
@@ -2450,6 +2504,8 @@
         overflow: hidden;
         cursor: pointer;
         padding: 0;
+        width: 100%;
+        transition: transform 0.1s ease;
     }
 
     .gif-item img {
@@ -2460,7 +2516,7 @@
     }
 
     .gif-item:hover {
-        opacity: 0.85;
+        transform: scale(1.02);
     }
 
     .gif-loading,
@@ -2504,11 +2560,9 @@
     }
 
     .gif-load-sentinel {
-        grid-column: 1 / -1;
         height: 40px;
     }
     .gif-load-spinner {
-        grid-column: 1 / -1;
         padding: 16px;
         text-align: center;
         font-size: 12px;
@@ -2957,7 +3011,9 @@
             right: 8px !important;
             top: auto !important;
             width: auto !important;
+            height: auto !important;
             max-width: calc(100vw - 16px) !important;
+            max-height: calc(100vh - 100px) !important;
             margin: 0 auto !important;
         }
 
@@ -3113,7 +3169,7 @@
     private ElementReference gifLoadSentinelRef;
     private DotNetObjectReference<Chat>? gifPickerDotNetRef;
     private List<GifResult> gifResults = new();
-    private record GifResult(string Url, string PreviewUrl);
+    private record GifResult(string Url, string PreviewUrl, int Width, int Height);
 
     private bool CanSend => !string.IsNullOrWhiteSpace(newMessageText) || selectedFile != null;
 
@@ -3294,6 +3350,31 @@
         if (teams.Any())
         {
             await SelectTeam(teams.First().Id);
+        }
+
+        // Fire-and-forget: prewarm the GIF picker so first open is instant.
+        // Server caches trending+categories; browser caches the thumbnails.
+        _ = PrewarmGifPicker();
+    }
+
+    private async Task PrewarmGifPicker()
+    {
+        try
+        {
+            await Task.WhenAll(
+                LoadTrendingPage(0),
+                LoadCategoriesIfNeeded()
+            );
+
+            if (gifResults.Count > 0)
+            {
+                var urls = gifResults.Select(g => g.PreviewUrl).ToArray();
+                await JS.InvokeVoidAsync("gifPicker.prefetchImages", new object[] { urls });
+            }
+        }
+        catch
+        {
+            // Silent: picker will retry on first user open if this fails.
         }
     }
 
@@ -4606,9 +4687,9 @@
         {
             var page = await GifClient.TrendingAsync(20, offset);
             if (offset == 0)
-                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl)).ToList();
+                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)).ToList();
             else
-                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl)));
+                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)));
 
             gifOffset = offset + page.Count;
             if (page.Count < 20) gifHasMore = false;
@@ -4646,9 +4727,9 @@
         {
             var page = await GifClient.SearchAsync(gifSearch, 20, offset);
             if (offset == 0)
-                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl)).ToList();
+                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)).ToList();
             else
-                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl)));
+                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)));
 
             gifOffset = offset + page.Count;
             if (page.Count < 20) gifHasMore = false;
@@ -4684,9 +4765,9 @@
         {
             var page = await GifClient.SearchAsync(categoryName, 20, offset);
             if (offset == 0)
-                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl)).ToList();
+                gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)).ToList();
             else
-                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl)));
+                gifResults.AddRange(page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)));
 
             gifOffset = offset + page.Count;
             if (page.Count < 20) gifHasMore = false;
@@ -4713,7 +4794,7 @@
         try
         {
             var list = await RecentGifs.GetAllAsync();
-            gifResults = list.Select(r => new GifResult(r.Url, r.PreviewUrl)).ToList();
+            gifResults = list.Select(r => new GifResult(r.Url, r.PreviewUrl, r.Width, r.Height)).ToList();
         }
         finally
         {
@@ -4812,7 +4893,7 @@
             newMessageText = pending;
 
         // Record in recent GIFs (LocalStorage). Done after send so a failed send doesn't pollute history.
-        await RecentGifs.AddAsync(new RecentGifsService.RecentGif(gif.Url, gif.PreviewUrl));
+        await RecentGifs.AddAsync(new RecentGifsService.RecentGif(gif.Url, gif.PreviewUrl, gif.Width, gif.Height));
         recentGifsCount = (await RecentGifs.GetAllAsync()).Count;
     }
 
@@ -5266,20 +5347,18 @@
         unreadCounts[teamId] = unreadCounts.GetValueOrDefault(teamId, 0) + 1;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex PureGifUrlRegex =
+        new(@"^\s*https?://[^\s]+\.gif[^\s]*\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private bool IsPureGifUrl(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && PureGifUrlRegex.IsMatch(text);
+
     private string RenderMessageContent(string text)
     {
         if (string.IsNullOrEmpty(text)) return "";
 
-        // Check if the message is only a GIF URL
-        var gifPattern = new System.Text.RegularExpressions.Regex(@"^\s*(https?://[^\s]+\.gif[^\s]*)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        var gifMatch = gifPattern.Match(text);
-        if (gifMatch.Success)
-        {
-            var gifUrl = System.Net.WebUtility.HtmlEncode(gifMatch.Groups[1].Value);
-            return $"<img src=\"{gifUrl}\" alt=\"GIF\" class=\"message-gif\" loading=\"lazy\" />";
-        }
-
-        // Otherwise render with mentions
+        // Pure-GIF-URL messages are rendered without a bubble by the markup path —
+        // this method only runs for messages that have text content (possibly with inline GIFs).
         return RenderMessageWithMentions(text);
     }
 

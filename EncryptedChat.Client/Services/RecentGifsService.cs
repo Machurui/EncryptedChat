@@ -9,7 +9,7 @@ public sealed class RecentGifsService(IJSRuntime js)
     private const int MaxItems = 12;
     private readonly IJSRuntime _js = js;
 
-    public sealed record RecentGif(string Url, string PreviewUrl);
+    public sealed record RecentGif(string Url, string PreviewUrl, int Width = 0, int Height = 0);
 
     public async Task<List<RecentGif>> GetAllAsync()
     {

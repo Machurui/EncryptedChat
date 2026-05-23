@@ -10,7 +10,7 @@ window.gifPicker = (function () {
                     console.warn('OnGifLoadMore invoke failed:', err);
                 });
             }
-        }, { threshold: 0.1 });
+        }, { rootMargin: '400px 0px' });
 
         observer.observe(sentinelEl);
         observers.set(sentinelEl, observer);
@@ -24,5 +24,19 @@ window.gifPicker = (function () {
         }
     }
 
-    return { observeLoadMore: observeLoadMore, stopObserving: stopObserving };
+    function prefetchImages(urls) {
+        if (!Array.isArray(urls)) return;
+        urls.forEach(function (url) {
+            if (typeof url === 'string' && url.length > 0) {
+                const img = new Image();
+                img.src = url;
+            }
+        });
+    }
+
+    return {
+        observeLoadMore: observeLoadMore,
+        stopObserving: stopObserving,
+        prefetchImages: prefetchImages
+    };
 })();
