@@ -503,6 +503,5 @@ $RECYCLE.BIN/
 *.db
 *.db*
 
-*wwwroot/
 ClaudeDesign/
 docs/
