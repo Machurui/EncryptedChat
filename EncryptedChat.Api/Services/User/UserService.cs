@@ -14,6 +14,10 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
     private readonly ICryptoService _crypto = crypto;
     private readonly IPresenceService _presenceService = presenceService;
 
+    private static readonly System.Text.RegularExpressions.Regex CssColorRegex =
+        new(@"^(#[0-9A-Fa-f]{6}|rgba?\([^)]{1,80}\)|hsla?\([^)]{1,80}\)|okl(ch|ab)\([^)]{1,80}\))$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public async Task<UserProfileDTO?> GetOwnProfileAsync(string id)
     {
         User? user = await _context.Users
@@ -282,7 +286,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
 
         if (nameColor != null)
         {
-            if (!System.Text.RegularExpressions.Regex.IsMatch(nameColor, @"^#[0-9A-Fa-f]{6}$"))
+            if (!CssColorRegex.IsMatch(nameColor))
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
             user.NameColor = nameColor;
         }

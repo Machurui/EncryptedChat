@@ -454,4 +454,57 @@ public class UserServiceTests : IDisposable
         result.Status.Should().Be(UserOperationStatus.ValidationFailed);
         (await _context.Users.FindAsync(user.Id)).Should().NotBeNull();
     }
+
+    private async Task<(UserService Service, string UserId)> SetupUserAsync()
+    {
+        User user = await CreateTestUser();
+        return (_service, user.Id);
+    }
+
+    [Theory]
+    [InlineData("#10B981")]
+    [InlineData("oklch(0.68 0.16 165)")]
+    [InlineData("oklch(0.68 0.16 165 / 0.85)")]
+    [InlineData("oklab(0.6 -0.15 0.05)")]
+    [InlineData("rgb(16, 185, 129)")]
+    [InlineData("rgba(16, 185, 129, 0.9)")]
+    [InlineData("hsl(160, 80%, 40%)")]
+    [InlineData("hsla(160, 80%, 40%, 0.9)")]
+    public async Task UpdateAsync_AcceptsValidColor(string colorValue)
+    {
+        var (service, userId) = await SetupUserAsync();
+        var dto = new UserUpdateDTO { NameColor = colorValue };
+
+        var result = await service.UpdateAsync(userId, userId, dto);
+
+        result.Status.Should().Be(UserOperationStatus.Success);
+    }
+
+    [Theory]
+    [InlineData("red")]
+    [InlineData("#abc")]
+    [InlineData("<script>alert(1)</script>")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("#10B981; background: url(evil)")]
+    public async Task UpdateAsync_RejectsInvalidColor(string colorValue)
+    {
+        var (service, userId) = await SetupUserAsync();
+        var dto = new UserUpdateDTO { NameColor = colorValue };
+
+        var result = await service.UpdateAsync(userId, userId, dto);
+
+        result.Status.Should().Be(UserOperationStatus.ValidationFailed);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_RejectsColorLongerThan80CharsInsideParens()
+    {
+        var (service, userId) = await SetupUserAsync();
+        var pathological = "oklch(" + new string('1', 200) + ")";
+        var dto = new UserUpdateDTO { NameColor = pathological };
+
+        var result = await service.UpdateAsync(userId, userId, dto);
+
+        result.Status.Should().Be(UserOperationStatus.ValidationFailed);
+    }
 }
