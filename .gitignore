@@ -15,9 +15,16 @@ AGENTS.md
 # Secrets / Sensitive config
 appsettings.Production.json
 appsettings.Local.json
+appsettings.Development.json
 secrets.json
 **/secrets/
 EncryptedChat.Api/storage/
+
+# User-uploaded content (avatars served from static wwwroot)
+EncryptedChat.Api/wwwroot/uploads/
+
+# Tailwind generated bundle (regenerated from input.css)
+EncryptedChat.Client/wwwroot/css/output.css
 
 # User-specific files
 *.rsuser
