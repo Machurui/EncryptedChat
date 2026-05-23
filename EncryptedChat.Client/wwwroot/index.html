@@ -65,27 +65,11 @@
 
     <script src="js/app-interop.js"></script>
     <script src="js/gif-picker.js"></script>
+    <script src="js/chat-scroll.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     <script src="js/flowbite-interop.js"></script>
     <script>
-        function scrollToBottom(elementId) {
-            const scroll = () => {
-                const container = document.getElementById(elementId);
-                if (container) container.scrollTop = container.scrollHeight;
-            };
-
-            // Scroll après render initial
-            requestAnimationFrame(() => {
-                requestAnimationFrame(scroll);
-            });
-
-            // Re-scroll après chargement des images (100ms, 300ms, 500ms)
-            setTimeout(scroll, 100);
-            setTimeout(scroll, 300);
-            setTimeout(scroll, 500);
-        }
-
         function getScrollInfo(elementId) {
             const container = document.getElementById(elementId);
             if (!container) return { position: 0, isAtBottom: true };

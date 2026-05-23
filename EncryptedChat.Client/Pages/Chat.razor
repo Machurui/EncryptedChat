@@ -3180,7 +3180,6 @@
 
     private HubConnection? hubConnection;
     private bool _signalRInitialized;
-    private bool _shouldScrollToBottom;
     private bool _isFirstLoad = true;
     private record ScrollInfo(double Position, bool IsAtBottom);
     private Dictionary<Guid, ScrollInfo> _teamScrollPositions = new();
@@ -3419,11 +3418,18 @@
                 nameof(SetJumpToBottomVisible));
         }
 
-        if (_shouldScrollToBottom)
+        // Attach the auto-scroll observer once the messages container is in the DOM.
+        // chatScroll.attach is idempotent.
+        if (selectedTeamId.HasValue)
         {
-            Console.WriteLine("[Scroll] OnAfterRenderAsync: scrolling now");
-            _shouldScrollToBottom = false;
-            await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
+            try
+            {
+                await JS.InvokeVoidAsync("chatScroll.attach", "messages-container");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"chatScroll.attach failed: {ex.Message}");
+            }
         }
 
         // Wire infinite scroll on the GIF picker sentinel when present
@@ -3818,11 +3824,21 @@
                 }
             }
 
+            // Disable auto-follow during load to avoid jank from the MutationObserver
+            // scrolling to bottom while we're about to restore a saved position.
+            await JS.InvokeVoidAsync("chatScroll.unfollow", "messages-container");
+
             await LoadMessages(scrollToBottom: shouldScrollToBottom);
 
             if (restorePosition.HasValue)
             {
                 await JS.InvokeVoidAsync("setScrollPosition", "messages-container", restorePosition.Value);
+                // The scroll handler will recompute the following state from isAtBottom.
+            }
+            else if (shouldScrollToBottom)
+            {
+                // Instant jump (no animation needed for team-switch initial position)
+                await JS.InvokeVoidAsync("chatScroll.follow", "messages-container", false);
             }
 
             // Only initialize SignalR once
@@ -3911,8 +3927,6 @@
 
             if (scrollToBottom)
             {
-                Console.WriteLine("[Scroll] LoadMessages: scrolling to bottom");
-                _shouldScrollToBottom = true;
                 _isFirstLoad = false;
             }
             StateHasChanged();
@@ -4020,8 +4034,7 @@
                     Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
                     messages.Add(message);
                     TriggerMessageFadeIn(message.Id);
-                    Console.WriteLine("[Scroll] ReceiveMessage: setting flag");
-                    _shouldScrollToBottom = true;
+                    // chatScroll observer auto-handles re-scroll if user is at bottom.
                     await InvokeAsync(StateHasChanged);
                 }
                 else
@@ -4073,7 +4086,7 @@
                     if (!message.Attachments.Any(a => a.Id == evt.Attachment.Id))
                     {
                         message.Attachments.Add(evt.Attachment);
-                        _shouldScrollToBottom = true;
+                        // chatScroll observer auto-handles re-scroll if user is at bottom.
                         await InvokeAsync(StateHasChanged);
                     }
                 }
@@ -4591,6 +4604,17 @@
         {
             isSending = false;
             await FocusComposerInput();
+            // Sending your own message → re-enable follow and smooth-scroll to bottom.
+            // The chatScroll observer will continue to keep things glued to the bottom as
+            // any attachment / image / GIF finishes loading.
+            try
+            {
+                await JS.InvokeVoidAsync("chatScroll.follow", "messages-container", true);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"chatScroll.follow (SendMessage) failed: {ex.Message}");
+            }
         }
     }
 
@@ -4939,7 +4963,7 @@
 
     private async Task JumpToPresent()
     {
-        await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
+        await JS.InvokeVoidAsync("chatScroll.follow", "messages-container", true);
         showJumpToBottomButton = false;
     }
 
@@ -5446,6 +5470,15 @@
         }
         _dotNetRef?.Dispose();
         _dotNetRef = null;
+
+        try
+        {
+            await JS.InvokeVoidAsync("chatScroll.detach", "messages-container");
+        }
+        catch
+        {
+            // JS context might already be gone
+        }
 
         _signalRInitialized = false;
         if (hubConnection != null)
