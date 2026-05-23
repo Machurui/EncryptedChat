@@ -3339,6 +3339,20 @@
             _shouldScrollToBottom = false;
             await JS.InvokeVoidAsync("scrollToBottom", "messages-container");
         }
+
+        // Wire infinite scroll on the GIF picker sentinel when present
+        if (showGifPicker && gifHasMore)
+        {
+            gifPickerDotNetRef ??= DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("gifPicker.observeLoadMore", gifLoadSentinelRef, gifPickerDotNetRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"gifPicker.observeLoadMore failed: {ex.Message}");
+            }
+        }
     }
 
     private async Task LoadTeams()
@@ -4722,6 +4736,29 @@
         }
     }
 
+    [JSInvokable]
+    public async Task OnGifLoadMore()
+    {
+        if (isLoadingMoreGifs || !gifHasMore) return;
+
+        switch (currentGifMode)
+        {
+            case GifPickerMode.Trending:
+                await LoadTrendingPage(gifOffset);
+                break;
+            case GifPickerMode.Search:
+                await LoadSearchPage(gifOffset);
+                break;
+            case GifPickerMode.Category:
+                if (!string.IsNullOrEmpty(selectedCategoryName))
+                    await LoadCategoryPage(selectedCategoryName, gifOffset);
+                break;
+            case GifPickerMode.Recent:
+                // Not paginated
+                break;
+        }
+    }
+
     private async Task SelectChipTrending()
     {
         currentGifMode = GifPickerMode.Trending;
@@ -5336,6 +5373,17 @@
                 await hubConnection.DisposeAsync();
             }
             catch { }
+        }
+
+        if (gifPickerDotNetRef != null)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("gifPicker.stopObserving", gifLoadSentinelRef);
+            }
+            catch { /* silent */ }
+            gifPickerDotNetRef.Dispose();
+            gifPickerDotNetRef = null;
         }
     }
 }
