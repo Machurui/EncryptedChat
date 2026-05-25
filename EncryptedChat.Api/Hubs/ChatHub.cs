@@ -20,8 +20,9 @@ public class ChatHub : Hub
     private readonly IPresenceService _presenceService;
     private readonly IRateLimitService _rateLimitService;
     private readonly ILogger<ChatHub> _logger;
+    private readonly IHubContext<ChatHub> _hubContext;
 
-    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IPresenceService presenceService, IRateLimitService rateLimitService, ILogger<ChatHub> logger)
+    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IPresenceService presenceService, IRateLimitService rateLimitService, ILogger<ChatHub> logger, IHubContext<ChatHub> hubContext)
     {
         _messageService = messageService;
         _teamService = teamService;
@@ -31,6 +32,7 @@ public class ChatHub : Hub
         _presenceService = presenceService;
         _rateLimitService = rateLimitService;
         _logger = logger;
+        _hubContext = hubContext;
     }
 
     private static string TeamGroup(Guid teamId) => $"team-{teamId}";
@@ -210,6 +212,26 @@ public class ChatHub : Hub
             return;
 
         await _realtimeService.BroadcastMessageAsync(teamId, created);
+
+        // First message in a DM? Notify the friend directly so they receive both
+        // (a) the new DM in their sidebar and (b) the initial message in real time.
+        // (Required because TeamController no longer broadcasts DirectMessageCreated
+        // on bare DM creation — the friend is only notified once there's content.)
+        var teamDto = await _teamService.GetByIdAsync(teamId);
+        if (teamDto?.IsDirect == true)
+        {
+            int messageCount = await _messageService.CountByTeamAsync(teamId);
+            if (messageCount == 1)
+            {
+                var allMemberIds = await _teamService.GetMemberUserIdsAsync(teamId);
+                var friendId = allMemberIds.FirstOrDefault(id => id != senderId);
+                if (!string.IsNullOrEmpty(friendId))
+                {
+                    await _hubContext.Clients.User(friendId).SendAsync("DirectMessageCreated", teamDto);
+                    await _hubContext.Clients.User(friendId).SendAsync("ReceiveMessage", created);
+                }
+            }
+        }
 
         var memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
         if (memberIds.Count > 0)
