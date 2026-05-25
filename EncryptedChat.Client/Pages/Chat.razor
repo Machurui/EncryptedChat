@@ -4098,25 +4098,25 @@
 
             hubConnection.On<ChatClient.MessageDTOPublic>("ReceiveMessage", async message =>
             {
-                Console.WriteLine($"[SignalR] ReceiveMessage: TeamId={message.TeamId}, SenderId={message.Sender?.Id}, SelectedTeam={selectedTeamId}");
-
                 // Store message (check for duplicates by Id)
                 if (!teamMessages.ContainsKey(message.TeamId))
                     teamMessages[message.TeamId] = new();
 
                 if (teamMessages[message.TeamId].Any(m => m.Id == message.Id))
-                {
-                    Console.WriteLine("[SignalR] ReceiveMessage: Duplicate message, skipping");
                     return;
-                }
 
                 // Add to cache (for non-current teams) or to messages (for current team)
                 if (message.TeamId == selectedTeamId)
                 {
                     if (!messages.Any(m => m.Id == message.Id))
                     {
-                        Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
                         messages.Add(message);
+                        // First message in a previously empty DM/team: flip the
+                        // LoadingState from Empty → Success so the foreach renders.
+                        // Without this, the "No messages yet" template keeps showing
+                        // until the user reloads.
+                        if (messagesState != LoadState.Success)
+                            messagesState = LoadState.Success;
                         TriggerMessageFadeIn(message.Id);
                         // chatScroll observer auto-handles re-scroll if user is at bottom.
                         await InvokeAsync(StateHasChanged);
@@ -4697,7 +4697,21 @@
             else if (hubConnection?.State == HubConnectionState.Connected)
             {
                 _lastAttemptedSendText = newMessageText;
-                await hubConnection.InvokeAsync("SendMessageToTeam", selectedTeamId.Value, newMessageText);
+                var sent = await hubConnection.InvokeAsync<ChatClient.MessageDTOPublic?>(
+                    "SendMessageToTeam", selectedTeamId.Value, newMessageText);
+
+                // Optimistic local render — guarantees the sender sees their own message
+                // immediately, independent of whether the SignalR group broadcast reaches
+                // them (fresh-DM race etc.). The ReceiveMessage handler dedups by message.Id.
+                if (sent != null && sent.TeamId == selectedTeamId &&
+                    !messages.Any(m => m.Id == sent.Id))
+                {
+                    messages.Add(sent);
+                    if (messagesState != LoadState.Success)
+                        messagesState = LoadState.Success;
+                    TriggerMessageFadeIn(sent.Id);
+                }
+
                 // Only clear if not rate-limited. If RateLimited event arrived during the
                 // await, IsInCooldown is already true and we preserve the user's text.
                 if (!IsInCooldown)
