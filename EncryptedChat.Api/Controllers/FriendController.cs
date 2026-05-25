@@ -123,13 +123,20 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var (success, removedFriendId, _) = await _friendService.RemoveFriendAsync(userId, friendId);
+        var (success, removedFriendId, deletedDmId) = await _friendService.RemoveFriendAsync(userId, friendId);
         if (!success)
             return NotFound(new { Message = "Friendship not found." });
 
         if (!string.IsNullOrEmpty(removedFriendId))
         {
             await _hubContext.Clients.User(removedFriendId).SendAsync("FriendRemoved", userId);
+
+            if (deletedDmId.HasValue)
+            {
+                var bothUsers = new[] { userId, removedFriendId };
+                await _hubContext.Clients.Users(bothUsers)
+                    .SendAsync("TeamDeleted", new { TeamId = deletedDmId.Value });
+            }
         }
 
         return NoContent();
