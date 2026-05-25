@@ -467,4 +467,42 @@ public class TeamControllerTests
     }
 
     #endregion
+
+    #region GetOrCreateDirectMessage
+
+    [Fact]
+    public async Task GetOrCreateDirectMessage_DoesNotBroadcastDirectMessageCreated()
+    {
+        string friendId = Guid.NewGuid().ToString();
+        TeamDTOPublic dmDto = new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "DM",
+            Slug = "dm-slug",
+            IsDirect = true,
+        };
+
+        // Fresh mock to make Verify checks unambiguous
+        Mock<IHubClients> mockClients = new();
+        Mock<IClientProxy> mockUserProxy = new();
+        mockClients.Setup(c => c.User(It.IsAny<string>())).Returns(mockUserProxy.Object);
+        _mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
+        _mockTeamService
+            .Setup(s => s.GetOrCreateDirectMessageWithStatusAsync(_userId, friendId))
+            .ReturnsAsync((dmDto, true)); // isNew = true (would historically trigger broadcast)
+
+        TeamController controller = CreateController(_userId);
+        ActionResult<TeamDTOPublic> result = await controller.GetOrCreateDirectMessage(friendId);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+
+        // CRITICAL: friend must NOT be notified at DM creation time
+        mockUserProxy.Verify(p => p.SendCoreAsync(
+            "DirectMessageCreated",
+            It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    #endregion
 }

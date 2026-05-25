@@ -246,16 +246,13 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            var (dm, isNew) = await _teamService.GetOrCreateDirectMessageWithStatusAsync(currentUserId, friendId);
+            var (dm, _) = await _teamService.GetOrCreateDirectMessageWithStatusAsync(currentUserId, friendId);
             if (dm == null)
                 return BadRequest(new { Message = "Could not create direct message channel." });
 
-            // Notify the friend via SignalR if this is a new DM
-            if (isNew)
-            {
-                await _hubContext.Clients.User(friendId).SendAsync("DirectMessageCreated", dm);
-            }
-
+            // Friend is intentionally NOT notified here. ChatHub.SendMessageToTeam
+            // detects the first message in a DM and sends DirectMessageCreated +
+            // the initial ReceiveMessage to the friend at that point.
             return Ok(dm);
         }
     }
