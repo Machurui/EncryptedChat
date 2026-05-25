@@ -258,4 +258,9 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
             Attachments = attachments
         };
     }
+
+    public Task<int> CountByTeamAsync(Guid teamId)
+    {
+        return _context.Messages.CountAsync(m => m.Team != null && m.Team.Id == teamId);
+    }
 }

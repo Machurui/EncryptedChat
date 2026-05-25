@@ -565,6 +565,29 @@ public class MessageServiceTests : IDisposable
 
     #endregion
 
+    #region CountByTeamAsync
+
+    [Fact]
+    public async Task CountByTeamAsync_ReturnsExactCount()
+    {
+        User user = await CreateUser("user-1");
+        Team teamA = await CreateTeam("TeamA");
+        Team teamB = await CreateTeam("TeamB");
+        await AddMember(user, teamA);
+        await AddMember(user, teamB);
+
+        await CreateMessage(user, teamA, "msg1");
+        await CreateMessage(user, teamA, "msg2");
+        await CreateMessage(user, teamA, "msg3");
+        await CreateMessage(user, teamB, "other-team-msg");
+
+        int count = await _service.CountByTeamAsync(teamA.Id);
+
+        count.Should().Be(3);
+    }
+
+    #endregion
+
     #region DecryptionFailure
 
     [Fact]

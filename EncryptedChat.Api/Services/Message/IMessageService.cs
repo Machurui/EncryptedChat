@@ -9,4 +9,5 @@ public interface IMessageService
     Task<MessageDTOPublic?> CreateAsync(MessageDTO message, string senderId);
     Task<MessageDTOPublic?> UpdateAsync(Guid id, MessageDTO message, string actorId);
     Task<MessageDTOPublic?> DeleteAsync(Guid id, string actorId);
+    Task<int> CountByTeamAsync(Guid teamId);
 }
