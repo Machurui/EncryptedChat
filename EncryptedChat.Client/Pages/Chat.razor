@@ -683,24 +683,38 @@
                                         }
                                         @if (msg.Attachments?.Any() == true)
                                         {
-                                            <div class="message-attachments">
-                                                @foreach (var att in msg.Attachments)
+                                            <div class="message-bubble-row">
+                                                <div class="message-attachments">
+                                                    @foreach (var att in msg.Attachments)
+                                                    {
+                                                        @if (IsImageMimeType(att.MimeType))
+                                                        {
+                                                            <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
+                                                                <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-attachment">
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                                <span class="attachment-file-name">@att.FileName</span>
+                                                                <span class="attachment-file-size">@FormatFileSize(att.Size)</span>
+                                                            </a>
+                                                        }
+                                                    }
+                                                </div>
+                                                @if (string.IsNullOrWhiteSpace(msg.Text))
                                                 {
-                                                    @if (IsImageMimeType(att.MimeType))
-                                                    {
-                                                        <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
-                                                            <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
-                                                        </a>
-                                                    }
-                                                    else
-                                                    {
-                                                        <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-attachment">
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                                            <span class="attachment-file-name">@att.FileName</span>
-                                                            <span class="attachment-file-size">@FormatFileSize(att.Size)</span>
-                                                        </a>
-                                                    }
+                                                    <button class="msg-pin-btn @(IsMessagePinned(msg.Id) ? "pinned" : "")"
+                                                            @onclick="() => TogglePinMessage(msg.Id)"
+                                                            @onclick:stopPropagation="true"
+                                                            title="@(IsMessagePinned(msg.Id) ? "Unpin message" : "Pin message")"
+                                                            aria-label="@(IsMessagePinned(msg.Id) ? "Unpin message" : "Pin message")">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                                        </svg>
+                                                    </button>
                                                 }
                                             </div>
                                         }
