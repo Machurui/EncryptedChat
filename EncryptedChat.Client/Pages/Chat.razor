@@ -3579,6 +3579,62 @@
         }
     }
 
+    private async Task RecoverFromOfflineAsync()
+    {
+        if (string.IsNullOrEmpty(_userId)) return;
+
+        try
+        {
+            var teamsResult = await TeamClient.GetTeamsByUserAsync(_userId);
+            if (teamsResult.Success && teamsResult.Value != null)
+            {
+                var serverTeamIds = teamsResult.Value.Select(t => t.Id).ToHashSet();
+                var localTeamIds = teams.Select(t => t.Id).ToHashSet();
+
+                // Add teams that exist on server but not locally (e.g., DM created
+                // while we were offline, or someone added us to a team).
+                foreach (var team in teamsResult.Value.Where(t => !localTeamIds.Contains(t.Id)))
+                {
+                    teams.Insert(0, team);
+                    try
+                    {
+                        if (hubConnection?.State == HubConnectionState.Connected)
+                            await hubConnection.InvokeAsync("JoinTeam", team.Id);
+                    }
+                    catch { /* silent — next reconnect will retry */ }
+                }
+
+                // Remove teams that exist locally but not on server (deleted while offline).
+                var staleTeamIds = localTeamIds.Where(id => !serverTeamIds.Contains(id)).ToList();
+                foreach (var teamId in staleTeamIds)
+                {
+                    teams.RemoveAll(t => t.Id == teamId);
+                    teamMessages.Remove(teamId);
+                    _teamScrollPositions.Remove(teamId);
+                    _visitedTeams.Remove(teamId);
+                    if (selectedTeamId == teamId)
+                    {
+                        selectedTeamId = null;
+                        selectedTeam = null;
+                        messages.Clear();
+                        pinnedMessages.Clear();
+                        var nextTeam = teams.FirstOrDefault();
+                        if (nextTeam != null) await SelectTeam(nextTeam.Id);
+                    }
+                }
+            }
+
+            // Re-fetch friends + pending requests in case they changed while offline.
+            await LoadFriends();
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SignalR] RecoverFromOfflineAsync failed: {ex.Message}");
+        }
+    }
+
     private async Task AcceptFriendRequest(Guid requestId)
     {
         var result = await FriendClient.AcceptRequestAsync(requestId);
@@ -4415,6 +4471,12 @@
                 }
                 return Task.CompletedTask;
             });
+
+            hubConnection.Reconnected += async (connectionId) =>
+            {
+                Console.WriteLine($"[SignalR] Reconnected: {connectionId} — re-syncing state");
+                await RecoverFromOfflineAsync();
+            };
 
             await hubConnection.StartAsync();
             Console.WriteLine($"[SignalR] Connected! ConnectionId={hubConnection.ConnectionId}");
