@@ -211,6 +211,12 @@ public class ChatHub : Hub
         if (created is null)
             return;
 
+        // Ensure the sender's connection is in the team group BEFORE broadcasting.
+        // Required for fresh DMs where the client-side JoinTeam may not have
+        // completed (race with hubConnection state) or for any robustness gap.
+        // Idempotent — safe to call every time.
+        await _hubContext.Groups.AddToGroupAsync(Context.ConnectionId, TeamGroup(teamId));
+
         await _realtimeService.BroadcastMessageAsync(teamId, created);
 
         // First message in a DM? Notify the friend directly so they receive both

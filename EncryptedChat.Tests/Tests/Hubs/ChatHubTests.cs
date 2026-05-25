@@ -21,6 +21,7 @@ public class ChatHubTests
     private readonly Mock<IHubContext<ChatHub>> _mockHubContext = new();
     private readonly Mock<IHubClients> _mockClients = new();
     private readonly Mock<IClientProxy> _mockUserProxy = new();
+    private readonly Mock<IGroupManager> _mockGroups = new();
     private readonly string _senderId = Guid.NewGuid().ToString();
     private readonly string _friendId = Guid.NewGuid().ToString();
     private readonly Guid _teamId = Guid.NewGuid();
@@ -29,6 +30,7 @@ public class ChatHubTests
     {
         _mockClients.Setup(c => c.User(It.IsAny<string>())).Returns(_mockUserProxy.Object);
         _mockHubContext.Setup(h => h.Clients).Returns(_mockClients.Object);
+        _mockHubContext.Setup(h => h.Groups).Returns(_mockGroups.Object);
 
         _mockRateLimit
             .Setup(r => r.CheckAndRecord(It.IsAny<string>()))
