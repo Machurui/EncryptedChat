@@ -90,6 +90,67 @@ public sealed class AuthServiceTests : IDisposable
         activeToken.IsRevoked.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task LoginRefreshLogout_SessionFkTracksCurrentRefreshToken_AndIsRevokedOnLogout()
+    {
+        User user = new()
+        {
+            Id = "user-fk",
+            Email = "fk@test.com",
+            NormalizedEmail = "FK@TEST.COM",
+            UserName = "fk@test.com",
+            NormalizedUserName = "FK@TEST.COM",
+            Name = "FK User",
+            Level = 1,
+            Secret = "secret"
+        };
+        await _userManager.CreateAsync(user);
+
+        _signInManager
+            .Setup(s => s.CheckPasswordSignInAsync(user, "P@ssw0rd", true))
+            .ReturnsAsync(SignInResult.Success);
+
+        // The mock ISessionService doesn't create real Session rows, so seed
+        // the existing-session row directly to exercise the update branch in
+        // LoginAsync (and the same branch is taken on Refresh).
+        Session seeded = new()
+        {
+            UserId = user.Id,
+            TokenHash = "placeholder",
+            DeviceInfo = "test-device",
+            DeviceKind = "web"
+        };
+        _context.Sessions.Add(seeded);
+        await _context.SaveChangesAsync();
+
+        LoginResult login = await _service.LoginAsync(
+            new LoginDTO { Email = user.Email, Password = "P@ssw0rd" },
+            deviceInfo: "test-device",
+            deviceKind: "web");
+        login.Succeeded.Should().BeTrue();
+
+        RefreshToken firstRefresh = await _context.RefreshTokens.SingleAsync();
+        Session sessionAfterLogin = await _context.Sessions.SingleAsync();
+        sessionAfterLogin.CurrentRefreshTokenId.Should().Be(firstRefresh.Id);
+
+        LoginResult refreshed = await _service.RefreshAsync(
+            login.RefreshToken!,
+            deviceInfo: "test-device",
+            deviceKind: "web");
+        refreshed.Succeeded.Should().BeTrue();
+
+        RefreshToken newRefresh = await _context.RefreshTokens
+            .SingleAsync(rt => rt.RevokedAt == null);
+        Session sessionAfterRefresh = await _context.Sessions.SingleAsync();
+        sessionAfterRefresh.CurrentRefreshTokenId.Should().Be(newRefresh.Id,
+            "the FK should rotate to the newly-issued refresh token");
+
+        await _service.LogoutAsync(refreshed.RefreshToken);
+        Session sessionAfterLogout = await _context.Sessions.SingleAsync();
+        sessionAfterLogout.IsRevoked.Should().BeTrue(
+            "logout should also revoke the linked session row");
+    }
+
     private static IConfiguration CreateConfiguration() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

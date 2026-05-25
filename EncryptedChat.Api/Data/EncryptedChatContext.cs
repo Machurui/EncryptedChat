@@ -98,6 +98,19 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
         modelBuilder.Entity<Session>()
             .HasIndex(s => new { s.UserId, s.IsRevoked });
 
+        modelBuilder.Entity<Session>()
+            .HasOne(s => s.CurrentRefreshToken)
+            .WithMany()
+            .HasForeignKey(s => s.CurrentRefreshTokenId)
+            // NoAction avoids SQL Server's multi-cascade-path error (User cascades
+            // to both Sessions and RefreshTokens). Refresh tokens are never hard
+            // deleted today (only RevokedAt is set); if a cleanup ever deletes
+            // rows, it must null this FK first.
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Session>()
+            .HasIndex(s => s.CurrentRefreshTokenId);
+
         modelBuilder.Entity<PinnedMessage>()
             .HasOne(p => p.Team)
             .WithMany()

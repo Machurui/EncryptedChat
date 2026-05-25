@@ -17,7 +17,7 @@ public class SessionService(EncryptedChatContext context) : ISessionService
         return Convert.ToBase64String(bytes);
     }
 
-    public async Task<Session> CreateSessionAsync(string userId, string token, string deviceInfo, string deviceKind, string? ipAddress)
+    public async Task<Session> CreateSessionAsync(string userId, string token, string deviceInfo, string deviceKind, string? ipAddress, Guid? refreshTokenId = null)
     {
         var tokenHash = HashToken(token);
 
@@ -28,7 +28,8 @@ public class SessionService(EncryptedChatContext context) : ISessionService
             DeviceInfo = deviceInfo,
             DeviceKind = deviceKind,
             IpAddress = MaskIpAddress(ipAddress),
-            ExpiresAt = DateTime.UtcNow.AddDays(SessionExpirationDays)
+            ExpiresAt = DateTime.UtcNow.AddDays(SessionExpirationDays),
+            CurrentRefreshTokenId = refreshTokenId
         };
 
         _context.Sessions.Add(session);
@@ -39,9 +40,15 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task<SessionListDTO> GetUserSessionsAsync(string userId, string? currentTokenHash)
     {
+        DateTime now = DateTime.UtcNow;
         var sessions = await _context.Sessions
             .AsNoTracking()
-            .Where(s => s.UserId == userId && !s.IsRevoked && (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow))
+            .Where(s => s.UserId == userId
+                && !s.IsRevoked
+                && (s.ExpiresAt == null || s.ExpiresAt > now)
+                && s.CurrentRefreshToken != null
+                && s.CurrentRefreshToken.RevokedAt == null
+                && s.CurrentRefreshToken.ExpiresAt > now)
             .OrderByDescending(s => s.LastActiveAt)
             .Select(s => new SessionDTO(
                 s.Id,
@@ -61,12 +68,18 @@ public class SessionService(EncryptedChatContext context) : ISessionService
     public async Task<bool> RevokeSessionAsync(string userId, Guid sessionId)
     {
         var session = await _context.Sessions
+            .Include(s => s.CurrentRefreshToken)
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && !s.IsRevoked);
 
         if (session == null)
             return false;
 
         session.IsRevoked = true;
+        // Revoke the linked refresh token too, otherwise the device just
+        // auto-refreshes itself back in once its 15-min access token expires.
+        if (session.CurrentRefreshToken != null && session.CurrentRefreshToken.RevokedAt == null)
+            session.CurrentRefreshToken.RevokedAt = DateTime.UtcNow;
+
         await _context.SaveChangesAsync();
         return true;
     }
@@ -74,12 +87,16 @@ public class SessionService(EncryptedChatContext context) : ISessionService
     public async Task<int> RevokeAllOtherSessionsAsync(string userId, string? currentTokenHash)
     {
         var sessions = await _context.Sessions
+            .Include(s => s.CurrentRefreshToken)
             .Where(s => s.UserId == userId && !s.IsRevoked && (currentTokenHash == null || s.TokenHash != currentTokenHash))
             .ToListAsync();
 
+        DateTime now = DateTime.UtcNow;
         foreach (var session in sessions)
         {
             session.IsRevoked = true;
+            if (session.CurrentRefreshToken != null && session.CurrentRefreshToken.RevokedAt == null)
+                session.CurrentRefreshToken.RevokedAt = now;
         }
 
         await _context.SaveChangesAsync();
@@ -101,8 +118,14 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task<bool> IsSessionValidAsync(string tokenHash)
     {
+        DateTime now = DateTime.UtcNow;
         return await _context.Sessions
-            .AnyAsync(s => s.TokenHash == tokenHash && !s.IsRevoked && (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            .AnyAsync(s => s.TokenHash == tokenHash
+                && !s.IsRevoked
+                && (s.ExpiresAt == null || s.ExpiresAt > now)
+                && s.CurrentRefreshToken != null
+                && s.CurrentRefreshToken.RevokedAt == null
+                && s.CurrentRefreshToken.ExpiresAt > now);
     }
 
     public async Task CleanupExpiredSessionsAsync()

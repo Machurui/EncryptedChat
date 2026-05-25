@@ -111,19 +111,21 @@ public class AuthService(
 
             if (existingSession != null)
             {
-                // Update existing session
+                // Update existing session — re-point to the freshly issued refresh token
                 existingSession.TokenHash = SessionService.HashToken(tokenPair.AccessToken);
                 existingSession.LastActiveAt = DateTime.UtcNow;
+                existingSession.CurrentRefreshTokenId = refreshTokenEntity.Id;
             }
             else
             {
-                // Create new session
+                // Create new session linked to the new refresh token
                 await _sessionService.CreateSessionAsync(
                     user.Id,
                     tokenPair.AccessToken,
                     deviceInfo,
                     deviceKind ?? "web",
-                    ipAddress
+                    ipAddress,
+                    refreshTokenEntity.Id
                 );
             }
         }
@@ -142,11 +144,21 @@ public class AuthService(
         RefreshToken? token = await _context.RefreshTokens
             .FirstOrDefaultAsync(rt => rt.Token == refreshTokenHash);
 
-        if (token != null)
+        if (token == null)
+            return;
+
+        token.RevokedAt = DateTime.UtcNow;
+
+        // Revoke the session linked to this refresh token so it disappears
+        // from the user's Active Sessions panel immediately.
+        Session? linkedSession = await _context.Sessions
+            .FirstOrDefaultAsync(s => s.CurrentRefreshTokenId == token.Id && !s.IsRevoked);
+        if (linkedSession != null)
         {
-            token.RevokedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            linkedSession.IsRevoked = true;
         }
+
+        await _context.SaveChangesAsync();
     }
 
     public async Task<LoginResult> RefreshAsync(string refreshToken, string? oldAccessToken = null, string? deviceInfo = null, string? deviceKind = null, string? ipAddress = null)
@@ -198,9 +210,10 @@ public class AuthService(
 
         if (session != null)
         {
-            // Update existing session
+            // Update existing session — re-point to the rotated refresh token
             session.TokenHash = newTokenHash;
             session.LastActiveAt = DateTime.UtcNow;
+            session.CurrentRefreshTokenId = newRefreshToken.Id;
         }
         else if (!string.IsNullOrEmpty(deviceInfo))
         {
@@ -210,7 +223,8 @@ public class AuthService(
                 newTokenPair.AccessToken,
                 deviceInfo,
                 deviceKind ?? "web",
-                ipAddress
+                ipAddress,
+                newRefreshToken.Id
             );
         }
 

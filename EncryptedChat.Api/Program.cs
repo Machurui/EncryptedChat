@@ -126,6 +126,23 @@ builder.Services
                     context.Token = cookieToken;
                 }
                 return Task.CompletedTask;
+            },
+            // Per-request session check: rejects access tokens whose Session row
+            // has been revoked (or whose linked refresh token is gone). Makes
+            // session revocation effective on the very next request instead of
+            // waiting up to 15 min for the access token to expire.
+            OnTokenValidated = async context =>
+            {
+                if (context.SecurityToken is not Microsoft.IdentityModel.JsonWebTokens.JsonWebToken jwt)
+                    return;
+
+                EncryptedChat.Services.ISessionService sessionService =
+                    context.HttpContext.RequestServices.GetRequiredService<EncryptedChat.Services.ISessionService>();
+
+                string tokenHash = EncryptedChat.Services.SessionService.HashToken(jwt.EncodedToken);
+                bool valid = await sessionService.IsSessionValidAsync(tokenHash);
+                if (!valid)
+                    context.Fail("Session revoked");
             }
         };
     });

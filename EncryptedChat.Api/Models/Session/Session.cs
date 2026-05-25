@@ -39,4 +39,14 @@ public class Session
     public DateTime? ExpiresAt { get; set; }
 
     public bool IsRevoked { get; set; } = false;
+
+    // Links this session to the refresh token currently keeping it alive.
+    // Rotated on every RefreshAsync; nulled (SetNull) if the refresh token
+    // row is deleted. A session is only "active" if this FK points to a
+    // non-revoked, non-expired RefreshToken — that is the real auth ground
+    // truth, not the session's own ExpiresAt clock.
+    public Guid? CurrentRefreshTokenId { get; set; }
+
+    [ForeignKey("CurrentRefreshTokenId")]
+    public RefreshToken? CurrentRefreshToken { get; set; }
 }
