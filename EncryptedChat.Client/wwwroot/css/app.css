@@ -1278,6 +1278,56 @@ textarea:-webkit-autofill {
     overflow: hidden;
 }
 
+.pinned-item-gif img,
+.pinned-item-image img {
+    max-height: 80px;
+    max-width: 100%;
+    border-radius: 6px;
+    display: block;
+    margin-top: 4px;
+}
+
+.pinned-item-image {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.pinned-item-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.pinned-item-attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.06);
+    border: 0.5px solid rgba(255,255,255,0.10);
+    border-radius: 6px;
+    color: rgba(255,255,255,0.80);
+    text-decoration: none;
+    font-size: 11px;
+    max-width: fit-content;
+}
+
+.pinned-item-attachment:hover {
+    background: rgba(255,255,255,0.10);
+}
+
+.pinned-item-attachment-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+}
+
+.pinned-item-attachment-size {
+    opacity: 0.6;
+}
+
 .pinned-unpin-btn {
     width: 24px;
     height: 24px;

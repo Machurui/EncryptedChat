@@ -527,7 +527,43 @@
                                                                 <span>·</span>
                                                                 <span>@pin.PinnedAt.ToLocalTime().ToString("MMM d")</span>
                                                             </div>
-                                                            <div class="pinned-item-text">@pin.Message?.Text</div>
+                                                            @if (pin.Message != null && !string.IsNullOrWhiteSpace(pin.Message.Text))
+                                                            {
+                                                                @if (IsPureGifUrl(pin.Message.Text))
+                                                                {
+                                                                    <div class="pinned-item-gif">
+                                                                        <img src="@pin.Message.Text.Trim()" alt="GIF" loading="lazy" />
+                                                                    </div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <div class="pinned-item-text">@((MarkupString)RenderMessageContent(pin.Message.Text))</div>
+                                                                }
+                                                            }
+                                                            @if (pin.Message?.Attachments?.Any() == true)
+                                                            {
+                                                                <div class="pinned-item-attachments">
+                                                                    @foreach (var att in pin.Message.Attachments)
+                                                                    {
+                                                                        @if (IsImageMimeType(att.MimeType))
+                                                                        {
+                                                                            <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="pinned-item-image">
+                                                                                <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
+                                                                            </a>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="pinned-item-attachment">
+                                                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                                                                </svg>
+                                                                                <span class="pinned-item-attachment-name">@att.FileName</span>
+                                                                                <span class="pinned-item-attachment-size">@FormatFileSize(att.Size)</span>
+                                                                            </a>
+                                                                        }
+                                                                    }
+                                                                </div>
+                                                            }
                                                         </div>
                                                         <button class="icon-btn pinned-unpin-btn" @onclick="() => UnpinMessage(pin.MessageId)" @onclick:stopPropagation="true" title="Unpin">
                                                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
