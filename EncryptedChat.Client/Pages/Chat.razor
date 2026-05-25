@@ -4251,12 +4251,27 @@
                 var removed = teams.RemoveAll(t => t.Id == evt.TeamId);
                 if (removed > 0)
                 {
+                    // Drop any cached state tied to the deleted team
+                    teamMessages.Remove(evt.TeamId);
+                    _teamScrollPositions.Remove(evt.TeamId);
+                    _visitedTeams.Remove(evt.TeamId);
+
                     if (selectedTeamId == evt.TeamId)
                     {
-                        selectedTeamId = teams.FirstOrDefault()?.Id;
-                        selectedTeam = teams.FirstOrDefault();
-                        if (selectedTeamId.HasValue)
-                            await LoadTeamDetails();
+                        // Reset current-team state BEFORE switching so the next
+                        // SelectTeam call doesn't try to save scroll position for
+                        // the now-deleted team, and the old conversation's
+                        // messages don't bleed into the new view.
+                        selectedTeamId = null;
+                        selectedTeam = null;
+                        messages.Clear();
+                        pinnedMessages.Clear();
+
+                        var nextTeam = teams.FirstOrDefault();
+                        if (nextTeam != null)
+                        {
+                            await SelectTeam(nextTeam.Id);
+                        }
                     }
                     await InvokeAsync(StateHasChanged);
                 }
