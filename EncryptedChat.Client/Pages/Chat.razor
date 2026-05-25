@@ -4057,11 +4057,14 @@
                 // Add to cache (for non-current teams) or to messages (for current team)
                 if (message.TeamId == selectedTeamId)
                 {
-                    Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
-                    messages.Add(message);
-                    TriggerMessageFadeIn(message.Id);
-                    // chatScroll observer auto-handles re-scroll if user is at bottom.
-                    await InvokeAsync(StateHasChanged);
+                    if (!messages.Any(m => m.Id == message.Id))
+                    {
+                        Console.WriteLine("[SignalR] ReceiveMessage: Message is for current team, adding to view");
+                        messages.Add(message);
+                        TriggerMessageFadeIn(message.Id);
+                        // chatScroll observer auto-handles re-scroll if user is at bottom.
+                        await InvokeAsync(StateHasChanged);
+                    }
                 }
                 else
                 {
@@ -5395,11 +5398,26 @@
         var result = await TeamClient.GetOrCreateDirectMessageAsync(friendId);
         if (result.Success && result.Value != null)
         {
-            // Add to teams list if not already there
             if (!teams.Any(t => t.Id == result.Value.Id))
             {
                 teams.Add(result.Value);
             }
+
+            // Sender must join the SignalR group for this DM so they receive their
+            // own broadcasts when sending messages (server broadcasts ReceiveMessage
+            // to the team-{dmId} group).
+            try
+            {
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    await hubConnection.InvokeAsync("JoinTeam", result.Value.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[StartDirectMessage] JoinTeam failed: {ex.Message}");
+            }
+
             await SelectTeam(result.Value.Id);
             activeNav = "chats";
         }
