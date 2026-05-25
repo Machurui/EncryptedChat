@@ -455,21 +455,33 @@
                                         E2EE
                                     </span>
                                 </div>
-                                <div class="conversation-meta">
-                                    @if (teamDetails?.Members != null)
-                                    {
-                                        <span>@teamDetails.Members.Count members · @GetOnlineMemberCount() online</span>
-                                    }
-                                </div>
+                                @if (selectedTeam?.IsDirect != true)
+                                {
+                                    <div class="conversation-meta">
+                                        @if (teamDetails?.Members != null)
+                                        {
+                                            <span>@teamDetails.Members.Count members · @GetOnlineMemberCount() online</span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="conversation-meta">
+                                        <span>Direct message</span>
+                                    </div>
+                                }
                             </div>
                         </div>
                         <div class="conversation-header-right">
-                            <button class="icon-btn hide-desktop-up" @onclick="ToggleMembersDrawer" aria-label="Show members" title="Members">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
-                                </svg>
-                            </button>
+                            @if (selectedTeam?.IsDirect != true)
+                            {
+                                <button class="icon-btn hide-desktop-up" @onclick="ToggleMembersDrawer" aria-label="Show members" title="Members">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                        <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                    </svg>
+                                </button>
+                            }
                             <button class="icon-btn" @onclick="OpenHeaderSearch" title="Search">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             </button>
@@ -529,36 +541,42 @@
                                     </div>
                                 }
                             </div>
-                            <div class="header-menu-container popup-container">
-                                <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                            @if (selectedTeam?.IsDirect != true)
+                            {
+                                <div class="header-menu-container popup-container">
+                                    <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                    </button>
+                                    @if (showHeaderMoreMenu)
+                                    {
+                                        <div class="header-dropdown more-dropdown">
+                                            <button class="dropdown-item" @onclick="OpenTeamManageModal">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                                </svg>
+                                                <span>Manage team...</span>
+                                            </button>
+                                            <div class="dropdown-divider"></div>
+                                            <button class="dropdown-item danger" @onclick="LeaveTeamAction">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                                                </svg>
+                                                <span>Leave team...</span>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            @if (selectedTeam?.IsDirect != true)
+                            {
+                                <button class="icon-btn mobile-members-toggle" @onclick="ToggleMembersRail" title="Members">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                        <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                    </svg>
                                 </button>
-                                @if (showHeaderMoreMenu)
-                                {
-                                    <div class="header-dropdown more-dropdown">
-                                        <button class="dropdown-item" @onclick="OpenTeamManageModal">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                                                <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
-                                            </svg>
-                                            <span>Manage team...</span>
-                                        </button>
-                                        <div class="dropdown-divider"></div>
-                                        <button class="dropdown-item danger" @onclick="LeaveTeamAction">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                                            </svg>
-                                            <span>Leave team...</span>
-                                        </button>
-                                    </div>
-                                }
-                            </div>
-                            <button class="icon-btn mobile-members-toggle" @onclick="ToggleMembersRail" title="Members">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
-                                </svg>
-                            </button>
+                            }
                         </div>
                     }
                 </div>
@@ -944,6 +962,8 @@
     @* ── Members rail (230px) ── *@
     @if (selectedTeam != null)
     {
+        @if (selectedTeam?.IsDirect != true)
+        {
         <GlassPanel Radius="24" Class="@($"members-rail-panel {(showMembersRail ? "show" : "")} {(mobileShowMembersDrawer ? "drawer-open" : "")}")">
             <div class="members-header">
                 <span class="section-label">Members</span>
@@ -998,6 +1018,7 @@
                 </div>
             }
         </GlassPanel>
+        }
     }
 </div>
 
@@ -2142,7 +2163,6 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        margin-top: 8px;
     }
 
     .message-attachment {
@@ -2187,7 +2207,6 @@
         max-width: 300px;
         border-radius: 12px;
         overflow: hidden;
-        margin-top: 8px;
     }
 
     .message-image-attachment img {
@@ -2364,6 +2383,13 @@
 
     .send-btn-countdown {
         white-space: nowrap;
+    }
+
+    /* Composer icon buttons match the send button size (36×36) for visual rhythm. */
+    .composer .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
     }
 
     /* ── Picker containers ── */
