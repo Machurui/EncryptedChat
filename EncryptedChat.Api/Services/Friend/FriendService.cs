@@ -172,7 +172,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
         return (true, otherUserId);
     }
 
-    public async Task<(bool Success, string? RemovedFriendId)> RemoveFriendAsync(string userId, string friendId)
+    public async Task<(bool Success, string? RemovedFriendId, Guid? DeletedDmId)> RemoveFriendAsync(string userId, string friendId)
     {
         var friendship = await _context.Friendships
             .FirstOrDefaultAsync(f =>
@@ -181,9 +181,10 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
                  (f.RequesterId == friendId && f.AddresseeId == userId)));
 
         if (friendship == null)
-            return (false, null);
+            return (false, null, null);
 
-        // Find and delete any DM between these two users
+        Guid? deletedDmId = null;
+
         var dm = await _context.Teams
             .Include(t => t.Members)
             .Where(t => t.IsDirect && t.Members.Count == 2)
@@ -192,21 +193,22 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
         if (dm != null)
         {
-            // Delete all messages in the DM
-            var messages = await _context.Messages.Where(m => m.Team != null && m.Team.Id == dm.Id).ToListAsync();
+            deletedDmId = dm.Id;
+
+            var messages = await _context.Messages
+                .Where(m => m.Team != null && m.Team.Id == dm.Id)
+                .ToListAsync();
             _context.Messages.RemoveRange(messages);
 
-            // Delete the members
             var members = await _context.Members.Where(m => m.TeamId == dm.Id).ToListAsync();
             _context.Members.RemoveRange(members);
 
-            // Delete the DM team
             _context.Teams.Remove(dm);
         }
 
         _context.Friendships.Remove(friendship);
         await _context.SaveChangesAsync();
-        return (true, friendId);
+        return (true, friendId, deletedDmId);
     }
 
     public async Task<bool> AreFriendsAsync(string userId1, string userId2)

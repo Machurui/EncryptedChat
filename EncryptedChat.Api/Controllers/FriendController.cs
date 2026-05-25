@@ -123,7 +123,7 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var (success, removedFriendId) = await _friendService.RemoveFriendAsync(userId, friendId);
+        var (success, removedFriendId, _) = await _friendService.RemoveFriendAsync(userId, friendId);
         if (!success)
             return NotFound(new { Message = "Friendship not found." });
 
