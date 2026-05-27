@@ -457,10 +457,10 @@
                                     <div class="status-options">
                                         @foreach (var preset in statusPresets)
                                         {
-                                            var isSelected = Status == preset.Key;
+                                            var isSelected = localStatus == preset.Key;
                                             <button class="status-option @(isSelected ? "selected" : "")"
                                                     style="@(isSelected ? $"background: {GetStatusDimColor(preset.Key)};" : "")"
-                                                    @onclick="() => Status = preset.Key">
+                                                    @onclick="() => localStatus = preset.Key">
                                                 <span class="status-option-dot @preset.Key"></span>
                                                 <span class="status-option-label">@preset.Value</span>
                                                 @if (isSelected)
@@ -476,7 +476,7 @@
 
                                 <div class="profile-field">
                                     <label class="profile-field-label">Custom status message</label>
-                                    <GlassInput @bind-Value="StatusMessage" Placeholder="What are you up to?" />
+                                    <GlassInput @bind-Value="localStatusMessage" Placeholder="What are you up to?" />
                                 </div>
 
                                 <div class="info-box">
@@ -1876,6 +1876,8 @@
     private bool localReadReceipts;
     private bool localTypingIndicators;
     private string localNotificationPreference = "all";
+    private string localStatus = "online";
+    private string? localStatusMessage;
     private bool privacyInitialized;
     private bool securityInfoLoaded;
 
@@ -2091,8 +2093,8 @@
         await NameChanged.InvokeAsync(Name);
         await HandleChanged.InvokeAsync(Handle);
         await NameColorChanged.InvokeAsync(NameColor);
-        await StatusChanged.InvokeAsync(Status);
-        await StatusMessageChanged.InvokeAsync(StatusMessage);
+        await StatusChanged.InvokeAsync(localStatus);
+        await StatusMessageChanged.InvokeAsync(localStatusMessage);
         await ThemeChanged.InvokeAsync(Theme);
         await ReadReceiptsChanged.InvokeAsync(localReadReceipts);
         await TypingIndicatorsChanged.InvokeAsync(localTypingIndicators);
@@ -2144,6 +2146,8 @@
             localReadReceipts = ReadReceipts;
             localTypingIndicators = TypingIndicators;
             localNotificationPreference = NotificationPreference;
+            localStatus = Status;
+            localStatusMessage = StatusMessage;
             privacyInitialized = true;
         }
         else if (!IsOpen)
