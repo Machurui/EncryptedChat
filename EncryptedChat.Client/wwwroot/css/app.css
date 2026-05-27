@@ -1508,6 +1508,13 @@ textarea:-webkit-autofill {
     position: relative;
     display: flex;
     align-items: stretch;
+    /* Isolate this subtree's painting from the surrounding glass-panel.
+       Without this, the JS-driven transform on .composer-highlight forces
+       the parent's backdrop-filter to re-rasterize on every keystroke,
+       producing a visible glass flicker. `isolation: isolate` creates a
+       new stacking context; `contain` keeps paint+layout work local. */
+    isolation: isolate;
+    contain: layout paint;
 }
 
 .composer-overlay-container .composer-input {
@@ -1532,6 +1539,10 @@ textarea:-webkit-autofill {
     box-sizing: border-box;
     display: flex;
     align-items: center;
+    /* Promote to its own compositor layer so the per-keystroke
+       transform update doesn't repaint siblings or trigger backdrop
+       re-rasterization. */
+    will-change: transform;
 }
 
 .composer-highlight .mention-token {
