@@ -5667,13 +5667,25 @@
             return $"<img src=\"{url}\" alt=\"GIF\" class=\"message-gif-inline\" loading=\"lazy\" />";
         });
 
-        // Find @mentions and highlight them
+        // Find @mentions and highlight them, but only if they map to a real
+        // team member (handle or normalized name). Otherwise leave as plain
+        // text — avoids chipping arbitrary @word tokens like @testtest.
         var mentionPattern = new System.Text.RegularExpressions.Regex(@"@(\w+)");
         text = mentionPattern.Replace(text, match =>
         {
             var handle = match.Groups[1].Value.ToLowerInvariant();
-            var isCurrentUser = handle == currentUserHandle?.ToLowerInvariant() ||
-                               handle == currentUserName?.ToLowerInvariant().Replace(" ", "");
+
+            bool isCurrentUser = handle == currentUserHandle?.ToLowerInvariant() ||
+                                 handle == currentUserName?.ToLowerInvariant().Replace(" ", "");
+
+            bool isMember = isCurrentUser || (teamDetails?.Members?.Any(m =>
+                m.User != null &&
+                ((m.User.Handle?.ToLowerInvariant() == handle) ||
+                 (m.User.Name?.ToLowerInvariant().Replace(" ", "") == handle))) ?? false);
+
+            if (!isMember)
+                return match.Value;
+
             var cssClass = isCurrentUser ? "mention mention-me" : "mention";
             return $"<span class=\"{cssClass}\">{match.Value}</span>";
         });
