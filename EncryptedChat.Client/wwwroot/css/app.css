@@ -1499,6 +1499,47 @@ textarea:-webkit-autofill {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   Composer @mention highlight overlay
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.composer-overlay-container {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    align-items: stretch;
+}
+
+.composer-overlay-container .composer-input {
+    color: transparent;
+    caret-color: rgba(255, 255, 255, 0.95);
+    position: relative;
+    z-index: 1;
+}
+
+.composer-highlight {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: pre;
+    color: white;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    border: none;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+.composer-highlight .mention-token {
+    color: var(--accent, oklch(0.65 0.16 165));
+    font-weight: 500;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    Mention Dropdown
    ══════════════════════════════════════════════════════════════════════════ */
 

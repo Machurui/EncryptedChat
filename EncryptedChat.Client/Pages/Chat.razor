@@ -863,9 +863,12 @@
                             </svg>
                         </button>
 
-                        @* Input *@
-                        <input id="composer-input" type="text" class="composer-input" placeholder="Send an encrypted message..."
-                               value="@newMessageText" @oninput="HandleMessageInput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
+                        @* Input with @mention highlight overlay *@
+                        <div class="composer-overlay-container">
+                            <div id="composer-highlight" class="composer-highlight" aria-hidden="true">@((MarkupString)RenderComposerHighlight(newMessageText))</div>
+                            <input id="composer-input" type="text" class="composer-input" placeholder="Send an encrypted message..."
+                                   value="@newMessageText" @oninput="HandleMessageInput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
+                        </div>
 
                         @* Emoji button *@
                         <div class="picker-container popup-container">
@@ -3481,6 +3484,7 @@
         if (firstRender)
         {
             await JS.InvokeVoidAsync("setupMobileComposerScroll", "composer-input", "messages-container");
+            await JS.InvokeVoidAsync("composerOverlay.sync", "composer-input", "composer-highlight");
 
             _dotNetRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("popupRegistry.register",
@@ -5608,6 +5612,36 @@
 
     private bool IsPureGifUrl(string? text) =>
         !string.IsNullOrWhiteSpace(text) && PureGifUrlRegex.IsMatch(text);
+
+    private string RenderComposerHighlight(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        int i = 0;
+        while (i < text.Length)
+        {
+            char c = text[i];
+            bool atMention = c == '@' && (i == 0 || char.IsWhiteSpace(text[i - 1]));
+            if (atMention)
+            {
+                int end = i + 1;
+                while (end < text.Length && !char.IsWhiteSpace(text[end]))
+                    end++;
+                sb.Append("<span class=\"mention-token\">");
+                sb.Append(System.Net.WebUtility.HtmlEncode(text[i..end]));
+                sb.Append("</span>");
+                i = end;
+            }
+            else
+            {
+                sb.Append(System.Net.WebUtility.HtmlEncode(c.ToString()));
+                i++;
+            }
+        }
+        return sb.ToString();
+    }
 
     private string RenderMessageContent(string text)
     {
