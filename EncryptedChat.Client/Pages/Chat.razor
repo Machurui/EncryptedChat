@@ -865,7 +865,7 @@
 
                         @* Input *@
                         <input id="composer-input" type="text" class="composer-input" placeholder="Send an encrypted message..."
-                               @bind="newMessageText" @bind:event="oninput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
+                               value="@newMessageText" @oninput="HandleMessageInput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
 
                         @* Emoji button *@
                         <div class="picker-container popup-container">
@@ -4603,6 +4603,11 @@
                 lastTypingTime = now;
                 Console.WriteLine($"[Typing] StartTyping for team {selectedTeamId.Value}");
                 await hubConnection.InvokeAsync("StartTyping", selectedTeamId.Value);
+                // Keep the receiver's indicator alive even when the composer
+                // loses focus — as long as the input still has text, we
+                // re-emit StartTyping on a heartbeat (the receiver auto-
+                // expires after 5s without a new event).
+                StartTypingHeartbeat();
             }
         }
         else if (isTyping)
@@ -4612,8 +4617,40 @@
         }
     }
 
+    private void StartTypingHeartbeat()
+    {
+        typingTimer?.Stop();
+        typingTimer?.Dispose();
+        typingTimer = new System.Timers.Timer(3000) { AutoReset = true };
+        typingTimer.Elapsed += async (_, _) =>
+        {
+            if (!isTyping || !selectedTeamId.HasValue || hubConnection?.State != HubConnectionState.Connected)
+                return;
+            if (string.IsNullOrWhiteSpace(newMessageText))
+                return;
+            try
+            {
+                await hubConnection.InvokeAsync("StartTyping", selectedTeamId.Value);
+            }
+            catch
+            {
+                // Hub may have dropped between the state check and the call;
+                // the receiver's 5s auto-expire will clean up.
+            }
+        };
+        typingTimer.Start();
+    }
+
+    private void StopTypingHeartbeat()
+    {
+        typingTimer?.Stop();
+        typingTimer?.Dispose();
+        typingTimer = null;
+    }
+
     private async Task StopTypingIndicator()
     {
+        StopTypingHeartbeat();
         if (isTyping && selectedTeamId.HasValue && hubConnection?.State == HubConnectionState.Connected)
         {
             isTyping = false;
@@ -4625,7 +4662,12 @@
     {
         await Task.Delay(150); // Allow click on mention item
         CloseMentionDropdown();
-        await StopTypingIndicator();
+        // Do NOT stop the typing indicator on blur — the user may have stepped
+        // away briefly with text still in the composer, and we want the
+        // receiver to keep seeing "X is typing…" while text is pending.
+        // The heartbeat (re-emit every 3s while text present) keeps the
+        // receiver's indicator alive; the indicator clears when the text is
+        // sent, cleared, or the composer is disposed.
     }
 
     private void CheckForMentionTrigger()
@@ -5640,6 +5682,10 @@
         _cooldownTickTimer?.Stop();
         _cooldownTickTimer?.Dispose();
         _cooldownTickTimer = null;
+
+        typingTimer?.Stop();
+        typingTimer?.Dispose();
+        typingTimer = null;
 
         if (_popupListenerRegistered)
         {
