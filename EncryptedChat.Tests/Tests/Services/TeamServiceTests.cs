@@ -608,4 +608,41 @@ public class TeamServiceTests : IDisposable
     }
 
     #endregion
+
+    #region UpdatePartialAsync OwnBubbleColor
+
+    [Fact]
+    public async Task UpdatePartialAsync_AcceptsValidOwnBubbleColor()
+    {
+        User admin = await CreateUser("admin");
+        Team team = await CreateTeam("Team", admin);
+
+        TeamUpdateDTO dto = new() { OwnBubbleColor = "oklch(0.70 0.18 30)" };
+
+        TeamDTOPublic? result = await _service.UpdatePartialAsync(team.Id, dto, admin.Id);
+
+        result.Should().NotBeNull();
+        result!.OwnBubbleColor.Should().Be("oklch(0.70 0.18 30)");
+
+        Team? reloaded = await _context.Teams.FindAsync(team.Id);
+        reloaded!.OwnBubbleColor.Should().Be("oklch(0.70 0.18 30)");
+    }
+
+    [Fact]
+    public async Task UpdatePartialAsync_IgnoresInvalidOwnBubbleColor()
+    {
+        User admin = await CreateUser("admin");
+        Team team = await CreateTeam("Team", admin);
+
+        TeamUpdateDTO dto = new() { OwnBubbleColor = "not a color" };
+
+        TeamDTOPublic? result = await _service.UpdatePartialAsync(team.Id, dto, admin.Id);
+
+        result.Should().BeNull();
+
+        Team? reloaded = await _context.Teams.FindAsync(team.Id);
+        reloaded!.OwnBubbleColor.Should().BeNull();
+    }
+
+    #endregion
 }

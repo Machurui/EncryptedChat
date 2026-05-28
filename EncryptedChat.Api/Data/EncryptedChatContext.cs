@@ -14,6 +14,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
+    public DbSet<UserTeamPreference> UserTeamPreferences => Set<UserTeamPreference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,25 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
         modelBuilder.Entity<User>()
          .HasIndex(u => u.Email)
          .IsUnique();
+
+        modelBuilder.Entity<UserTeamPreference>()
+            .HasKey(p => new { p.UserId, p.TeamId });
+
+        modelBuilder.Entity<UserTeamPreference>()
+            .HasOne(p => p.User)
+            .WithMany()
+            .HasForeignKey(p => p.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserTeamPreference>()
+            .HasOne(p => p.Team)
+            .WithMany()
+            .HasForeignKey(p => p.TeamId)
+            // ClientCascade avoids SQL Server's multi-cascade-path error
+            // (User→UserTeamPreferences already cascades). EF Core deletes
+            // UserTeamPreferences when a Team is removed via the in-memory
+            // change tracker rather than via DB-level cascade.
+            .OnDelete(DeleteBehavior.ClientCascade);
 
         modelBuilder.Entity<Team>()
             .HasMany(t => t.Members)

@@ -15,4 +15,6 @@ public class TeamUpdateDTO
 
     [MaxLength(10)]
     public string? MessageLifetime { get; set; }
+
+    public string? OwnBubbleColor { get; set; }
 }

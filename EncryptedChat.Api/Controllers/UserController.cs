@@ -143,6 +143,39 @@ public class UserController(
         return BadRequest(new { Message = "Failed to remove avatar" });
     }
 
+    [HttpGet("me/bubble-colors")]
+    public async Task<IActionResult> GetMyBubbleColors()
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        Dictionary<Guid, string> map = await _service.GetOwnBubbleColorsAsync(userId);
+        return Ok(map);
+    }
+
+    public record SetBubbleColorRequest(string? Color);
+
+    [HttpPut("me/teams/{teamId}/bubble-color")]
+    public async Task<IActionResult> SetMyBubbleColor(Guid teamId, [FromBody] SetBubbleColorRequest? req)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        if (req is null)
+            return BadRequest(new { Message = "Request body is required" });
+
+        UserOperationStatus status = await _service.SetOwnBubbleColorAsync(userId, teamId, req.Color);
+        return status switch
+        {
+            UserOperationStatus.Success => NoContent(),
+            UserOperationStatus.Forbidden => Forbid(),
+            UserOperationStatus.ValidationFailed => BadRequest(new { Message = "Invalid color format" }),
+            _ => BadRequest()
+        };
+    }
+
     private async Task NotifyFriendsOfProfileUpdate(string userId, UserProfileDTO profile)
     {
         var publicProfile = new

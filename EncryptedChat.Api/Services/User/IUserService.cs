@@ -11,6 +11,8 @@ public interface IUserService
     Task<UserUpdateResult> UpdateAsync(string id, string requesterId, UserUpdateDTO dto);
     Task<UserDeleteResult> DeleteAsync(string id, string requesterId);
     Task UpdateLastSeenAsync(string userId);
+    Task<Dictionary<Guid, string>> GetOwnBubbleColorsAsync(string userId);
+    Task<UserOperationStatus> SetOwnBubbleColorAsync(string userId, Guid teamId, string? color);
 }
 
 public enum UserOperationStatus

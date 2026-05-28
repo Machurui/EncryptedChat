@@ -14,10 +14,6 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
     private readonly ICryptoService _crypto = crypto;
     private readonly IPresenceService _presenceService = presenceService;
 
-    private static readonly System.Text.RegularExpressions.Regex CssColorRegex =
-        new(@"^(#[0-9A-Fa-f]{6}|rgba?\([^)]{1,80}\)|hsla?\([^)]{1,80}\)|okl(ch|ab)\([^)]{1,80}\))$",
-            System.Text.RegularExpressions.RegexOptions.Compiled);
-
     private static readonly System.Text.RegularExpressions.Regex HandleRegex =
         new(@"^[a-zA-Z0-9_]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -294,7 +290,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
 
         if (nameColor != null)
         {
-            if (!CssColorRegex.IsMatch(nameColor))
+            if (!CssColor.Regex.IsMatch(nameColor))
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
             user.NameColor = nameColor;
         }
@@ -409,5 +405,53 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         await _context.Database.ExecuteSqlRawAsync(
             "UPDATE AspNetUsers SET LastSeenAt = {0} WHERE Id = {1}",
             DateTime.UtcNow, userId);
+    }
+
+    public async Task<Dictionary<Guid, string>> GetOwnBubbleColorsAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return new Dictionary<Guid, string>();
+
+        return await _context.UserTeamPreferences
+            .AsNoTracking()
+            .Where(p => p.UserId == userId && p.BubbleColor != null)
+            .ToDictionaryAsync(p => p.TeamId, p => p.BubbleColor!);
+    }
+
+    public async Task<UserOperationStatus> SetOwnBubbleColorAsync(string userId, Guid teamId, string? color)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return UserOperationStatus.NotFound;
+
+        bool isMember = await _context.Members.AnyAsync(m => m.UserId == userId && m.TeamId == teamId);
+        if (!isMember)
+            return UserOperationStatus.Forbidden;
+
+        string? normalized = string.IsNullOrWhiteSpace(color) ? null : color.Trim();
+        if (normalized != null && !CssColor.IsValid(normalized))
+            return UserOperationStatus.ValidationFailed;
+
+        UserTeamPreference? pref = await _context.UserTeamPreferences
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.TeamId == teamId);
+
+        if (pref == null)
+        {
+            if (normalized == null)
+                return UserOperationStatus.Success;
+
+            _context.UserTeamPreferences.Add(new UserTeamPreference
+            {
+                UserId = userId,
+                TeamId = teamId,
+                BubbleColor = normalized
+            });
+        }
+        else
+        {
+            pref.BubbleColor = normalized;
+        }
+
+        await _context.SaveChangesAsync();
+        return UserOperationStatus.Success;
     }
 }

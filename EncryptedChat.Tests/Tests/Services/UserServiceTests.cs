@@ -508,4 +508,151 @@ public class UserServiceTests : IDisposable
 
         result.Status.Should().Be(UserOperationStatus.ValidationFailed);
     }
+
+    [Fact]
+    public async Task GetOwnBubbleColorsAsync_ReturnsMapForUser()
+    {
+        User userA = await CreateTestUser("user-a", "UserA", "a@test.com");
+        User userB = await CreateTestUser("user-b", "UserB", "b@test.com");
+
+        Guid teamId1 = Guid.NewGuid();
+        Guid teamId2 = Guid.NewGuid();
+        Guid teamId3 = Guid.NewGuid();
+
+        _context.UserTeamPreferences.Add(new UserTeamPreference
+        {
+            UserId = userA.Id,
+            TeamId = teamId1,
+            BubbleColor = "oklch(0.70 0.18 30)"
+        });
+        _context.UserTeamPreferences.Add(new UserTeamPreference
+        {
+            UserId = userA.Id,
+            TeamId = teamId2,
+            BubbleColor = "#10B981"
+        });
+        _context.UserTeamPreferences.Add(new UserTeamPreference
+        {
+            UserId = userB.Id,
+            TeamId = teamId3,
+            BubbleColor = "rgb(16, 185, 129)"
+        });
+        await _context.SaveChangesAsync();
+
+        Dictionary<Guid, string> map = await _service.GetOwnBubbleColorsAsync(userA.Id);
+
+        map.Should().HaveCount(2);
+        map[teamId1].Should().Be("oklch(0.70 0.18 30)");
+        map[teamId2].Should().Be("#10B981");
+        map.Should().NotContainKey(teamId3);
+    }
+
+    [Fact]
+    public async Task SetOwnBubbleColorAsync_SavesValidColorForMember()
+    {
+        User userA = await CreateTestUser("user-a", "UserA", "a@test.com");
+        Team team = new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Team",
+            Slug = "team",
+            Secret = "team-secret"
+        };
+        _context.Teams.Add(team);
+        _context.Members.Add(new Member
+        {
+            Id = Guid.NewGuid(),
+            Team = team,
+            TeamId = team.Id,
+            User = userA,
+            UserId = userA.Id,
+            Role = Member.MemberRole
+        });
+        await _context.SaveChangesAsync();
+
+        UserOperationStatus status = await _service.SetOwnBubbleColorAsync(userA.Id, team.Id, "oklch(0.70 0.18 30)");
+
+        status.Should().Be(UserOperationStatus.Success);
+
+        UserTeamPreference? pref = await _context.UserTeamPreferences
+            .FirstOrDefaultAsync(p => p.UserId == userA.Id && p.TeamId == team.Id);
+        pref.Should().NotBeNull();
+        pref!.BubbleColor.Should().Be("oklch(0.70 0.18 30)");
+    }
+
+    [Fact]
+    public async Task SetOwnBubbleColorAsync_NullClearsExistingPreference()
+    {
+        User userA = await CreateTestUser("user-a", "UserA", "a@test.com");
+        Team team = new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Team",
+            Slug = "team",
+            Secret = "team-secret"
+        };
+        _context.Teams.Add(team);
+        _context.Members.Add(new Member
+        {
+            Id = Guid.NewGuid(),
+            Team = team,
+            TeamId = team.Id,
+            User = userA,
+            UserId = userA.Id,
+            Role = Member.MemberRole
+        });
+        _context.UserTeamPreferences.Add(new UserTeamPreference
+        {
+            UserId = userA.Id,
+            TeamId = team.Id,
+            BubbleColor = "#10B981"
+        });
+        await _context.SaveChangesAsync();
+
+        UserOperationStatus status = await _service.SetOwnBubbleColorAsync(userA.Id, team.Id, null);
+
+        status.Should().Be(UserOperationStatus.Success);
+
+        UserTeamPreference? pref = await _context.UserTeamPreferences
+            .FirstOrDefaultAsync(p => p.UserId == userA.Id && p.TeamId == team.Id);
+        pref.Should().NotBeNull();
+        pref!.BubbleColor.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SetOwnBubbleColorAsync_NonMemberReturnsForbidden()
+    {
+        User userA = await CreateTestUser("user-a", "UserA", "a@test.com");
+        Team team = new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "Team",
+            Slug = "team",
+            Secret = "team-secret"
+        };
+        _context.Teams.Add(team);
+        await _context.SaveChangesAsync();
+
+        UserOperationStatus status = await _service.SetOwnBubbleColorAsync(userA.Id, team.Id, "oklch(0.70 0.18 30)");
+
+        status.Should().Be(UserOperationStatus.Forbidden);
+
+        bool any = await _context.UserTeamPreferences
+            .AnyAsync(p => p.UserId == userA.Id && p.TeamId == team.Id);
+        any.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SetOwnBubbleColorAsync_NullColorOnAbsentPreferenceReturnsSuccess()
+    {
+        Guid teamId = Guid.NewGuid();
+        _context.Teams.Add(new Team { Id = teamId, Name = "T", Slug = "t-noprev", Secret = "s" });
+        _context.Members.Add(new Member { UserId = "userA", TeamId = teamId, Role = "Member" });
+        await _context.SaveChangesAsync();
+
+        UserOperationStatus status = await _service.SetOwnBubbleColorAsync("userA", teamId, null);
+
+        status.Should().Be(UserOperationStatus.Success);
+        (await _context.UserTeamPreferences.AnyAsync()).Should().BeFalse();
+    }
 }
