@@ -17,6 +17,7 @@
 @inject AuthClient AuthClient
 @inject UserClient UserClient
 @inject PinnedMessageClient PinnedMessageClient
+@inject BubbleColorClient BubbleColorClient
 @inject FriendClient FriendClient
 @inject GifClient GifClient
 @inject RecentGifsService RecentGifs
@@ -486,6 +487,31 @@
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             </button>
                             <div class="header-menu-container popup-container">
+                                <button class="icon-btn @(showBubbleColorPicker ? "active" : "")" @onclick="ToggleBubbleColorPicker" title="My bubble color">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+                                    </svg>
+                                </button>
+                                @if (showBubbleColorPicker)
+                                {
+                                    <div class="header-dropdown chat-bubble-color-dropdown">
+                                        <div class="chat-bubble-picker-section">
+                                            <div class="chat-bubble-picker-section-label">My color (only you see it)</div>
+                                            <input type="color" class="chat-bubble-color-input" value="@SafeBubbleHex(ResolveOwnBubbleColor(selectedTeam))" @onchange="HandleMyBubbleColorChange" />
+                                            <button class="chat-bubble-reset-btn" @onclick="ResetMyBubbleColor">Reset to default</button>
+                                        </div>
+                                        @if (isAdmin && selectedTeam?.IsDirect != true)
+                                        {
+                                            <div class="chat-bubble-picker-section">
+                                                <div class="chat-bubble-picker-section-label">Team default (everyone sees it)</div>
+                                                <input type="color" class="chat-bubble-color-input" value="@SafeBubbleHex(selectedTeam?.OwnBubbleColor)" @onchange="HandleTeamBubbleColorChange" />
+                                                <button class="chat-bubble-reset-btn" @onclick="ResetTeamBubbleColor">Reset team default</button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="header-menu-container popup-container">
                                 <button class="icon-btn @(showPinnedDropdown ? "active" : "")" @onclick="TogglePinnedDropdown" title="Pinned messages">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
@@ -620,7 +646,8 @@
 
             @* Message stream *@
             <GlassPanel Radius="20" Class="message-stream-panel">
-                <div id="messages-container" class="messages-container">
+                <div id="messages-container" class="messages-container"
+                     style="@(ResolveOwnBubbleColor(selectedTeam) is { } c ? $"--own-bubble: {c};" : "")">
                     <div class="encryption-pill">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
@@ -2152,9 +2179,49 @@
     }
 
     .message-bubble.own {
-        background: linear-gradient(135deg, var(--accent), oklch(0.40 0.16 135));
+        background: linear-gradient(135deg, var(--own-bubble, var(--accent)), oklch(0.40 0.16 135));
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px var(--accent-glow);
     }
+
+    .chat-bubble-color-dropdown {
+        padding: 14px;
+        min-width: 230px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .chat-bubble-picker-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .chat-bubble-picker-section-label {
+        font-size: 11px;
+        opacity: 0.7;
+    }
+
+    .chat-bubble-color-input {
+        width: 100%;
+        height: 32px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .chat-bubble-reset-btn {
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.85);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        cursor: pointer;
+    }
+
+    .chat-bubble-reset-btn:hover { background: rgba(255,255,255,0.10); }
 
     /* Pinned message indicator */
     .message.pinned .message-bubble {
@@ -3315,6 +3382,7 @@
     // Pinned messages
     private bool showPinnedDropdown;
     private List<PinnedMessageClient.PinnedMessageDTO> pinnedMessages = new();
+    private Dictionary<Guid, string> userBubbleColors = new();
 
     private IEnumerable<TeamClient.TeamDTOPublic> DirectMessages =>
         teams.Where(t => t.IsDirect).OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue);
@@ -3593,6 +3661,7 @@
             editStatusMessage = currentStatusMessage ?? string.Empty;
             ApplyTheme(currentTheme);
             profileState = LoadState.Success;
+            userBubbleColors = await BubbleColorClient.GetMyBubbleColorsAsync();
         }
         catch (Exception ex)
         {
@@ -3895,6 +3964,23 @@
     }
 
     private string GetStatusLabel(string status) => statusPresets.GetValueOrDefault(status, "Online");
+
+    private string? ResolveOwnBubbleColor(TeamClient.TeamDTOPublic? team)
+    {
+        if (team == null) return null;
+        if (userBubbleColors.TryGetValue(team.Id, out var personal) && !string.IsNullOrWhiteSpace(personal))
+            return personal;
+        if (!string.IsNullOrWhiteSpace(team.OwnBubbleColor))
+            return team.OwnBubbleColor;
+        return null;
+    }
+
+    private static string SafeBubbleHex(string? color)
+    {
+        if (!string.IsNullOrWhiteSpace(color) && color.StartsWith('#') && color.Length == 7)
+            return color;
+        return "#a3e635";
+    }
 
     private string GetStatusDimColor(string status) => status switch
     {
@@ -5333,6 +5419,64 @@
             var result = await PinnedMessageClient.GetPinnedMessagesAsync(selectedTeamId.Value);
             if (result.Success)
                 pinnedMessages = result.Value ?? [];
+        }
+    }
+
+    private bool showBubbleColorPicker;
+
+    private void ToggleBubbleColorPicker() => showBubbleColorPicker = !showBubbleColorPicker;
+
+    private async Task HandleMyBubbleColorChange(ChangeEventArgs e)
+    {
+        if (!selectedTeamId.HasValue) return;
+        string? color = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(color)) return;
+
+        if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, color))
+        {
+            userBubbleColors[selectedTeamId.Value] = color;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResetMyBubbleColor()
+    {
+        if (!selectedTeamId.HasValue) return;
+        if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, null))
+        {
+            userBubbleColors.Remove(selectedTeamId.Value);
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleTeamBubbleColorChange(ChangeEventArgs e)
+    {
+        if (!selectedTeamId.HasValue || selectedTeam == null) return;
+        string? color = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(color)) return;
+
+        var result = await TeamClient.UpdateTeamAsync(selectedTeamId.Value,
+            new TeamClient.TeamUpdateDTO(OwnBubbleColor: color));
+        if (result.Success && result.Value != null)
+        {
+            var idx = teams.FindIndex(t => t.Id == selectedTeamId.Value);
+            if (idx >= 0) teams[idx] = result.Value;
+            selectedTeam = result.Value;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResetTeamBubbleColor()
+    {
+        if (!selectedTeamId.HasValue) return;
+        var result = await TeamClient.UpdateTeamAsync(selectedTeamId.Value,
+            new TeamClient.TeamUpdateDTO(OwnBubbleColor: ""));
+        if (result.Success && result.Value != null)
+        {
+            var idx = teams.FindIndex(t => t.Id == selectedTeamId.Value);
+            if (idx >= 0) teams[idx] = result.Value;
+            selectedTeam = result.Value;
+            StateHasChanged();
         }
     }
 

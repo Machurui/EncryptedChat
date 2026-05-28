@@ -40,6 +40,7 @@ builder.Services.AddScoped<AttachmentClient>();
 builder.Services.AddScoped<FriendClient>();
 builder.Services.AddScoped<SecurityClient>();
 builder.Services.AddScoped(sp => new PinnedMessageClient(sp.GetRequiredService<HttpClient>()));
+builder.Services.AddScoped<BubbleColorClient>();
 builder.Services.AddScoped<GifClient>();
 builder.Services.AddScoped<RecentGifsService>();
 builder.Services.AddScoped<RecentNameColorsService>();
