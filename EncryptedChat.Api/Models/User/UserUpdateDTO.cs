@@ -16,7 +16,10 @@ public class UserUpdateDTO
     [MaxLength(256)]
     public string? Email { get; set; }
 
-    [RegularExpression(@"^#[0-9A-Fa-f]{6}$", ErrorMessage = "Invalid color format")]
+    // Format validation is performed in UserService.UpdateAsync against
+    // CssColorRegex which accepts #RRGGBB, rgb/rgba, hsl/hsla, oklch, oklab.
+    // No DataAnnotation regex here — a stricter regex would reject oklch
+    // colors before the controller body runs.
     public string? NameColor { get; set; }
 
     [MaxLength(500)]

@@ -160,21 +160,23 @@ public class UserController(
         // Notify friends
         var friends = await _friendService.GetFriendsAsync(userId);
         var friendIds = friends.Select(f => f.UserId).ToList();
+        var pendingUserIds = await _friendService.GetPendingRequestUserIdsAsync(userId);
+        var teams = await _service.GetUserTeamsAsync(userId, userId, 1, 100);
+
+        Console.WriteLine($"[Profile] Broadcasting FriendProfileUpdated for user {userId}: " +
+                          $"{friendIds.Count} friends, {pendingUserIds.Count} pending, {teams.Count} teams " +
+                          $"(NameColor={publicProfile.NameColor})");
 
         if (friendIds.Count > 0)
         {
             await _hubContext.Clients.Users(friendIds).SendAsync("FriendProfileUpdated", publicProfile);
         }
 
-        // Notify users with pending friend requests
-        var pendingUserIds = await _friendService.GetPendingRequestUserIdsAsync(userId);
         if (pendingUserIds.Count > 0)
         {
             await _hubContext.Clients.Users(pendingUserIds).SendAsync("FriendRequestProfileUpdated", publicProfile);
         }
 
-        // Notify team members via team groups
-        var teams = await _service.GetUserTeamsAsync(userId, userId, 1, 100);
         foreach (var team in teams)
         {
             await _hubContext.Clients.Group($"team-{team.Id}").SendAsync("FriendProfileUpdated", publicProfile);

@@ -4251,8 +4251,10 @@
                 }
             });
 
-            hubConnection.On<FriendProfileUpdate>("FriendProfileUpdated", update =>
+            hubConnection.On<FriendProfileUpdate>("FriendProfileUpdated", async update =>
             {
+                Console.WriteLine($"[SignalR] FriendProfileUpdated received: id={update.Id}, NameColor={update.NameColor}, Name={update.Name}");
+
                 // Update friend list
                 var friend = friends.FirstOrDefault(f => f.UserId == update.Id);
                 if (friend != null)
@@ -4290,7 +4292,49 @@
                     }
                 }
 
-                InvokeAsync(StateHasChanged);
+                // Patch messages currently in view (MessageDTOPublic / SenderDTO are
+                // mutable classes — mutate in place; Blazor's diff picks up the
+                // new property values on the next render).
+                foreach (var msg in messages)
+                {
+                    if (msg.Sender != null && msg.Sender.Id == update.Id)
+                    {
+                        msg.Sender.Name = update.Name;
+                        msg.Sender.Handle = update.Handle;
+                        msg.Sender.NameColor = update.NameColor ?? msg.Sender.NameColor;
+                        msg.Sender.ProfileImageUrl = update.ProfileImageUrl;
+                    }
+                }
+
+                // Patch the per-team message cache so other conversations also
+                // reflect the new identity when the user switches back to them.
+                foreach (var kvp in teamMessages)
+                {
+                    foreach (var msg in kvp.Value)
+                    {
+                        if (msg.Sender != null && msg.Sender.Id == update.Id)
+                        {
+                            msg.Sender.Name = update.Name;
+                            msg.Sender.Handle = update.Handle;
+                            msg.Sender.NameColor = update.NameColor ?? msg.Sender.NameColor;
+                            msg.Sender.ProfileImageUrl = update.ProfileImageUrl;
+                        }
+                    }
+                }
+
+                // Patch pinned messages dropdown.
+                foreach (var pin in pinnedMessages)
+                {
+                    if (pin.Message?.Sender != null && pin.Message.Sender.Id == update.Id)
+                    {
+                        pin.Message.Sender.Name = update.Name;
+                        pin.Message.Sender.Handle = update.Handle;
+                        pin.Message.Sender.NameColor = update.NameColor ?? pin.Message.Sender.NameColor;
+                        pin.Message.Sender.ProfileImageUrl = update.ProfileImageUrl;
+                    }
+                }
+
+                await InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<Guid>("FriendRequestCancelled", async requestId =>
@@ -4334,6 +4378,7 @@
 
             hubConnection.On<FriendProfileUpdate>("FriendRequestProfileUpdated", async update =>
             {
+                Console.WriteLine($"[SignalR] FriendRequestProfileUpdated received: id={update.Id}, NameColor={update.NameColor}");
                 var request = pendingRequests.FirstOrDefault(r => r.UserId == update.Id);
                 if (request != null)
                 {
