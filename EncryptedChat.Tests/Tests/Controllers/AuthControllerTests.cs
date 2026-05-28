@@ -29,7 +29,7 @@ public class AuthControllerTests
         {
             Email = "test@example.com",
             Password = "P@ssw0rd",
-            Name = "Test User"
+            Handle = "testuser"
         };
 
         mockAuthService
@@ -51,7 +51,7 @@ public class AuthControllerTests
         {
             Email = "invalid@x.com",
             Password = "short1",
-            Name = "Bad Input"
+            Handle = "badinput"
         };
 
         mockAuthService

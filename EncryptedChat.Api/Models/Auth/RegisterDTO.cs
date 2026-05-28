@@ -14,7 +14,8 @@ public class RegisterDTO
     public string Password { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(2)]
-    [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
+    [MinLength(3)]
+    [MaxLength(32)]
+    [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "Handle can only contain letters, numbers, and underscores")]
+    public string Handle { get; set; } = string.Empty;
 }

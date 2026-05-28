@@ -19,7 +19,7 @@ public class AuthClient
 
     // DTO match API
     public record LoginDTO(string Email, string Password);
-    public record RegisterDTO(string Email, string Password, string Name);
+    public record RegisterDTO(string Email, string Password, string Handle);
     public record ForgotPasswordDTO(string Email);
     public record ResetPasswordDTO(string Email, string Token, string NewPassword);
 
@@ -67,11 +67,11 @@ public class AuthClient
 
     // ---------- Registration ----------
     public Task<Result> RegisterAsync(RegisterDTO dto)
-        => RegisterAsync(dto.Email, dto.Password, dto.Name);
+        => RegisterAsync(dto.Email, dto.Password, dto.Handle);
 
-    public async Task<Result> RegisterAsync(string email, string password, string name, bool autoLogin = false)
+    public async Task<Result> RegisterAsync(string email, string password, string handle, bool autoLogin = false)
     {
-        var res = await _http.PostAsJsonAsync("api/auth/register", new RegisterDTO(email, password, name));
+        var res = await _http.PostAsJsonAsync("api/auth/register", new RegisterDTO(email, password, handle));
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)

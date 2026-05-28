@@ -41,16 +41,19 @@
                     </div>
                 }
 
-                <!-- Display Name Field -->
+                <!-- Handle Field -->
                 <div style="display: flex; flex-direction: column; gap: 5px;">
                     <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
-                        Display name
+                        Handle
                     </label>
                     <div class="glass-input">
                         <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
                         </svg>
-                        <InputText @bind-Value="registerModel.Name" placeholder="François Serra" />
+                        <InputText @bind-Value="registerModel.Handle" placeholder="your_handle" />
+                    </div>
+                    <div style="font-size:12px;opacity:0.7;margin-top:4px;">
+                        Your unique identifier. Letters, numbers, and underscore (3–32 chars). Cannot be changed later.
                     </div>
                 </div>
 
@@ -156,7 +159,7 @@
 
         try
         {
-            var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Name);
+            var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Handle);
 
             if (result.Success)
                 Nav.NavigateTo("/login");
@@ -171,10 +174,11 @@
 
     public class RegisterModel
     {
-        [Required(ErrorMessage = "Name is required")]
-        [MinLength(2, ErrorMessage = "Name must be at least 2 characters")]
-        [MaxLength(100)]
-        public string Name { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Handle is required")]
+        [MinLength(3, ErrorMessage = "Handle must be at least 3 characters")]
+        [MaxLength(32, ErrorMessage = "Handle must be at most 32 characters")]
+        [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "Handle can only contain letters, numbers, and underscores")]
+        public string Handle { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email")]

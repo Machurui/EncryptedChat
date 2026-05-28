@@ -18,6 +18,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         new(@"^(#[0-9A-Fa-f]{6}|rgba?\([^)]{1,80}\)|hsla?\([^)]{1,80}\)|okl(ch|ab)\([^)]{1,80}\))$",
             System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    private static readonly System.Text.RegularExpressions.Regex HandleRegex =
+        new(@"^[a-zA-Z0-9_]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public async Task<UserProfileDTO?> GetOwnProfileAsync(string id)
     {
         User? user = await _context.Users
@@ -240,22 +243,27 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             if (name.Length < 2 || name.Length > 100)
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
-            bool nameExists = await _context.Users.AnyAsync(u => u.Name == name && u.Id != id);
-            if (nameExists)
-                return new UserUpdateResult(UserOperationStatus.Conflict);
-
+            // Display name is free-form; no uniqueness constraint.
             user.Name = name;
         }
 
-        if (handle != null)
+        if (handle != null && !string.Equals(handle, user.Handle, StringComparison.Ordinal))
         {
+            if (user.Handle != null)
+            {
+                // Already claimed — handle is permanent.
+                return new UserUpdateResult(UserOperationStatus.Forbidden);
+            }
+
+            // First-time claim path (user.Handle is null).
             if (handle.Length < 3 || handle.Length > 32)
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
-            if (!System.Text.RegularExpressions.Regex.IsMatch(handle, @"^[a-zA-Z0-9_]+$"))
+            if (!HandleRegex.IsMatch(handle))
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
-            bool handleExists = await _context.Users.AnyAsync(u => u.Handle == handle && u.Id != id);
+            // First-time claim — user.Handle is null, so no self-exclusion needed.
+            bool handleExists = await _context.Users.AnyAsync(u => u.Handle == handle);
             if (handleExists)
                 return new UserUpdateResult(UserOperationStatus.Conflict);
 

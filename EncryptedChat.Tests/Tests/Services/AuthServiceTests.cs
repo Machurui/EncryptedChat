@@ -151,6 +151,80 @@ public sealed class AuthServiceTests : IDisposable
             "logout should also revoke the linked session row");
     }
 
+    [Fact]
+    public async Task RegisterAsync_Succeeds_SetsHandleAndNameToHandle()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+
+        IdentityResult result = await _service.RegisterAsync(new RegisterDTO
+        {
+            Email = "newuser@test.com",
+            Password = "P@ssw0rd123",
+            Handle = "NewUser"
+        });
+
+        result.Succeeded.Should().BeTrue();
+        User created = await _userManager.Users.SingleAsync(u => u.Email == "newuser@test.com");
+        created.Handle.Should().Be("newuser");
+        created.Name.Should().Be("newuser");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_FailsWith_DuplicateHandle()
+    {
+        User existing = new()
+        {
+            Id = "user-existing",
+            Email = "existing@test.com",
+            NormalizedEmail = "EXISTING@TEST.COM",
+            UserName = "existing@test.com",
+            NormalizedUserName = "EXISTING@TEST.COM",
+            Name = "existing",
+            Handle = "taken",
+            Level = 1,
+            Secret = "secret"
+        };
+        await _userManager.CreateAsync(existing);
+
+        IdentityResult result = await _service.RegisterAsync(new RegisterDTO
+        {
+            Email = "other@test.com",
+            Password = "P@ssw0rd123",
+            Handle = "Taken"
+        });
+
+        result.Succeeded.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.Code == "DuplicateHandle");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_FailsWith_DuplicateEmail()
+    {
+        User existing = new()
+        {
+            Id = "user-existing-email",
+            Email = "dup@test.com",
+            NormalizedEmail = "DUP@TEST.COM",
+            UserName = "dup@test.com",
+            NormalizedUserName = "DUP@TEST.COM",
+            Name = "first",
+            Handle = "first",
+            Level = 1,
+            Secret = "secret"
+        };
+        await _userManager.CreateAsync(existing);
+
+        IdentityResult result = await _service.RegisterAsync(new RegisterDTO
+        {
+            Email = "dup@test.com",
+            Password = "P@ssw0rd123",
+            Handle = "different"
+        });
+
+        result.Succeeded.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.Code == "DuplicateEmail");
+    }
+
     private static IConfiguration CreateConfiguration() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

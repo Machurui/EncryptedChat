@@ -4769,12 +4769,11 @@
         mentionStartIndex = lastAtIndex;
         mentionQuery = query.ToLowerInvariant();
 
-        // Filter members based on query
+        // Filter members by handle only — consistent with mention rendering
+        // (RenderMessageWithMentions chips only handle matches, not display names).
         filteredMentions = teamDetails.Members
             .Where(m => m.User != null && m.User.Id != _userId)
-            .Where(m =>
-                (m.User!.Name?.ToLowerInvariant().Contains(mentionQuery) ?? false) ||
-                (m.User!.Handle?.ToLowerInvariant().Contains(mentionQuery) ?? false))
+            .Where(m => m.User!.Handle?.ToLowerInvariant().Contains(mentionQuery) ?? false)
             .Take(5)
             .ToList();
 
@@ -5734,13 +5733,11 @@
         {
             var handle = match.Groups[1].Value.ToLowerInvariant();
 
-            bool isCurrentUser = handle == currentUserHandle?.ToLowerInvariant() ||
-                                 handle == currentUserName?.ToLowerInvariant().Replace(" ", "");
+            bool isCurrentUser = handle == currentUserHandle?.ToLowerInvariant();
 
             bool isMember = isCurrentUser || (teamDetails?.Members?.Any(m =>
                 m.User != null &&
-                ((m.User.Handle?.ToLowerInvariant() == handle) ||
-                 (m.User.Name?.ToLowerInvariant().Replace(" ", "") == handle))) ?? false);
+                m.User.Handle?.ToLowerInvariant() == handle) ?? false);
 
             if (!isMember)
                 return match.Value;
@@ -5773,8 +5770,7 @@
         foreach (System.Text.RegularExpressions.Match match in matches)
         {
             var handle = match.Groups[1].Value.ToLowerInvariant();
-            if (handle == currentUserHandle?.ToLowerInvariant() ||
-                handle == currentUserName?.ToLowerInvariant().Replace(" ", ""))
+            if (handle == currentUserHandle?.ToLowerInvariant())
             {
                 return true;
             }

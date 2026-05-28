@@ -34,18 +34,21 @@ public class AuthService(
                 Description = "Email already in use"
             });
 
-        bool nameExists = await _userManager.Users.AnyAsync(u => u.Name == model.Name);
-        if (nameExists)
+        string handle = (model.Handle ?? string.Empty).Trim().ToLowerInvariant();
+
+        bool handleExists = await _userManager.Users.AnyAsync(u => u.Handle == handle);
+        if (handleExists)
             return IdentityResult.Failed(new IdentityError
             {
-                Code = "DuplicateName",
-                Description = "Name already in use"
+                Code = "DuplicateHandle",
+                Description = "Handle already in use"
             });
 
         User user = new()
         {
             UserName = model.Email,
-            Name = model.Name,
+            Name = handle,    // initial display name = handle; user can customize later
+            Handle = handle,
             Email = model.Email,
             Level = 1,
             Secret = Guid.NewGuid().ToString("N")

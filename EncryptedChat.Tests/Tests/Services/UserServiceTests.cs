@@ -371,7 +371,7 @@ public class UserServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdateAsync_ReturnsNull_WhenNameAlreadyExists()
+    public async Task UpdateAsync_AllowsDuplicateName_AsDisplayNameIsNotUnique()
     {
         await CreateTestUser("1", "ExistingName", "user1@test.com");
         User user = await CreateTestUser("2", "MyName", "user2@test.com");
@@ -380,8 +380,9 @@ public class UserServiceTests : IDisposable
 
         UserUpdateResult result = await _service.UpdateAsync(user.Id, user.Id, dto);
 
-        result.Status.Should().Be(UserOperationStatus.Conflict);
-        result.User.Should().BeNull();
+        result.Status.Should().Be(UserOperationStatus.Success);
+        result.User.Should().NotBeNull();
+        result.User!.Name.Should().Be("ExistingName");
     }
 
     [Fact]

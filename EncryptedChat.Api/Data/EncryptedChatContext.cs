@@ -23,10 +23,6 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
          .HasIndex(u => u.Email)
          .IsUnique();
 
-        modelBuilder.Entity<User>()
-            .HasIndex(u => u.Name)
-            .IsUnique();
-
         modelBuilder.Entity<Team>()
             .HasMany(t => t.Members)
             .WithOne(m => m.Team)

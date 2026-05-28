@@ -360,15 +360,34 @@
                                 <div class="profile-fields-grid">
                                     <div class="profile-field">
                                         <label class="profile-field-label">Display name</label>
-                                        <GlassInput @bind-Value="Name" Placeholder="Your name" />
+                                        <GlassInput @bind-Value="localName" Placeholder="Your name" />
                                     </div>
                                     <div class="profile-field">
                                         <label class="profile-field-label">Handle</label>
-                                        <GlassInput @bind-Value="Handle" Placeholder="your_handle">
-                                            <Icon>
-                                                <span style="color: rgba(255,255,255,0.5);">@@</span>
-                                            </Icon>
-                                        </GlassInput>
+                                        @* Locked when Handle is set (the normal case for users registered after the
+                                           refactor). The editable branch below covers legacy accounts that pre-date
+                                           the refactor and never claimed a handle — they get one shot to claim. *@
+                                        @if (!string.IsNullOrWhiteSpace(localHandle))
+                                        {
+                                            <div class="handle-locked">
+                                                <span class="handle-locked-text">@@@(localHandle)</span>
+                                                <span class="handle-locked-icon" title="Handle is permanent and cannot be changed">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                            <div class="handle-helper-text">Handle is permanent — cannot be changed.</div>
+                                        }
+                                        else
+                                        {
+                                            <GlassInput @bind-Value="localHandle" Placeholder="your_handle">
+                                                <Icon>
+                                                    <span style="color: rgba(255,255,255,0.5);">@@</span>
+                                                </Icon>
+                                            </GlassInput>
+                                            <div class="handle-helper-text">Choose your handle. Letters, numbers, underscore (3–32 chars). This cannot be changed later.</div>
+                                        }
                                     </div>
                                 </div>
 
@@ -789,6 +808,30 @@
         font-weight: 600;
         color: rgba(255,255,255,0.75);
         letter-spacing: 0.01em;
+    }
+
+    .handle-locked {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.85);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+    }
+
+    .handle-locked-icon {
+        display: inline-flex;
+        color: rgba(255,255,255,0.55);
+    }
+
+    .handle-helper-text {
+        font-size: 11px;
+        opacity: 0.65;
+        margin-top: 4px;
     }
 
     .color-input-wrapper {
@@ -1878,6 +1921,8 @@
     private string localNotificationPreference = "all";
     private string localStatus = "online";
     private string? localStatusMessage;
+    private string localName = "";
+    private string? localHandle;
     private bool privacyInitialized;
     private bool securityInfoLoaded;
 
@@ -2090,8 +2135,8 @@
 
     private async Task Save()
     {
-        await NameChanged.InvokeAsync(Name);
-        await HandleChanged.InvokeAsync(Handle);
+        await NameChanged.InvokeAsync(localName);
+        await HandleChanged.InvokeAsync(localHandle);
         await NameColorChanged.InvokeAsync(NameColor);
         await StatusChanged.InvokeAsync(localStatus);
         await StatusMessageChanged.InvokeAsync(localStatusMessage);
@@ -2148,6 +2193,8 @@
             localNotificationPreference = NotificationPreference;
             localStatus = Status;
             localStatusMessage = StatusMessage;
+            localName = Name;
+            localHandle = Handle;
             privacyInitialized = true;
         }
         else if (!IsOpen)
