@@ -494,20 +494,49 @@
                                 </button>
                                 @if (showBubbleColorPicker)
                                 {
+                                    var myBc = ResolveOwnBubbleColor(selectedTeam) ?? "oklch(0.65 0.16 165)";
+                                    var teamLabel = selectedTeam?.IsDirect == true
+                                        ? GetDmDisplayName(selectedTeam)
+                                        : (selectedTeam?.Name ?? "this team");
+                                    var mySampleStyle = $"background: linear-gradient(135deg, {myBc}, color-mix(in oklch, {myBc} 55%, black)); box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px color-mix(in oklch, {myBc} 30%, transparent);";
                                     <div class="header-dropdown chat-bubble-color-dropdown">
+
+                                        @* ───────── My color (always shown) ───────── *@
                                         <div class="chat-bubble-picker-section">
-                                            <div class="chat-bubble-picker-section-label">My color (only you see it)</div>
-                                            <input type="color" class="chat-bubble-color-input" value="@SafeBubbleHex(ResolveOwnBubbleColor(selectedTeam))" @onchange="HandleMyBubbleColorChange" />
+                                            <div class="chat-bubble-picker-section-label">My bubble color</div>
+                                            <div class="chat-bubble-picker-sub">Only you see it</div>
+
+                                            <label class="chat-bubble-preview" style="--bc: @myBc;">
+                                                <input type="color" class="chat-bubble-native-input" value="@SafeBubbleHex(myBc)" @onchange="HandleMyBubbleColorChange" />
+                                                <span class="chat-bubble-glow"></span>
+                                                <div class="chat-bubble-preview-row">
+                                                    <div class="chat-bubble-preview-sample" style="@mySampleStyle">
+                                                        Looks great in @teamLabel ✨
+                                                    </div>
+                                                </div>
+                                            </label>
+
+                                            <div class="chat-bubble-controls">
+                                                <div class="chat-bubble-slider-track">
+                                                    <input type="range" min="0" max="360" step="1"
+                                                           value="@GetBubbleHue(myBc)"
+                                                           @oninput="OnMyHueChange"
+                                                           class="chat-bubble-slider" />
+                                                </div>
+                                                <input type="text" class="chat-bubble-text-input"
+                                                       value="@myBc"
+                                                       @onchange="OnMyTextChange"
+                                                       placeholder="#10B981"
+                                                       spellcheck="false" />
+                                            </div>
+
                                             <button class="chat-bubble-reset-btn" @onclick="ResetMyBubbleColor">Reset to default</button>
                                         </div>
-                                        @if (isAdmin && selectedTeam?.IsDirect != true)
-                                        {
-                                            <div class="chat-bubble-picker-section">
-                                                <div class="chat-bubble-picker-section-label">Team default (everyone sees it)</div>
-                                                <input type="color" class="chat-bubble-color-input" value="@SafeBubbleHex(selectedTeam?.OwnBubbleColor)" @onchange="HandleTeamBubbleColorChange" />
-                                                <button class="chat-bubble-reset-btn" @onclick="ResetTeamBubbleColor">Reset team default</button>
-                                            </div>
-                                        }
+
+                                        @* ───────── Team default (admin only, not DMs) ───────── *@
+                                        <div class="chat-bubble-helper">
+                                            Tap the preview for the system RGB picker. Drag the rainbow to skim hues, or paste any CSS color.
+                                        </div>
                                     </div>
                                 }
                             </div>
@@ -2179,13 +2208,14 @@
     }
 
     .message-bubble.own {
-        background: linear-gradient(135deg, var(--own-bubble, var(--accent)), oklch(0.40 0.16 135));
-        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px var(--accent-glow);
+        background: linear-gradient(135deg, var(--own-bubble, var(--accent)), color-mix(in oklch, var(--own-bubble, var(--accent)) 55%, black));
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px color-mix(in oklch, var(--own-bubble, var(--accent)) 30%, transparent);
     }
 
     .chat-bubble-color-dropdown {
         padding: 14px;
-        min-width: 230px;
+        min-width: 320px;
+        max-width: 340px;
         display: flex;
         flex-direction: column;
         gap: 14px;
@@ -2194,34 +2224,175 @@
     .chat-bubble-picker-section {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 10px;
     }
 
     .chat-bubble-picker-section-label {
-        font-size: 11px;
-        opacity: 0.7;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.78);
+        letterSpacing: 0.01em;
     }
 
-    .chat-bubble-color-input {
+    .chat-bubble-picker-sub {
+        font-size: 10.5px;
+        color: rgba(255,255,255,0.50);
+        margin-top: -6px;
+        line-height: 1.35;
+    }
+
+    .chat-bubble-picker-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+    }
+
+    /* Preview card — clickable rectangle that opens the native RGB picker */
+    .chat-bubble-preview {
+        position: relative;
+        display: block;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, color-mix(in oklch, var(--bc) 12%, transparent), rgba(255,255,255,0.04) 60%);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.10);
+        cursor: pointer;
+        overflow: hidden;
+        isolation: isolate;
+    }
+
+    .chat-bubble-native-input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
         width: 100%;
-        height: 32px;
+        height: 100%;
         border: none;
+        padding: 0;
+        cursor: pointer;
+    }
+
+    .chat-bubble-glow {
+        position: absolute;
+        right: -40px;
+        bottom: -40px;
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--bc), transparent 70%);
+        filter: blur(22px);
+        opacity: 0.45;
+        pointer-events: none;
+    }
+
+    .chat-bubble-preview-row {
+        position: relative;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .chat-bubble-preview-sample {
+        padding: 9px 14px;
+        border-radius: 16px;
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: -0.005em;
+        border: 0.5px solid rgba(255,255,255,0.18);
+        max-width: 80%;
+    }
+
+    /* Hue slider + hex text input row */
+    .chat-bubble-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 0.5px solid rgba(255,255,255,0.10);
+    }
+
+    .chat-bubble-slider-track {
+        position: relative;
+        flex: 1;
+        height: 22px;
+    }
+
+    .chat-bubble-slider-track::before {
+        content: "";
+        position: absolute;
+        inset: 6px 2px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #ff0040 0%, #ffae00 14%, #d4ff00 28%, #2cff5b 42%, #00f4ff 56%, #2c8bff 70%, #b25bff 84%, #ff34c2 100%);
+        border: 0.5px solid rgba(255,255,255,0.18);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.30);
+        pointer-events: none;
+    }
+
+    .chat-bubble-slider {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
         background: transparent;
         cursor: pointer;
-        padding: 0;
+        margin: 0;
+    }
+
+    .chat-bubble-slider::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(0,0,0,0.35);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+        cursor: pointer;
+    }
+
+    .chat-bubble-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(0,0,0,0.35);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+        cursor: pointer;
+    }
+
+    .chat-bubble-text-input {
+        width: 130px;
+        flex: 0 0 130px;
+        background: rgba(0,0,0,0.18);
+        border: 0.5px solid rgba(255,255,255,0.10);
+        border-radius: 8px;
+        outline: none;
+        color: white;
+        font-size: 12px;
+        padding: 6px 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
     }
 
     .chat-bubble-reset-btn {
+        align-self: flex-start;
         background: rgba(255,255,255,0.06);
         color: rgba(255,255,255,0.85);
         border: 0.5px solid rgba(255,255,255,0.10);
-        padding: 4px 8px;
+        padding: 5px 10px;
         border-radius: 6px;
         font-size: 11px;
         cursor: pointer;
     }
 
     .chat-bubble-reset-btn:hover { background: rgba(255,255,255,0.10); }
+
+    .chat-bubble-helper {
+        font-size: 10.5px;
+        color: rgba(255,255,255,0.50);
+        line-height: 1.4;
+    }
 
     /* Pinned message indicator */
     .message.pinned .message-bubble {
@@ -3968,11 +4139,9 @@
     private string? ResolveOwnBubbleColor(TeamClient.TeamDTOPublic? team)
     {
         if (team == null) return null;
-        if (userBubbleColors.TryGetValue(team.Id, out var personal) && !string.IsNullOrWhiteSpace(personal))
-            return personal;
-        if (!string.IsNullOrWhiteSpace(team.OwnBubbleColor))
-            return team.OwnBubbleColor;
-        return null;
+        return userBubbleColors.TryGetValue(team.Id, out var personal) && !string.IsNullOrWhiteSpace(personal)
+            ? personal
+            : null;
     }
 
     private static string SafeBubbleHex(string? color)
@@ -3980,6 +4149,96 @@
         if (!string.IsNullOrWhiteSpace(color) && color.StartsWith('#') && color.Length == 7)
             return color;
         return "#a3e635";
+    }
+
+    // Extract hue 0-360 from a CSS color so the rainbow slider reflects it.
+    // Accepts oklch(...), hex, rgb()/rgba(), or hsl()/hsla(). Defaults to 165
+    // (teal — matches the global accent) when parsing fails.
+    private static int GetBubbleHue(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return 165;
+
+        var trimmed = color.Trim();
+
+        // oklch(L C H) — third number is the hue.
+        if (trimmed.StartsWith("oklch(", StringComparison.OrdinalIgnoreCase))
+        {
+            var inside = trimmed[6..].TrimEnd(')');
+            var parts = inside.Split(new[] { ' ', ',', '/' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3 && double.TryParse(parts[2],
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var h))
+            {
+                return ((int)Math.Round(h) % 360 + 360) % 360;
+            }
+        }
+
+        // hsl(H ...) / hsla(H ...) — first number is the hue.
+        if (trimmed.StartsWith("hsl", StringComparison.OrdinalIgnoreCase))
+        {
+            var open = trimmed.IndexOf('(');
+            if (open >= 0)
+            {
+                var inside = trimmed[(open + 1)..].TrimEnd(')');
+                var parts = inside.Split(new[] { ' ', ',', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 1 && double.TryParse(parts[0].TrimEnd('°'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var h))
+                {
+                    return ((int)Math.Round(h) % 360 + 360) % 360;
+                }
+            }
+        }
+
+        // #RRGGBB → derive hue via simple RGB→HSV.
+        if (trimmed.StartsWith('#') && trimmed.Length == 7)
+        {
+            try
+            {
+                var r = Convert.ToInt32(trimmed.Substring(1, 2), 16) / 255.0;
+                var g = Convert.ToInt32(trimmed.Substring(3, 2), 16) / 255.0;
+                var b = Convert.ToInt32(trimmed.Substring(5, 2), 16) / 255.0;
+                var max = Math.Max(r, Math.Max(g, b));
+                var min = Math.Min(r, Math.Min(g, b));
+                var delta = max - min;
+                if (delta < 0.0001) return 0;
+                double h;
+                if (max == r) h = ((g - b) / delta) % 6;
+                else if (max == g) h = (b - r) / delta + 2;
+                else h = (r - g) / delta + 4;
+                var hue = (int)Math.Round(h * 60);
+                return (hue % 360 + 360) % 360;
+            }
+            catch { return 165; }
+        }
+
+        return 165;
+    }
+
+    // ───────── My-bubble handlers (hue slider + text input) ─────────
+
+    private async Task OnMyHueChange(ChangeEventArgs e)
+    {
+        if (!selectedTeamId.HasValue) return;
+        if (!int.TryParse(e.Value?.ToString(), out var hue)) return;
+        var color = $"oklch(0.68 0.16 {hue})";
+        if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, color))
+        {
+            userBubbleColors[selectedTeamId.Value] = color;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnMyTextChange(ChangeEventArgs e)
+    {
+        if (!selectedTeamId.HasValue) return;
+        var color = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(color)) return;
+        if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, color))
+        {
+            userBubbleColors[selectedTeamId.Value] = color;
+            StateHasChanged();
+        }
     }
 
     private string GetStatusDimColor(string status) => status switch
@@ -5305,6 +5564,7 @@
         showGifPicker = false;
         showPinnedDropdown = false;
         showHeaderMoreMenu = false;
+        showBubbleColorPicker = false;
         openFriendMenuId = null;
         StateHasChanged();
         return Task.CompletedTask;
@@ -5445,37 +5705,6 @@
         if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, null))
         {
             userBubbleColors.Remove(selectedTeamId.Value);
-            StateHasChanged();
-        }
-    }
-
-    private async Task HandleTeamBubbleColorChange(ChangeEventArgs e)
-    {
-        if (!selectedTeamId.HasValue || selectedTeam == null) return;
-        string? color = e.Value?.ToString();
-        if (string.IsNullOrWhiteSpace(color)) return;
-
-        var result = await TeamClient.UpdateTeamAsync(selectedTeamId.Value,
-            new TeamClient.TeamUpdateDTO(OwnBubbleColor: color));
-        if (result.Success && result.Value != null)
-        {
-            var idx = teams.FindIndex(t => t.Id == selectedTeamId.Value);
-            if (idx >= 0) teams[idx] = result.Value;
-            selectedTeam = result.Value;
-            StateHasChanged();
-        }
-    }
-
-    private async Task ResetTeamBubbleColor()
-    {
-        if (!selectedTeamId.HasValue) return;
-        var result = await TeamClient.UpdateTeamAsync(selectedTeamId.Value,
-            new TeamClient.TeamUpdateDTO(OwnBubbleColor: ""));
-        if (result.Success && result.Value != null)
-        {
-            var idx = teams.FindIndex(t => t.Id == selectedTeamId.Value);
-            if (idx >= 0) teams[idx] = result.Value;
-            selectedTeam = result.Value;
             StateHasChanged();
         }
     }

@@ -1460,7 +1460,7 @@ textarea:-webkit-autofill {
 }
 
 .message.own .message-bubble {
-    background: linear-gradient(135deg, var(--accent), oklch(0.50 0.16 225));
+    background: linear-gradient(135deg, var(--own-bubble, var(--accent)), color-mix(in oklch, var(--own-bubble, var(--accent)) 55%, black));
     border-top-left-radius: 16px;
     border-top-right-radius: 4px;
 }

@@ -470,21 +470,6 @@ public class TeamService : ITeamService
             }
         }
 
-        if (dto.OwnBubbleColor != null)
-        {
-            string trimmed = dto.OwnBubbleColor.Trim();
-            if (trimmed.Length == 0)
-            {
-                team.OwnBubbleColor = null;
-                hasChanges = true;
-            }
-            else if (CssColor.IsValid(trimmed))
-            {
-                team.OwnBubbleColor = trimmed;
-                hasChanges = true;
-            }
-        }
-
         if (!hasChanges)
             return null;
 
@@ -664,7 +649,6 @@ public class TeamService : ITeamService
             Glyph = team.Glyph,
             Color = team.Color,
             MessageLifetime = team.MessageLifetime,
-            OwnBubbleColor = team.OwnBubbleColor,
             IsDirect = team.IsDirect,
             Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)]
         };

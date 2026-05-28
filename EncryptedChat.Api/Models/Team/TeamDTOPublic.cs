@@ -29,8 +29,6 @@ public class TeamDTOPublic
     [MaxLength(10)]
     public string MessageLifetime { get; set; } = "off";
 
-    public string? OwnBubbleColor { get; set; }
-
     public bool IsDirect { get; set; } = false;
 
     [MaxLength(16)]

@@ -44,9 +44,6 @@ public class Team
     [MaxLength(10)]
     public string MessageLifetime { get; set; } = "off";
 
-    [MaxLength(64)]
-    public string? OwnBubbleColor { get; set; }
-
     public bool IsDirect { get; set; } = false;
 
     [Required]
