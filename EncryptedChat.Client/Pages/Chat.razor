@@ -4320,6 +4320,14 @@
                 if (!friends.Any(f => f.UserId == newFriend.UserId))
                 {
                     friends.Add(newFriend);
+                    // First friend appended live: flip the LoadingState so the
+                    // SuccessTemplate's foreach renders the new friend. Without
+                    // this, friendsState stays Empty (set at load time when the
+                    // requester had zero friends) and the panel keeps showing
+                    // "No friends yet" until F5. Same pattern as the DM first-
+                    // message fix.
+                    if (friendsState != LoadState.Success)
+                        friendsState = LoadState.Success;
                 }
                 await InvokeAsync(StateHasChanged);
             });
