@@ -474,20 +474,20 @@
                             </div>
                         </div>
                         <div class="conversation-header-right">
+                            <button class="icon-btn mobile-hide-direct" @onclick="OpenHeaderSearch" title="Search">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            </button>
                             @if (selectedTeam?.IsDirect != true)
                             {
-                                <button class="icon-btn hide-desktop-up" @onclick="ToggleMembersDrawer" aria-label="Show members" title="Members">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <button class="icon-btn mobile-hide-direct @(showMembersRail ? "active" : "")" @onclick="ToggleMembersRail" title="Members">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
                                         <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
                                     </svg>
                                 </button>
                             }
-                            <button class="icon-btn" @onclick="OpenHeaderSearch" title="Search">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            </button>
                             <div class="header-menu-container popup-container">
-                                <button class="icon-btn @(showBubbleColorPicker ? "active" : "")" @onclick="ToggleBubbleColorPicker" title="My bubble color">
+                                <button class="icon-btn mobile-hide-direct @(showBubbleColorPicker ? "active" : "")" @onclick="ToggleBubbleColorPicker" title="My bubble color">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
                                     </svg>
@@ -541,7 +541,7 @@
                                 }
                             </div>
                             <div class="header-menu-container popup-container">
-                                <button class="icon-btn @(showPinnedDropdown ? "active" : "")" @onclick="TogglePinnedDropdown" title="Pinned messages">
+                                <button class="icon-btn mobile-hide-direct @(showPinnedDropdown ? "active" : "")" @onclick="TogglePinnedDropdown" title="Pinned messages">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
                                     </svg>
@@ -632,15 +632,43 @@
                                     </div>
                                 }
                             </div>
-                            @if (selectedTeam?.IsDirect != true)
-                            {
-                                <div class="header-menu-container popup-container">
-                                    <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                                    </button>
-                                    @if (showHeaderMoreMenu)
-                                    {
-                                        <div class="header-dropdown more-dropdown">
+                            <div class="header-menu-container popup-container @(selectedTeam?.IsDirect == true ? "mobile-only-when-dm" : "")">
+                                <button class="icon-btn @(showHeaderMoreMenu ? "active" : "")" @onclick="ToggleHeaderMoreMenu" title="More">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                                </button>
+                                @if (showHeaderMoreMenu)
+                                {
+                                    <div class="header-dropdown more-dropdown">
+                                        @* ─── Mobile-only mirrors of the direct action buttons hidden in the icon row ─── *@
+                                        <button class="dropdown-item mobile-only-item" @onclick="@(() => { showHeaderMoreMenu = false; _ = OpenHeaderSearch(); })">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                            <span>Search</span>
+                                        </button>
+                                        @if (selectedTeam?.IsDirect != true)
+                                        {
+                                            <button class="dropdown-item mobile-only-item" @onclick="@(() => { showHeaderMoreMenu = false; ToggleMembersRail(); })">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                                                </svg>
+                                                <span>@(showMembersRail ? "Hide members" : "Show members")</span>
+                                            </button>
+                                        }
+                                        <button class="dropdown-item mobile-only-item" @onclick="@(() => { showHeaderMoreMenu = false; ToggleBubbleColorPicker(); })">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+                                            </svg>
+                                            <span>Bubble color</span>
+                                        </button>
+                                        <button class="dropdown-item mobile-only-item" @onclick="@(() => { showHeaderMoreMenu = false; _ = TogglePinnedDropdown(); })">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 2 2 0 000-4H8a2 2 0 000 4 1 1 0 011 1z"/>
+                                            </svg>
+                                            <span>Pinned messages</span>
+                                        </button>
+                                        @if (selectedTeam?.IsDirect != true)
+                                        {
+                                            <div class="dropdown-divider mobile-only-item"></div>
                                             <button class="dropdown-item" @onclick="OpenTeamManageModal">
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -655,19 +683,10 @@
                                                 </svg>
                                                 <span>Leave team...</span>
                                             </button>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            @if (selectedTeam?.IsDirect != true)
-                            {
-                                <button class="icon-btn mobile-members-toggle" @onclick="ToggleMembersRail" title="Members">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                                        <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
-                                    </svg>
-                                </button>
-                            }
+                                        }
+                                    </div>
+                                }
+                            </div>
                         </div>
                     }
                 </div>
@@ -1068,12 +1087,12 @@
         }
     </div>
 
-    @* ── Members rail (230px) ── *@
+    @* ── Members rail (230px, on-demand) ── *@
     @if (selectedTeam != null)
     {
-        @if (selectedTeam?.IsDirect != true)
+        @if (selectedTeam?.IsDirect != true && showMembersRail)
         {
-        <GlassPanel Radius="24" Class="@($"members-rail-panel {(showMembersRail ? "show" : "")} {(mobileShowMembersDrawer ? "drawer-open" : "")}")">
+        <GlassPanel Radius="24" Class="members-rail-panel">
             <div class="members-header">
                 <span class="section-label">Members</span>
                 <button class="icon-btn mobile-close" @onclick="() => showMembersRail = false">
@@ -1132,8 +1151,10 @@
 </div>
 
 @* ── Mobile sidebar overlay ── *@
-<div class="drawer-overlay @(mobileShowMembersDrawer ? "show" : "")"
-     @onclick="() => mobileShowMembersDrawer = false"></div>
+@if (showMembersRail && selectedTeam?.IsDirect != true)
+{
+    <div class="drawer-overlay show" @onclick="() => showMembersRail = false"></div>
+}
 
 @* ── Team Manage Modal ── *@
 <TeamManageModal
@@ -2096,6 +2117,21 @@
         gap: 6px;
     }
 
+    /* Mobile-only menu entries (Search / Members / Bubble color / Pinned) live
+       inside the More dropdown but are hidden on desktop — desktop has the
+       direct icon-row buttons. */
+    .mobile-only-item {
+        display: none;
+    }
+
+    /* The More menu on desktop is only meaningful for non-DM teams (Manage /
+       Leave). DMs have nothing in the More menu on desktop — hide it. */
+    @@media (min-width: 768px) {
+        .header-menu-container.mobile-only-when-dm {
+            display: none;
+        }
+    }
+
     .message-stream-panel {
         flex: 1;
         min-height: 0;
@@ -2934,6 +2970,12 @@
         flex: 0 0 230px;
         display: flex;
         flex-direction: column;
+        animation: slide-in-rail 0.22s ease-out;
+    }
+
+    @@keyframes slide-in-rail {
+        from { transform: translateX(100%); opacity: 0; }
+        to   { transform: translateX(0);    opacity: 1; }
     }
 
     .members-header {
@@ -2985,7 +3027,7 @@
         border-top: 0.5px solid rgba(255,255,255,0.10);
     }
 
-    .mobile-close, .mobile-members-toggle {
+    .mobile-close {
         display: none;
     }
 
@@ -3214,13 +3256,7 @@
             bottom: 0;
             width: 280px;
             z-index: 100;
-            transform: translateX(100%);
-            transition: transform 0.25s ease;
             box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .members-rail-panel.drawer-open {
-            transform: translateX(0);
         }
     }
 
@@ -3287,9 +3323,91 @@
         .conversation-column,
         .members-rail-panel { border-radius: 0; }
 
+        /* Chat header: tighten padding + let the title shrink with ellipsis
+           so the action buttons on the right never get clipped. */
+        .conversation-header {
+            padding: 12px 12px;
+            gap: 8px;
+        }
+
+        .conversation-header-left {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        /* Inner title block must also be shrinkable so its children (title-row
+           + meta) can ellipsis instead of pushing buttons off the screen. */
+        .conversation-header-left > div {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .conversation-title-row {
+            min-width: 0;
+        }
+
+        .conversation-title {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-meta {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Hide the E2EE pill on mobile — the app is fully E2EE so the pill
+           is informational redundancy that eats badly needed horizontal space. */
+        .e2ee-badge {
+            display: none;
+        }
+
+        .conversation-header-right {
+            flex: 0 0 auto;
+            gap: 2px;
+        }
+
+        .conversation-header-right .icon-btn {
+            width: 32px;
+            height: 32px;
+        }
+
+        /* Consolidate everything in the More (⋯) menu on mobile.
+           The direct action icons are hidden; their wrappers stay in DOM so
+           the Bubble color and Pinned popovers (anchored to those wrappers)
+           still render — they're CSS-relocated to a bottom-sheet below. */
+        .conversation-header-right .mobile-hide-direct {
+            display: none;
+        }
+
+        .mobile-only-item {
+            display: flex;
+        }
+
+        /* Bubble color and Pinned popovers normally anchor to their (now
+           hidden) trigger button. On mobile, escape that and become a
+           centered bottom sheet so they remain usable. */
+        .header-dropdown.chat-bubble-color-dropdown,
+        .header-dropdown.pinned-dropdown {
+            position: fixed;
+            inset: auto 12px max(12px, env(safe-area-inset-bottom, 0)) 12px;
+            top: auto;
+            right: auto;
+            left: 12px;
+            max-width: none;
+            min-width: 0;
+            max-height: 70vh;
+            overflow-y: auto;
+            z-index: 200;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+        }
+
         .chat-floating-layout .chat-sidebar-panel { display: flex; flex: 1; }
         .chat-floating-layout .conversation-column { display: none; }
-        .chat-floating-layout .members-rail-panel { display: none; }
 
         .chat-floating-layout.mobile-show-conversation .chat-sidebar-panel { display: none; }
         .chat-floating-layout.mobile-show-conversation .conversation-column {
@@ -3297,19 +3415,13 @@
             flex: 1;
         }
 
-        .chat-floating-layout.mobile-show-conversation .members-rail-panel.drawer-open {
+        .chat-floating-layout.mobile-show-conversation .members-rail-panel {
             display: flex;
             position: fixed;
             inset: 0 0 0 auto;
             width: 85vw;
             z-index: 100;
-            transform: translateX(0);
-            transition: transform 0.25s ease;
             box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .chat-floating-layout.mobile-show-conversation .members-rail-panel:not(.drawer-open) {
-            display: none;
         }
 
         .composer-wrapper {
@@ -3383,7 +3495,6 @@
 
     // Mobile navigation state
     private bool mobileShowConversation;
-    private bool mobileShowMembersDrawer;
 
     // Status
     private bool showStatusMenu;
@@ -4003,15 +4114,10 @@
     private void BackToSidebarMobile()
     {
         mobileShowConversation = false;
-        mobileShowMembersDrawer = false;
+        showMembersRail = false;
     }
 
-    private void ToggleMembersDrawer()
-    {
-        mobileShowMembersDrawer = !mobileShowMembersDrawer;
-    }
-
-    private async Task SelectStatus(string status)
+private async Task SelectStatus(string status)
     {
         currentStatus = status;
         await SaveStatusAndClose();
@@ -4280,7 +4386,6 @@
             selectedTeam = teams.FirstOrDefault(t => t.Id == teamId);
             newMessageText = "";
             mobileShowConversation = true;
-            mobileShowMembersDrawer = false;
             showPinnedDropdown = false;
             pinnedMessages = new();
 
