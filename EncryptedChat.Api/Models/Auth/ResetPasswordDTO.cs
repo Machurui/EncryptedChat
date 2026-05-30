@@ -13,7 +13,7 @@ public class ResetPasswordDTO
     public string Token { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(6)]
-    [MaxLength(100)]
+    [MinLength(14)]
+    [MaxLength(128)]
     public string NewPassword { get; set; } = string.Empty;
 }

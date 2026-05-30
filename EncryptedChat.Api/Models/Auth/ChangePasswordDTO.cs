@@ -9,7 +9,7 @@ public class ChangePasswordDTO
     public string CurrentPassword { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(12, ErrorMessage = "Password must be at least 12 characters")]
+    [MinLength(14, ErrorMessage = "Password must be at least 14 characters")]
     [MaxLength(128)]
     public string NewPassword { get; set; } = string.Empty;
 
@@ -34,6 +34,6 @@ public record RegisterResultDTO(string Message, IReadOnlyList<string> RecoveryWo
 public record RecoverRequestDTO(
     [Required, EmailAddress, MaxLength(254)] string Email,
     [Required, MinLength(12), MaxLength(12)] List<string> Words,
-    [Required, MinLength(6), MaxLength(128)] string NewPassword);
+    [Required, MinLength(14), MaxLength(128)] string NewPassword);
 
 public record RecoverResultDTO(string Message, IReadOnlyList<string> NewRecoveryWords);

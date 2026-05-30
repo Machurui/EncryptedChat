@@ -9,8 +9,8 @@ public class RegisterDTO
     public string Email { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(6)]
-    [MaxLength(100)]
+    [MinLength(14)]
+    [MaxLength(128)]
     public string Password { get; set; } = string.Empty;
 
     [Required]
