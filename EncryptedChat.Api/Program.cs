@@ -217,6 +217,7 @@ builder.Services.AddScoped<IPinnedMessageService, PinnedMessageService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IRecoveryService, RecoveryService>();
+builder.Services.AddScoped<IPasswordHistoryService, PasswordHistoryService>();
 builder.Services.AddScoped<IRealtimeService, RealtimeService>();
 
 // Auth service

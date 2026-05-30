@@ -23,6 +23,7 @@ public sealed class AuthServiceTests : IDisposable
     private readonly Mock<SignInManager<User>> _signInManager;
     private readonly Mock<ISessionService> _sessionService;
     private readonly Mock<IRecoveryService> _recoveryService = new();
+    private readonly PasswordHistoryService _passwordHistory;
     private readonly AuthService _service;
 
     public AuthServiceTests()
@@ -40,6 +41,7 @@ public sealed class AuthServiceTests : IDisposable
             .ReturnsAsync(new RecoveryPhraseDTO(
                 Bip39Words.All.Take(12).ToList(),
                 DateTime.UtcNow));
+        _passwordHistory = new PasswordHistoryService(_context, _userManager.PasswordHasher);
         _service = new AuthService(
             _userManager,
             _signInManager.Object,
@@ -47,8 +49,20 @@ public sealed class AuthServiceTests : IDisposable
             new JwtTokenService(CreateConfiguration()),
             _context,
             _sessionService.Object,
-            _recoveryService.Object);
+            _recoveryService.Object,
+            _passwordHistory);
     }
+
+    private AuthService BuildAuthService(IRecoveryService recovery)
+        => new(
+            _userManager,
+            _signInManager.Object,
+            _roleManager,
+            new JwtTokenService(CreateConfiguration()),
+            _context,
+            _sessionService.Object,
+            recovery,
+            _passwordHistory);
 
     public void Dispose()
     {
@@ -245,14 +259,7 @@ public sealed class AuthServiceTests : IDisposable
         var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
             (await _userManager.FindByEmailAsync("alice@test.com"))!.Id);
 
-        var service = new AuthService(
-            _userManager,
-            _signInManager.Object,
-            _roleManager,
-            new JwtTokenService(CreateConfiguration()),
-            _context,
-            _sessionService.Object,
-            realRecovery);
+        var service = BuildAuthService(realRecovery);
 
         var (success, _, newWords) = await service.RecoverAsync(
             "alice@test.com",
@@ -274,14 +281,7 @@ public sealed class AuthServiceTests : IDisposable
     public async Task RecoverAsync_UnknownEmail_ReturnsGenericFailure()
     {
         var realRecovery = new RecoveryService(_context, _userManager);
-        var service = new AuthService(
-            _userManager,
-            _signInManager.Object,
-            _roleManager,
-            new JwtTokenService(CreateConfiguration()),
-            _context,
-            _sessionService.Object,
-            realRecovery);
+        var service = BuildAuthService(realRecovery);
 
         var (success, message, newWords) = await service.RecoverAsync(
             "nobody@test.com",
@@ -303,14 +303,7 @@ public sealed class AuthServiceTests : IDisposable
         await realRecovery.GenerateRecoveryPhraseAsync(
             (await _userManager.FindByEmailAsync("bob@test.com"))!.Id);
 
-        var service = new AuthService(
-            _userManager,
-            _signInManager.Object,
-            _roleManager,
-            new JwtTokenService(CreateConfiguration()),
-            _context,
-            _sessionService.Object,
-            realRecovery);
+        var service = BuildAuthService(realRecovery);
 
         var wrong = Enumerable.Range(0, 12).Select(_ => "abandon").ToList();
         var (success, message, _) = await service.RecoverAsync(
@@ -330,14 +323,7 @@ public sealed class AuthServiceTests : IDisposable
         var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
             (await _userManager.FindByEmailAsync("carol@test.com"))!.Id);
 
-        var service = new AuthService(
-            _userManager,
-            _signInManager.Object,
-            _roleManager,
-            new JwtTokenService(CreateConfiguration()),
-            _context,
-            _sessionService.Object,
-            realRecovery);
+        var service = BuildAuthService(realRecovery);
 
         var (success, message, _) = await service.RecoverAsync(
             "carol@test.com",
@@ -345,7 +331,13 @@ public sealed class AuthServiceTests : IDisposable
             "weak"); // fails Identity's default policy
 
         success.Should().BeFalse();
-        message.Should().Be("Invalid new password");
+        // After the hardening fix that surfaces Identity's actual policy errors,
+        // the message is the concrete rule that failed (e.g. requires-uppercase),
+        // not the generic "Invalid new password" placeholder. We only assert it's
+        // present and distinct from the email/phrase mismatch — the exact wording
+        // is Identity-version-specific.
+        message.Should().NotBeNullOrWhiteSpace();
+        message.Should().NotBe("Invalid email or recovery phrase");
 
         var user = await _userManager.FindByEmailAsync("carol@test.com");
         (await _userManager.CheckPasswordAsync(user!, "OldP@ssw0rd!")).Should().BeTrue();
@@ -363,19 +355,129 @@ public sealed class AuthServiceTests : IDisposable
         var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
             (await _userManager.FindByEmailAsync("dave@test.com"))!.Id);
 
-        var service = new AuthService(
-            _userManager,
-            _signInManager.Object,
-            _roleManager,
-            new JwtTokenService(CreateConfiguration()),
-            _context,
-            _sessionService.Object,
-            realRecovery);
+        var service = BuildAuthService(realRecovery);
 
         var user = await _userManager.FindByEmailAsync("dave@test.com");
         await service.RecoverAsync("dave@test.com", phrase!.Words.ToList(), "NewP@ssw0rd!");
 
         _sessionService.Verify(s => s.RevokeAllSessionsAsync(user!.Id), Times.Once);
+    }
+
+    [Fact]
+    public async Task RecoverAsync_NewPasswordSameAsCurrent_ReturnsReuseRejection()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("eve@test.com", "SameP@ss1!", "eve");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
+            (await _userManager.FindByEmailAsync("eve@test.com"))!.Id);
+
+        var service = BuildAuthService(realRecovery);
+
+        var (success, message, _) = await service.RecoverAsync(
+            "eve@test.com", phrase!.Words.ToList(), "SameP@ss1!");
+
+        success.Should().BeFalse();
+        message.Should().Contain("last 3 passwords");
+    }
+
+    [Fact]
+    public async Task RecoverAsync_NewPasswordEqualsPreviousPassword_ReturnsReuseRejection()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("frank@test.com", "First!P@ss1", "frank");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var userId = (await _userManager.FindByEmailAsync("frank@test.com"))!.Id;
+
+        // Round 1: recover from First → Second.
+        var phrase1 = await realRecovery.GenerateRecoveryPhraseAsync(userId);
+        var service = BuildAuthService(realRecovery);
+        var r1 = await service.RecoverAsync("frank@test.com", phrase1!.Words.ToList(), "Second!P@ss2");
+        r1.Success.Should().BeTrue();
+
+        // Round 2: try to recover back to First — must be blocked (it's in history).
+        var freshPhrase = await realRecovery.GenerateRecoveryPhraseAsync(userId);
+        var service2 = BuildAuthService(realRecovery);
+        var r2 = await service2.RecoverAsync("frank@test.com", freshPhrase!.Words.ToList(), "First!P@ss1");
+
+        r2.Success.Should().BeFalse();
+        r2.Message.Should().Contain("last 3 passwords");
+    }
+
+    [Fact]
+    public async Task RecoverAsync_NewPasswordOutsideHistoryWindow_Succeeds()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("gina@test.com", "Alpha!P@1", "gina");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var userId = (await _userManager.FindByEmailAsync("gina@test.com"))!.Id;
+
+        // Rotate through Alpha -> Beta -> Gamma -> Delta. After this rotation the
+        // history holds Gamma + Beta (2 entries), the current hash is Delta.
+        // Last 3 = {Delta, Gamma, Beta}. Alpha has been pruned and can be reused.
+        async Task RecoverTo(string newPw)
+        {
+            var p = await realRecovery.GenerateRecoveryPhraseAsync(userId);
+            var s = BuildAuthService(realRecovery);
+            var res = await s.RecoverAsync("gina@test.com", p!.Words.ToList(), newPw);
+            res.Success.Should().BeTrue();
+        }
+
+        await RecoverTo("Beta!P@2");
+        await RecoverTo("Gamma!P@3");
+        await RecoverTo("Delta!P@4");
+
+        // Now Alpha should be allowed again (pruned out of the last-3 window).
+        var lastPhrase = await realRecovery.GenerateRecoveryPhraseAsync(userId);
+        var finalService = BuildAuthService(realRecovery);
+        var finalResult = await finalService.RecoverAsync(
+            "gina@test.com", lastPhrase!.Words.ToList(), "Alpha!P@1");
+
+        finalResult.Success.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_NewPasswordSameAsCurrent_ReturnsReuseError()
+    {
+        await SeedUserWithPasswordAsync("henry@test.com", "Curr!P@ss1", "henry");
+        var userId = (await _userManager.FindByEmailAsync("henry@test.com"))!.Id;
+
+        IdentityResult result = await _service.ChangePasswordAsync(userId, new ChangePasswordDTO
+        {
+            CurrentPassword = "Curr!P@ss1",
+            NewPassword = "Curr!P@ss1"
+        });
+
+        result.Succeeded.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.Code == "PasswordRecentlyUsed");
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_NewPasswordSameAsPreviousOne_ReturnsReuseError()
+    {
+        await SeedUserWithPasswordAsync("ivy@test.com", "First!P@1", "ivy");
+        var userId = (await _userManager.FindByEmailAsync("ivy@test.com"))!.Id;
+
+        // First → Second (succeeds, First lands in history).
+        IdentityResult round1 = await _service.ChangePasswordAsync(userId, new ChangePasswordDTO
+        {
+            CurrentPassword = "First!P@1",
+            NewPassword = "Second!P@2"
+        });
+        round1.Succeeded.Should().BeTrue();
+
+        // Try Second → First (blocked: First is in history).
+        IdentityResult round2 = await _service.ChangePasswordAsync(userId, new ChangePasswordDTO
+        {
+            CurrentPassword = "Second!P@2",
+            NewPassword = "First!P@1"
+        });
+
+        round2.Succeeded.Should().BeFalse();
+        round2.Errors.Should().ContainSingle(e => e.Code == "PasswordRecentlyUsed");
     }
 
     private async Task SeedUserWithPasswordAsync(string email, string password, string handle)

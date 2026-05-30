@@ -15,6 +15,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
     public DbSet<UserTeamPreference> UserTeamPreferences => Set<UserTeamPreference>();
+    public DbSet<PasswordHistoryEntry> PasswordHistory => Set<PasswordHistoryEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -148,6 +149,15 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
         modelBuilder.Entity<PinnedMessage>()
             .HasIndex(p => new { p.TeamId, p.MessageId })
             .IsUnique();
+
+        modelBuilder.Entity<PasswordHistoryEntry>()
+            .HasOne(p => p.User)
+            .WithMany()
+            .HasForeignKey(p => p.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PasswordHistoryEntry>()
+            .HasIndex(p => new { p.UserId, p.CreatedAt });
 
         modelBuilder.Entity<IdentityRole>().HasData(
             new IdentityRole

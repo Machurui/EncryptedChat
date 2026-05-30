@@ -14,9 +14,11 @@ public class AuthService(
     JwtTokenService tokens,
     EncryptedChatContext context,
     ISessionService sessionService,
-    IRecoveryService recoveryService) : IAuthService
+    IRecoveryService recoveryService,
+    IPasswordHistoryService passwordHistory) : IAuthService
 {
     private const string DefaultUserRole = "User";
+    private const string ReuseRejection = "You cannot reuse one of your last 3 passwords.";
 
     private readonly UserManager<User> _userManager = userManager;
     private readonly SignInManager<User> _signInManager = signInManager;
@@ -25,6 +27,7 @@ public class AuthService(
     private readonly EncryptedChatContext _context = context;
     private readonly ISessionService _sessionService = sessionService;
     private readonly IRecoveryService _recoveryService = recoveryService;
+    private readonly IPasswordHistoryService _passwordHistory = passwordHistory;
 
     public async Task<(IdentityResult Result, IReadOnlyList<string>? RecoveryWords)> RegisterAsync(RegisterDTO model)
     {
@@ -264,10 +267,24 @@ public class AuthService(
                 Description = "User not found"
             });
 
+        // Block reuse of the last 3 passwords before invoking Identity's change
+        // flow. Identity itself does not enforce this.
+        if (await _passwordHistory.IsReusedAsync(user, model.NewPassword))
+            return IdentityResult.Failed(new IdentityError
+            {
+                Code = "PasswordRecentlyUsed",
+                Description = ReuseRejection
+            });
+
+        string? previousHash = user.PasswordHash;
+
         var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
 
         if (result.Succeeded)
         {
+            if (!string.IsNullOrEmpty(previousHash))
+                await _passwordHistory.RecordAsync(user.Id, previousHash);
+
             user.PasswordChangedAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
         }
@@ -300,6 +317,16 @@ public class AuthService(
         if (!valid)
             return (false, GenericFailure, null);
 
+        // Block reuse of the current password or either of the two most recent
+        // previous ones — before touching anything else, so a rejected reuse
+        // leaves the account fully intact.
+        if (await _passwordHistory.IsReusedAsync(user, newPassword))
+            return (false, ReuseRejection, null);
+
+        // Capture the current hash so we can append it to history once the
+        // reset succeeds (becomes the "previous" entry for the next change).
+        string? previousHash = user.PasswordHash;
+
         // Reset the password atomically via Identity's reset-token flow.
         // ResetPasswordAsync validates the new password BEFORE replacing the
         // existing hash — a weak/rejected new password leaves the old one intact
@@ -307,7 +334,17 @@ public class AuthService(
         string resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
         IdentityResult resetResult = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
         if (!resetResult.Succeeded)
-            return (false, "Invalid new password", null);
+        {
+            // Password policy is public information — surface the specific rule that
+            // failed so the legitimate user can fix it. This is distinct from the
+            // generic "email or phrase" failure, which intentionally hides which
+            // half mismatched to block account enumeration.
+            string detail = string.Join(" ", resetResult.Errors.Select(e => e.Description));
+            return (false, string.IsNullOrWhiteSpace(detail) ? "Invalid new password" : detail, null);
+        }
+
+        if (!string.IsNullOrEmpty(previousHash))
+            await _passwordHistory.RecordAsync(user.Id, previousHash);
 
         user.PasswordChangedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
