@@ -4,6 +4,7 @@ using EncryptedChat.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace EncryptedChat.Controllers;
@@ -17,10 +18,12 @@ public class AuthController(IAuthService authService) : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDTO model)
     {
-        IdentityResult result = await _auth.RegisterAsync(model);
+        var (result, recoveryWords) = await _auth.RegisterAsync(model);
 
         if (result.Succeeded)
-            return Ok(new { Message = "User created successfully" });
+            return Ok(new RegisterResultDTO(
+                "User created successfully",
+                recoveryWords ?? Array.Empty<string>()));
 
         List<string> errors = result.Errors.Select(e => e.Description).ToList();
         return BadRequest(new { Message = errors });
@@ -176,6 +179,18 @@ public class AuthController(IAuthService authService) : ControllerBase
             return Unauthorized(new { Message = "No access token" });
 
         return Ok(new { Token = accessToken });
+    }
+
+    [HttpPost("recover")]
+    [EnableRateLimiting("AccountRecover")]
+    public async Task<IActionResult> Recover([FromBody] RecoverRequestDTO dto)
+    {
+        var (success, message, newWords) = await _auth.RecoverAsync(dto.Email, dto.Words, dto.NewPassword);
+
+        if (!success)
+            return BadRequest(new { Message = message });
+
+        return Ok(new RecoverResultDTO(message, newWords ?? Array.Empty<string>()));
     }
 
     private void SetAccessTokenCookie(string token, DateTime expiresUtc)

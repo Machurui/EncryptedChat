@@ -34,7 +34,7 @@ public class AuthControllerTests
 
         mockAuthService
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync(IdentityResult.Success);
+            .ReturnsAsync((IdentityResult.Success, (IReadOnlyList<string>?)new[] { "abandon" }));
 
         AuthController controller = new(mockAuthService.Object);
 
@@ -56,7 +56,7 @@ public class AuthControllerTests
 
         mockAuthService
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Invalid data" }));
+            .ReturnsAsync((IdentityResult.Failed(new IdentityError { Description = "Invalid data" }), (IReadOnlyList<string>?)null));
 
         AuthController controller = new(mockAuthService.Object);
 

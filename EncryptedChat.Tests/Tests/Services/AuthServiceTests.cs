@@ -22,6 +22,7 @@ public sealed class AuthServiceTests : IDisposable
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly Mock<SignInManager<User>> _signInManager;
     private readonly Mock<ISessionService> _sessionService;
+    private readonly Mock<IRecoveryService> _recoveryService = new();
     private readonly AuthService _service;
 
     public AuthServiceTests()
@@ -35,13 +36,18 @@ public sealed class AuthServiceTests : IDisposable
         _roleManager = CreateRoleManager(_context);
         _signInManager = CreateSignInManager(_userManager);
         _sessionService = new Mock<ISessionService>();
+        _recoveryService.Setup(r => r.GenerateRecoveryPhraseAsync(It.IsAny<string>()))
+            .ReturnsAsync(new RecoveryPhraseDTO(
+                Bip39Words.All.Take(12).ToList(),
+                DateTime.UtcNow));
         _service = new AuthService(
             _userManager,
             _signInManager.Object,
             _roleManager,
             new JwtTokenService(CreateConfiguration()),
             _context,
-            _sessionService.Object);
+            _sessionService.Object,
+            _recoveryService.Object);
     }
 
     public void Dispose()
@@ -156,7 +162,7 @@ public sealed class AuthServiceTests : IDisposable
     {
         await _roleManager.CreateAsync(new IdentityRole("User"));
 
-        IdentityResult result = await _service.RegisterAsync(new RegisterDTO
+        var (result, recoveryWords) = await _service.RegisterAsync(new RegisterDTO
         {
             Email = "newuser@test.com",
             Password = "P@ssw0rd123",
@@ -164,6 +170,8 @@ public sealed class AuthServiceTests : IDisposable
         });
 
         result.Succeeded.Should().BeTrue();
+        recoveryWords.Should().NotBeNull();
+        recoveryWords!.Should().HaveCount(12);
         User created = await _userManager.Users.SingleAsync(u => u.Email == "newuser@test.com");
         created.Handle.Should().Be("newuser");
         created.Name.Should().Be("newuser");
@@ -186,7 +194,7 @@ public sealed class AuthServiceTests : IDisposable
         };
         await _userManager.CreateAsync(existing);
 
-        IdentityResult result = await _service.RegisterAsync(new RegisterDTO
+        var (result, recoveryWords) = await _service.RegisterAsync(new RegisterDTO
         {
             Email = "other@test.com",
             Password = "P@ssw0rd123",
@@ -195,6 +203,7 @@ public sealed class AuthServiceTests : IDisposable
 
         result.Succeeded.Should().BeFalse();
         result.Errors.Should().ContainSingle(e => e.Code == "DuplicateHandle");
+        recoveryWords.Should().BeNull();
     }
 
     [Fact]
@@ -214,7 +223,7 @@ public sealed class AuthServiceTests : IDisposable
         };
         await _userManager.CreateAsync(existing);
 
-        IdentityResult result = await _service.RegisterAsync(new RegisterDTO
+        var (result, recoveryWords) = await _service.RegisterAsync(new RegisterDTO
         {
             Email = "dup@test.com",
             Password = "P@ssw0rd123",
@@ -223,6 +232,109 @@ public sealed class AuthServiceTests : IDisposable
 
         result.Succeeded.Should().BeFalse();
         result.Errors.Should().ContainSingle(e => e.Code == "DuplicateEmail");
+        recoveryWords.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RecoverAsync_ValidPhrase_ResetsPassword_AndReturnsNewWords()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("alice@test.com", "OldP@ssw0rd!", "alice");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
+            (await _userManager.FindByEmailAsync("alice@test.com"))!.Id);
+
+        var service = new AuthService(
+            _userManager,
+            _signInManager.Object,
+            _roleManager,
+            new JwtTokenService(CreateConfiguration()),
+            _context,
+            _sessionService.Object,
+            realRecovery);
+
+        var (success, _, newWords) = await service.RecoverAsync(
+            "alice@test.com",
+            phrase!.Words.ToList(),
+            "NewP@ssw0rd!");
+
+        success.Should().BeTrue();
+        newWords.Should().NotBeNull();
+        newWords!.Should().HaveCount(12);
+
+        var user = await _userManager.FindByEmailAsync("alice@test.com");
+        (await _userManager.CheckPasswordAsync(user!, "NewP@ssw0rd!")).Should().BeTrue();
+        (await _userManager.CheckPasswordAsync(user!, "OldP@ssw0rd!")).Should().BeFalse();
+
+        (await realRecovery.VerifyRecoveryPhraseAsync(user!.Id, phrase.Words)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RecoverAsync_UnknownEmail_ReturnsGenericFailure()
+    {
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var service = new AuthService(
+            _userManager,
+            _signInManager.Object,
+            _roleManager,
+            new JwtTokenService(CreateConfiguration()),
+            _context,
+            _sessionService.Object,
+            realRecovery);
+
+        var (success, message, newWords) = await service.RecoverAsync(
+            "nobody@test.com",
+            Bip39Words.All.Take(12).ToList(),
+            "NewP@ssw0rd!");
+
+        success.Should().BeFalse();
+        message.Should().Be("Invalid email or recovery phrase");
+        newWords.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RecoverAsync_WrongPhrase_ReturnsGenericFailure()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("bob@test.com", "OldP@ssw0rd!", "bob");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        await realRecovery.GenerateRecoveryPhraseAsync(
+            (await _userManager.FindByEmailAsync("bob@test.com"))!.Id);
+
+        var service = new AuthService(
+            _userManager,
+            _signInManager.Object,
+            _roleManager,
+            new JwtTokenService(CreateConfiguration()),
+            _context,
+            _sessionService.Object,
+            realRecovery);
+
+        var wrong = Enumerable.Range(0, 12).Select(_ => "abandon").ToList();
+        var (success, message, _) = await service.RecoverAsync(
+            "bob@test.com", wrong, "NewP@ssw0rd!");
+
+        success.Should().BeFalse();
+        message.Should().Be("Invalid email or recovery phrase");
+    }
+
+    private async Task SeedUserWithPasswordAsync(string email, string password, string handle)
+    {
+        User user = new()
+        {
+            Id = handle + "-id",
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            UserName = email,
+            NormalizedUserName = email.ToUpperInvariant(),
+            Name = handle,
+            Handle = handle,
+            Level = 1,
+            Secret = "s"
+        };
+        await _userManager.CreateAsync(user, password);
     }
 
     private static IConfiguration CreateConfiguration() =>

@@ -13,7 +13,8 @@ public class AuthService(
     RoleManager<IdentityRole> roleManager,
     JwtTokenService tokens,
     EncryptedChatContext context,
-    ISessionService sessionService) : IAuthService
+    ISessionService sessionService,
+    IRecoveryService recoveryService) : IAuthService
 {
     private const string DefaultUserRole = "User";
 
@@ -23,26 +24,27 @@ public class AuthService(
     private readonly JwtTokenService _tokens = tokens;
     private readonly EncryptedChatContext _context = context;
     private readonly ISessionService _sessionService = sessionService;
+    private readonly IRecoveryService _recoveryService = recoveryService;
 
-    public async Task<IdentityResult> RegisterAsync(RegisterDTO model)
+    public async Task<(IdentityResult Result, IReadOnlyList<string>? RecoveryWords)> RegisterAsync(RegisterDTO model)
     {
         User? existingByEmail = await _userManager.FindByEmailAsync(model.Email);
         if (existingByEmail != null)
-            return IdentityResult.Failed(new IdentityError
+            return (IdentityResult.Failed(new IdentityError
             {
                 Code = "DuplicateEmail",
                 Description = "Email already in use"
-            });
+            }), null);
 
         string handle = (model.Handle ?? string.Empty).Trim().ToLowerInvariant();
 
         bool handleExists = await _userManager.Users.AnyAsync(u => u.Handle == handle);
         if (handleExists)
-            return IdentityResult.Failed(new IdentityError
+            return (IdentityResult.Failed(new IdentityError
             {
                 Code = "DuplicateHandle",
                 Description = "Handle already in use"
-            });
+            }), null);
 
         User user = new()
         {
@@ -55,28 +57,29 @@ public class AuthService(
         };
 
         IdentityResult result = await _userManager.CreateAsync(user, model.Password);
-        if (result.Succeeded)
-        {
-            bool roleExists = await _roleManager.RoleExistsAsync(DefaultUserRole);
-            if (!roleExists)
-            {
-                await _userManager.DeleteAsync(user);
-                return IdentityResult.Failed(new IdentityError
-                {
-                    Code = "RoleMissing",
-                    Description = $"Required role '{DefaultUserRole}' is not configured."
-                });
-            }
+        if (!result.Succeeded)
+            return (result, null);
 
-            IdentityResult roleResult = await _userManager.AddToRoleAsync(user, DefaultUserRole);
-            if (!roleResult.Succeeded)
+        bool roleExists = await _roleManager.RoleExistsAsync(DefaultUserRole);
+        if (!roleExists)
+        {
+            await _userManager.DeleteAsync(user);
+            return (IdentityResult.Failed(new IdentityError
             {
-                await _userManager.DeleteAsync(user);
-                return roleResult;
-            }
+                Code = "RoleMissing",
+                Description = $"Required role '{DefaultUserRole}' is not configured."
+            }), null);
         }
 
-        return result;
+        IdentityResult roleResult = await _userManager.AddToRoleAsync(user, DefaultUserRole);
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+            return (roleResult, null);
+        }
+
+        RecoveryPhraseDTO? phrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
+        return (result, phrase?.Words);
     }
 
     public async Task<LoginResult> LoginAsync(LoginDTO model, string? deviceInfo = null, string? deviceKind = null, string? ipAddress = null)
@@ -276,6 +279,47 @@ public class AuthService(
     {
         var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
         return user?.PasswordChangedAt;
+    }
+
+    public async Task<(bool Success, string Message, IReadOnlyList<string>? NewWords)> RecoverAsync(
+        string email, List<string> words, string newPassword)
+    {
+        const string GenericFailure = "Invalid email or recovery phrase";
+
+        if (string.IsNullOrWhiteSpace(email) || words == null || string.IsNullOrWhiteSpace(newPassword))
+            return (false, GenericFailure, null);
+
+        User? user = await _userManager.FindByEmailAsync(email);
+        if (user == null)
+            return (false, GenericFailure, null);
+
+        bool valid = await _recoveryService.VerifyRecoveryPhraseAsync(user.Id, words);
+        if (!valid)
+            return (false, GenericFailure, null);
+
+        IdentityResult removePw = await _userManager.RemovePasswordAsync(user);
+        if (!removePw.Succeeded)
+            return (false, "Failed to reset password", null);
+
+        IdentityResult addPw = await _userManager.AddPasswordAsync(user, newPassword);
+        if (!addPw.Succeeded)
+            return (false, addPw.Errors.FirstOrDefault()?.Description ?? "Invalid new password", null);
+
+        user.PasswordChangedAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+
+        await _sessionService.RevokeAllSessionsAsync(user.Id);
+
+        var activeRefreshTokens = await _context.RefreshTokens
+            .Where(rt => rt.UserId == user.Id && rt.RevokedAt == null)
+            .ToListAsync();
+        foreach (var rt in activeRefreshTokens)
+            rt.RevokedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        RecoveryPhraseDTO? newPhrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
+
+        return (true, "Account recovered. Save your new recovery phrase.", newPhrase?.Words);
     }
 
     private static string HashRefreshToken(string refreshToken)

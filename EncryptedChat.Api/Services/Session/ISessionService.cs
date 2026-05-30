@@ -8,6 +8,7 @@ public interface ISessionService
     Task<SessionListDTO> GetUserSessionsAsync(string userId, string? currentTokenHash);
     Task<bool> RevokeSessionAsync(string userId, Guid sessionId);
     Task<int> RevokeAllOtherSessionsAsync(string userId, string? currentTokenHash);
+    Task<int> RevokeAllSessionsAsync(string userId);
     Task<bool> UpdateLastActiveAsync(string tokenHash);
     Task<bool> IsSessionValidAsync(string tokenHash);
     Task CleanupExpiredSessionsAsync();

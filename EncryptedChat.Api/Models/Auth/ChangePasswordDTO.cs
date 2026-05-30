@@ -28,3 +28,9 @@ public class RecoveryPhraseRequestDTO
     [Required]
     public string Password { get; set; } = string.Empty;
 }
+
+public record RegisterResultDTO(string Message, IReadOnlyList<string> RecoveryWords);
+
+public record RecoverRequestDTO(string Email, List<string> Words, string NewPassword);
+
+public record RecoverResultDTO(string Message, IReadOnlyList<string> NewRecoveryWords);

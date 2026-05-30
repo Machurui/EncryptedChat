@@ -103,6 +103,25 @@ public class SessionService(EncryptedChatContext context) : ISessionService
         return sessions.Count;
     }
 
+    public async Task<int> RevokeAllSessionsAsync(string userId)
+    {
+        var sessions = await _context.Sessions
+            .Include(s => s.CurrentRefreshToken)
+            .Where(s => s.UserId == userId && !s.IsRevoked)
+            .ToListAsync();
+
+        DateTime now = DateTime.UtcNow;
+        foreach (var session in sessions)
+        {
+            session.IsRevoked = true;
+            if (session.CurrentRefreshToken != null && session.CurrentRefreshToken.RevokedAt == null)
+                session.CurrentRefreshToken.RevokedAt = now;
+        }
+
+        await _context.SaveChangesAsync();
+        return sessions.Count;
+    }
+
     public async Task<bool> UpdateLastActiveAsync(string tokenHash)
     {
         var session = await _context.Sessions
