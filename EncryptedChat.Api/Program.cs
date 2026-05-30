@@ -163,6 +163,11 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddRateLimiter(options =>
 {
+    // 429 Too Many Requests is the IETF standard for rate-limited responses
+    // (RFC 6585). The default 503 also signals "try again later" but clients
+    // typically can't tell it apart from a real outage.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
     options.AddPolicy("UserLookup", context =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: context.User.Identity?.Name
