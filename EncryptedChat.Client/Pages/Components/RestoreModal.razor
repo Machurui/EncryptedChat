@@ -39,7 +39,10 @@
                         <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                             New password
                         </label>
-                        <GlassInput @bind-Value="newPassword" Type="password" Placeholder="At least 6 characters" />
+                        <GlassInput @bind-Value="newPassword" Type="password" Placeholder="Strong password" />
+                        <div style="font-size: 11px; color: rgba(255,255,255,0.50); margin-top: 4px; line-height: 1.5;">
+                            Min 6 characters with at least one uppercase letter, lowercase letter, digit, and symbol.
+                        </div>
 
                         <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                             Confirm new password
@@ -182,12 +185,6 @@
         if (newPassword != confirmPassword)
         {
             error = "Passwords don't match.";
-            return;
-        }
-
-        if (newPassword.Length < 6)
-        {
-            error = "Password must be at least 6 characters.";
             return;
         }
 

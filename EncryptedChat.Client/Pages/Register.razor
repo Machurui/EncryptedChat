@@ -33,7 +33,7 @@
         <div style="padding: 20px 36px 28px;">
         @if (signupRecoveryWords == null)
         {
-            <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister" style="display: flex; flex-direction: column; gap: 12px;">
+            <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister" OnInvalidSubmit="@HandleInvalidRegister" style="display: flex; flex-direction: column; gap: 12px;">
                 <DataAnnotationsValidator/>
 
                 @if (!string.IsNullOrWhiteSpace(errorMessage))
@@ -43,6 +43,8 @@
                         @errorMessage
                     </div>
                 }
+
+                <ValidationSummary style="margin: 0; padding: 8px 12px; background: rgba(220,60,60,0.10); border: 0.5px solid rgba(220,60,60,0.25); border-radius: 8px; font-size: 12px; color: oklch(0.78 0.14 25); list-style: none;" />
 
                 <!-- Handle Field -->
                 <div style="display: flex; flex-direction: column; gap: 5px;">
@@ -204,6 +206,11 @@
     private IReadOnlyList<string>? signupRecoveryWords;
     private bool signupRecoveryConfirmed;
     private bool recoveryCopied;
+
+    private void HandleInvalidRegister()
+    {
+        errorMessage = "Please fix the highlighted fields and try again.";
+    }
 
     private async Task HandleRegister()
     {
