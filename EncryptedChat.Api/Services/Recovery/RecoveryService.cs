@@ -74,6 +74,15 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
         return user?.RecoveryPhraseLastViewed;
     }
 
+    // Constant-cost dummy hash used by callers that need to mask whether
+    // a given user exists (e.g., the unauthenticated Recover endpoint).
+    public void PerformDummyVerify()
+    {
+        _ = DeriveKey("dummy-recovery-phrase-input", _dummySalt);
+    }
+
+    private static readonly byte[] _dummySalt = new byte[SaltSizeBytes];
+
     private static IReadOnlyList<string> GenerateRandomWords(int count)
     {
         var words = new string[count];

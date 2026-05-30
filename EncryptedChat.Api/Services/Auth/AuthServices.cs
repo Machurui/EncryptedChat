@@ -291,23 +291,33 @@ public class AuthService(
 
         User? user = await _userManager.FindByEmailAsync(email);
         if (user == null)
+        {
+            _recoveryService.PerformDummyVerify();  // equalize timing to mask account enumeration
             return (false, GenericFailure, null);
+        }
 
         bool valid = await _recoveryService.VerifyRecoveryPhraseAsync(user.Id, words);
         if (!valid)
             return (false, GenericFailure, null);
 
-        IdentityResult removePw = await _userManager.RemovePasswordAsync(user);
-        if (!removePw.Succeeded)
-            return (false, "Failed to reset password", null);
-
-        IdentityResult addPw = await _userManager.AddPasswordAsync(user, newPassword);
-        if (!addPw.Succeeded)
-            return (false, addPw.Errors.FirstOrDefault()?.Description ?? "Invalid new password", null);
+        // Reset the password atomically via Identity's reset-token flow.
+        // ResetPasswordAsync validates the new password BEFORE replacing the
+        // existing hash — a weak/rejected new password leaves the old one intact
+        // rather than bricking the account.
+        string resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+        IdentityResult resetResult = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
+        if (!resetResult.Succeeded)
+            return (false, "Invalid new password", null);
 
         user.PasswordChangedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
+        // Rotate the recovery phrase FIRST so the just-used phrase is dead even
+        // if the session-revocation step crashes. This preserves the one-shot
+        // invariant under partial failure.
+        RecoveryPhraseDTO? newPhrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
+
+        // Kick every live session and revoke every active refresh token.
         await _sessionService.RevokeAllSessionsAsync(user.Id);
 
         var activeRefreshTokens = await _context.RefreshTokens
@@ -316,8 +326,6 @@ public class AuthService(
         foreach (var rt in activeRefreshTokens)
             rt.RevokedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
-
-        RecoveryPhraseDTO? newPhrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
 
         return (true, "Account recovered. Save your new recovery phrase.", newPhrase?.Words);
     }

@@ -320,6 +320,64 @@ public sealed class AuthServiceTests : IDisposable
         message.Should().Be("Invalid email or recovery phrase");
     }
 
+    [Fact]
+    public async Task RecoverAsync_WeakNewPassword_PreservesOldPassword_AndDoesNotRevokeSessions()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("carol@test.com", "OldP@ssw0rd!", "carol");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
+            (await _userManager.FindByEmailAsync("carol@test.com"))!.Id);
+
+        var service = new AuthService(
+            _userManager,
+            _signInManager.Object,
+            _roleManager,
+            new JwtTokenService(CreateConfiguration()),
+            _context,
+            _sessionService.Object,
+            realRecovery);
+
+        var (success, message, _) = await service.RecoverAsync(
+            "carol@test.com",
+            phrase!.Words.ToList(),
+            "weak"); // fails Identity's default policy
+
+        success.Should().BeFalse();
+        message.Should().Be("Invalid new password");
+
+        var user = await _userManager.FindByEmailAsync("carol@test.com");
+        (await _userManager.CheckPasswordAsync(user!, "OldP@ssw0rd!")).Should().BeTrue();
+
+        _sessionService.Verify(s => s.RevokeAllSessionsAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RecoverAsync_ValidPhrase_CallsRevokeAllSessions()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        await SeedUserWithPasswordAsync("dave@test.com", "OldP@ssw0rd!", "dave");
+
+        var realRecovery = new RecoveryService(_context, _userManager);
+        var phrase = await realRecovery.GenerateRecoveryPhraseAsync(
+            (await _userManager.FindByEmailAsync("dave@test.com"))!.Id);
+
+        var service = new AuthService(
+            _userManager,
+            _signInManager.Object,
+            _roleManager,
+            new JwtTokenService(CreateConfiguration()),
+            _context,
+            _sessionService.Object,
+            realRecovery);
+
+        var user = await _userManager.FindByEmailAsync("dave@test.com");
+        await service.RecoverAsync("dave@test.com", phrase!.Words.ToList(), "NewP@ssw0rd!");
+
+        _sessionService.Verify(s => s.RevokeAllSessionsAsync(user!.Id), Times.Once);
+    }
+
     private async Task SeedUserWithPasswordAsync(string email, string password, string handle)
     {
         User user = new()
@@ -350,15 +408,31 @@ public sealed class AuthServiceTests : IDisposable
     private static UserManager<User> CreateUserManager(EncryptedChatContext context)
     {
         UserStore<User> store = new(context);
+
+        // Register a "Default" token provider so UserManager.GeneratePasswordResetTokenAsync /
+        // ResetPasswordAsync work in tests (these are required by AuthService.RecoverAsync's
+        // atomic password reset). The DataProtectorTokenProvider needs an IDataProtectionProvider
+        // and IOptions<DataProtectionTokenProviderOptions> from DI.
+        var services = new ServiceCollection();
+        services.AddDataProtection();
+        services.AddLogging();
+        services.AddSingleton<DataProtectorTokenProvider<User>>();
+        var provider = services.BuildServiceProvider();
+
+        IdentityOptions identityOptions = new();
+        identityOptions.Tokens.ProviderMap.Add(
+            TokenOptions.DefaultProvider,
+            new TokenProviderDescriptor(typeof(DataProtectorTokenProvider<User>)));
+
         return new UserManager<User>(
             store,
-            Options.Create(new IdentityOptions()),
+            Options.Create(identityOptions),
             new PasswordHasher<User>(),
             [],
-            [],
+            [new PasswordValidator<User>(new IdentityErrorDescriber())],
             new UpperInvariantLookupNormalizer(),
             new IdentityErrorDescriber(),
-            new ServiceCollection().BuildServiceProvider(),
+            provider,
             NullLogger<UserManager<User>>.Instance);
     }
 

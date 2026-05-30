@@ -31,6 +31,9 @@ public class RecoveryPhraseRequestDTO
 
 public record RegisterResultDTO(string Message, IReadOnlyList<string> RecoveryWords);
 
-public record RecoverRequestDTO(string Email, List<string> Words, string NewPassword);
+public record RecoverRequestDTO(
+    [Required, EmailAddress, MaxLength(254)] string Email,
+    [Required, MinLength(12), MaxLength(12)] List<string> Words,
+    [Required, MinLength(6), MaxLength(128)] string NewPassword);
 
 public record RecoverResultDTO(string Message, IReadOnlyList<string> NewRecoveryWords);
