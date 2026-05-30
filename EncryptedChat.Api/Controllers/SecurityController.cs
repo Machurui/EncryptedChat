@@ -70,25 +70,6 @@ public class SecurityController(
         return Ok(new { ChangedAt = changedAt });
     }
 
-    // POST: api/Security/recovery
-    // TEMP: disabled in Task 1 of the recovery-phrase v1 rewrite — the AES-decrypt
-    // path is gone (now PBKDF2 hash-only). Task 4 deletes this action and the
-    // matching client call. Until then, leave it commented so the build passes.
-    // [HttpPost("recovery")]
-    // [Authorize(Roles = "User")]
-    // public async Task<IActionResult> GetRecoveryPhrase([FromBody] RecoveryPhraseRequestDTO dto)
-    // {
-    //     var userId = GetCurrentUserId();
-    //     if (string.IsNullOrEmpty(userId))
-    //         return Unauthorized();
-    //
-    //     var result = await _recoveryService.GetRecoveryPhraseAsync(userId, dto.Password);
-    //     if (result == null)
-    //         return Unauthorized(new { Message = "Invalid password" });
-    //
-    //     return Ok(result);
-    // }
-
     // POST: api/Security/recovery/regenerate
     [HttpPost("recovery/regenerate")]
     [Authorize(Roles = "User")]

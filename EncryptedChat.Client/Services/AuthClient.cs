@@ -31,6 +31,19 @@ public class AuthClient
         public static Result Fail(string msg) => new() { Success = false, ErrorMessage = msg };
     }
 
+    public class Result<T>
+    {
+        public bool Success { get; init; }
+        public T? Value { get; init; }
+        public string? ErrorMessage { get; init; }
+        public static Result<T> Ok(T value) => new() { Success = true, Value = value };
+        public static Result<T> Fail(string msg) => new() { Success = false, ErrorMessage = msg };
+    }
+
+    // Result payloads for recovery-phrase flows
+    public record RegisterResult(string Message, IReadOnlyList<string> RecoveryWords);
+    public record RecoverResult(string Message, IReadOnlyList<string> NewRecoveryWords);
+
     // ---------- Auth ----------
     public async Task<Result> LoginAsync(string email, string password)
     {
@@ -66,21 +79,46 @@ public class AuthClient
     }
 
     // ---------- Registration ----------
-    public Task<Result> RegisterAsync(RegisterDTO dto)
+    public Task<Result<RegisterResult>> RegisterAsync(RegisterDTO dto)
         => RegisterAsync(dto.Email, dto.Password, dto.Handle);
 
-    public async Task<Result> RegisterAsync(string email, string password, string handle, bool autoLogin = false)
+    public async Task<Result<RegisterResult>> RegisterAsync(string email, string password, string handle)
     {
         var res = await _http.PostAsJsonAsync("api/auth/register", new RegisterDTO(email, password, handle));
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
-            return Result.Fail(ParseMessage(body) ?? "Registration failed.");
+            return Result<RegisterResult>.Fail(ParseMessage(body) ?? "Registration failed.");
 
-        if (autoLogin)
-            return await LoginAsync(email, password);
+        // Parse the new { message, recoveryWords } response shape.
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
 
-        return Result.Ok();
+            string message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+                ? m.GetString() ?? "Registered"
+                : "Registered";
+
+            var words = new List<string>();
+            if (root.TryGetProperty("recoveryWords", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var element in arr.EnumerateArray())
+                {
+                    if (element.ValueKind == JsonValueKind.String)
+                    {
+                        var w = element.GetString();
+                        if (!string.IsNullOrEmpty(w)) words.Add(w);
+                    }
+                }
+            }
+
+            return Result<RegisterResult>.Ok(new RegisterResult(message, words));
+        }
+        catch
+        {
+            return Result<RegisterResult>.Fail("Registration succeeded but response could not be parsed.");
+        }
     }
 
     // ---------- Password ----------
@@ -117,6 +155,63 @@ public class AuthClient
     }
 
     private record SignalRTokenResponse(string? Token);
+
+    // ---------- Recovery ----------
+    public async Task<Result<RecoverResult>> RecoverAsync(string email, IReadOnlyList<string> words, string newPassword)
+    {
+        try
+        {
+            var res = await _http.PostAsJsonAsync("api/auth/recover", new
+            {
+                Email = email,
+                Words = words,
+                NewPassword = newPassword
+            });
+
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadAsStringAsync();
+                try
+                {
+                    using var doc = JsonDocument.Parse(body);
+                    var root = doc.RootElement;
+
+                    string message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+                        ? m.GetString() ?? "Recovery successful"
+                        : "Recovery successful";
+
+                    var newWords = new List<string>();
+                    if (root.TryGetProperty("newRecoveryWords", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var element in arr.EnumerateArray())
+                        {
+                            if (element.ValueKind == JsonValueKind.String)
+                            {
+                                var w = element.GetString();
+                                if (!string.IsNullOrEmpty(w)) newWords.Add(w);
+                            }
+                        }
+                    }
+
+                    return Result<RecoverResult>.Ok(new RecoverResult(message, newWords));
+                }
+                catch
+                {
+                    return Result<RecoverResult>.Fail("Recovery succeeded but response could not be parsed.");
+                }
+            }
+
+            if (res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                return Result<RecoverResult>.Fail("Too many recovery attempts. Try again later.");
+
+            var errBody = await res.Content.ReadAsStringAsync();
+            return Result<RecoverResult>.Fail(ParseMessage(errBody) ?? "Invalid email or recovery phrase.");
+        }
+        catch (HttpRequestException)
+        {
+            return Result<RecoverResult>.Fail("Network error");
+        }
+    }
 
     // ---------- Helpers ----------
     private static string? ParseMessage(string body)

@@ -2,6 +2,7 @@
 @layout EmptyLayout
 @inject EncryptedChat.Client.Services.AuthClient Auth
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 @using System.ComponentModel.DataAnnotations
 @using EncryptedChat.Client.Pages.Components
@@ -30,6 +31,8 @@
         </div>
 
         <div style="padding: 20px 36px 28px;">
+        @if (signupRecoveryWords == null)
+        {
             <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister" style="display: flex; flex-direction: column; gap: 12px;">
                 <DataAnnotationsValidator/>
 
@@ -123,6 +126,57 @@
                     </NavLink>
                 </div>
             </EditForm>
+        }
+        else
+        {
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="font-size: 22px; font-weight: 700; color: white; letter-spacing: -0.02em; text-align: center;">
+                    Save your recovery phrase
+                </div>
+
+                <div class="encryption-banner" style="border-color: rgba(251,191,36,0.40); background: rgba(251,191,36,0.08);">
+                    <svg class="encryption-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.85 0.15 75)" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <div class="encryption-banner-text">
+                        Save this phrase now. We <strong>cannot</strong> show it again. Without it, losing your password means losing your account.
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0;">
+                    @for (int i = 0; i < signupRecoveryWords.Count; i++)
+                    {
+                        var index = i;
+                        <div style="padding: 10px 12px; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.10); border-radius: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; color: white;">
+                            <span style="opacity: 0.45; margin-right: 6px;">@(index + 1).</span>@signupRecoveryWords[index]
+                        </div>
+                    }
+                </div>
+
+                @if (recoveryCopied)
+                {
+                    <div style="font-size: 11.5px; color: oklch(0.78 0.14 165); text-align: center;">Copied to clipboard</div>
+                }
+
+                <GlassButton OnClick="CopyRecoveryPhrase" Style="width: 100%;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                    </svg>
+                    Copy to clipboard
+                </GlassButton>
+
+                <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: rgba(255,255,255,0.80);">
+                    <input type="checkbox" @bind="signupRecoveryConfirmed" style="margin-top: 2px;" />
+                    <span>I've written down my recovery phrase in a safe place.</span>
+                </label>
+
+                <GlassButton Primary="true" OnClick="ContinueToLogin" Disabled="@(!signupRecoveryConfirmed)" Style="width: 100%;">
+                    Continue to login
+                </GlassButton>
+            </div>
+        }
         </div>
     </GlassPanel>
 </div>
@@ -146,6 +200,11 @@
     private string? errorMessage;
     private bool isLoading;
 
+    // Post-signup recovery view state.
+    private IReadOnlyList<string>? signupRecoveryWords;
+    private bool signupRecoveryConfirmed;
+    private bool recoveryCopied;
+
     private async Task HandleRegister()
     {
         if (registerModel.Password != registerModel.ConfirmPassword)
@@ -161,15 +220,42 @@
         {
             var result = await Auth.RegisterAsync(registerModel.Email, registerModel.Password, registerModel.Handle);
 
-            if (result.Success)
-                Nav.NavigateTo("/login");
-            else
-                errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
+            if (result.Success && result.Value != null)
+            {
+                // Switch to the one-shot recovery-phrase view. The phrase is
+                // returned by the server only on this success response.
+                signupRecoveryWords = result.Value.RecoveryWords;
+                signupRecoveryConfirmed = false;
+                recoveryCopied = false;
+                return;
+            }
+
+            errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
         }
         finally
         {
             isLoading = false;
         }
+    }
+
+    private async Task CopyRecoveryPhrase()
+    {
+        if (signupRecoveryWords == null) return;
+        var text = string.Join(' ', signupRecoveryWords);
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            recoveryCopied = true;
+        }
+        catch
+        {
+            // Silently ignore copy failures (older browsers, denied permission).
+        }
+    }
+
+    private void ContinueToLogin()
+    {
+        Nav.NavigateTo("/login");
     }
 
     public class RegisterModel

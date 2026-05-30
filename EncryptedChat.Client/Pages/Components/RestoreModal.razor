@@ -1,0 +1,230 @@
+@namespace EncryptedChat.Client.Pages.Components
+@using EncryptedChat.Client.Services
+
+@inject AuthClient Auth
+@inject IJSRuntime JS
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div @onclick:stopPropagation="true">
+            <GlassPanel Radius="22" Class="modal-responsive restore-modal" Style="width: 100%; max-width: 460px; max-height: calc(100vh - 40px); overflow-y: auto;">
+                <div style="padding: 22px 24px;">
+                    @if (newRecoveryWords == null)
+                    {
+                        <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.015em;">
+                            Restore from recovery phrase
+                        </h3>
+                        <p style="margin: 0 0 16px; font-size: 12px; color: rgba(255,255,255,0.60); line-height: 1.5;">
+                            Enter your email, the 12 words you saved at signup, and a new password.
+                        </p>
+
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                            Email
+                        </label>
+                        <GlassInput @bind-Value="email" Placeholder="you@workspace.app" Type="email" />
+
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                            Recovery phrase (12 words, space-separated)
+                        </label>
+                        <textarea class="restore-textarea"
+                                  @bind="phraseText"
+                                  @bind:event="oninput"
+                                  placeholder="anchor beacon cipher dawn ember frost glade helix iron jade knot lumen"
+                                  spellcheck="false"
+                                  autocomplete="off"
+                                  autocapitalize="none"
+                                  rows="3"></textarea>
+
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                            New password
+                        </label>
+                        <GlassInput @bind-Value="newPassword" Type="password" Placeholder="At least 6 characters" />
+
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                            Confirm new password
+                        </label>
+                        <GlassInput @bind-Value="confirmPassword" Type="password" Placeholder="Repeat" />
+
+                        @if (!string.IsNullOrEmpty(error))
+                        {
+                            <div style="margin-top: 14px; padding: 8px 10px; background: rgba(220,60,60,0.15); border: 0.5px solid rgba(220,60,60,0.30); border-radius: 8px; font-size: 12px; color: oklch(0.78 0.14 25);">
+                                @error
+                            </div>
+                        }
+
+                        <div style="display: flex; gap: 10px; margin-top: 18px;">
+                            <GlassButton OnClick="Close" Style="flex: 1;">Cancel</GlassButton>
+                            <GlassButton Primary="true" OnClick="Submit" Disabled="@isSubmitting" Style="flex: 1;">
+                                @(isSubmitting ? "Restoring..." : "Restore")
+                            </GlassButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.015em;">
+                            Save your new recovery phrase
+                        </h3>
+                        <p style="margin: 0 0 14px; font-size: 12px; color: rgba(255,255,255,0.60); line-height: 1.5;">
+                            Your old phrase has been invalidated. Write this one down now &mdash; we cannot show it again.
+                        </p>
+
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;">
+                            @for (int i = 0; i < newRecoveryWords.Count; i++)
+                            {
+                                var index = i;
+                                <div style="padding: 10px 12px; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.10); border-radius: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; color: white;">
+                                    <span style="opacity: 0.45; margin-right: 6px;">@(index + 1).</span>@newRecoveryWords[index]
+                                </div>
+                            }
+                        </div>
+
+                        @if (copied)
+                        {
+                            <div style="font-size: 11.5px; color: oklch(0.78 0.14 165); text-align: center; margin-bottom: 8px;">Copied to clipboard</div>
+                        }
+
+                        <GlassButton OnClick="CopyNewPhrase" Style="width: 100%; margin-bottom: 12px;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                            </svg>
+                            Copy to clipboard
+                        </GlassButton>
+
+                        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: rgba(255,255,255,0.80); margin-bottom: 14px;">
+                            <input type="checkbox" @bind="confirmed" style="margin-top: 2px;" />
+                            <span>I've written down my new recovery phrase in a safe place.</span>
+                        </label>
+
+                        <GlassButton Primary="true" OnClick="Close" Disabled="@(!confirmed)" Style="width: 100%;">
+                            Done &mdash; go to login
+                        </GlassButton>
+                    }
+                </div>
+            </GlassPanel>
+        </div>
+    </div>
+}
+
+<style>
+    .restore-textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 11px 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 0.5px solid rgba(255, 255, 255, 0.20);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.20), inset -1px -1px 1px rgba(0, 0, 0, 0.10);
+        color: white;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        resize: vertical;
+        outline: none;
+    }
+
+    .restore-textarea::placeholder {
+        color: rgba(255, 255, 255, 0.40);
+    }
+
+    .restore-textarea:focus {
+        border-color: rgba(255, 255, 255, 0.30);
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string email = "";
+    private string phraseText = "";
+    private string newPassword = "";
+    private string confirmPassword = "";
+    private string? error;
+    private bool isSubmitting;
+    private IReadOnlyList<string>? newRecoveryWords;
+    private bool confirmed;
+    private bool copied;
+
+    private async Task Close()
+    {
+        // Reset all state so the next open starts clean.
+        email = "";
+        phraseText = "";
+        newPassword = "";
+        confirmPassword = "";
+        error = null;
+        isSubmitting = false;
+        newRecoveryWords = null;
+        confirmed = false;
+        copied = false;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task Submit()
+    {
+        error = null;
+
+        var words = (phraseText ?? string.Empty)
+            .Trim()
+            .Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w.ToLowerInvariant())
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(email) || words.Count != 12 || string.IsNullOrWhiteSpace(newPassword))
+        {
+            error = "Email, 12 words, and a new password are required.";
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            error = "Passwords don't match.";
+            return;
+        }
+
+        if (newPassword.Length < 6)
+        {
+            error = "Password must be at least 6 characters.";
+            return;
+        }
+
+        isSubmitting = true;
+        StateHasChanged();
+        try
+        {
+            var result = await Auth.RecoverAsync(email.Trim(), words, newPassword);
+
+            if (result.Success && result.Value != null)
+            {
+                newRecoveryWords = result.Value.NewRecoveryWords;
+                confirmed = false;
+                copied = false;
+            }
+            else
+            {
+                error = result.ErrorMessage ?? "Recovery failed.";
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task CopyNewPhrase()
+    {
+        if (newRecoveryWords == null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", string.Join(' ', newRecoveryWords));
+            copied = true;
+        }
+        catch
+        {
+            // Silently ignore copy failures.
+        }
+    }
+}

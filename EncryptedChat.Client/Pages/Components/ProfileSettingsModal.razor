@@ -19,7 +19,7 @@
                     <div style="display: flex; align-items: center; gap: 12px;">
                         @if (securityView != null)
                         {
-                            <button class="back-btn" @onclick='() => { securityView = null; recoveryRevealed = false; recoveryPhrase = null; recoveryPassword = ""; }'>
+                            <button class="back-btn" @onclick='() => { securityView = null; ResetRecoveryViewState(); }'>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <polyline points="15 18 9 12 15 6"/>
                                 </svg>
@@ -135,53 +135,50 @@
                             else if (securityView == "recovery")
                             {
                                 <div class="profile-section">
-                                    @if (!recoveryRevealed)
+                                    @if (recoveryPhrase == null)
                                     {
                                         <div class="warning-banner">
                                             <svg class="warning-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                                             </svg>
                                             <div>
-                                                <div class="warning-banner-title">Anyone with these 12 words can read your messages</div>
-                                                <div class="warning-banner-text">Make sure no one is watching your screen. Don't take a screenshot — write them down or store them in a password manager.</div>
+                                                <div class="warning-banner-title">We can't show you your existing phrase</div>
+                                                <div class="warning-banner-text">If you've lost your recovery phrase, regenerate a new one. <strong>This invalidates your current phrase. Save the new one immediately &mdash; we cannot show it again.</strong></div>
                                             </div>
                                         </div>
 
                                         <div class="recovery-hidden-box">
                                             <div class="recovery-icon-box">
                                                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
+                                                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                                                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                                                 </svg>
                                             </div>
-                                            <div class="recovery-hidden-title">Your phrase is hidden</div>
-                                            <div class="recovery-hidden-text">Enter your password to reveal the 12 words.</div>
-
-                                            <div style="width: 100%; max-width: 280px;">
-                                                <GlassInput Type="password" @bind-Value="recoveryPassword" Placeholder="Enter your password" />
-                                            </div>
+                                            <div class="recovery-hidden-title">Regenerate your recovery phrase</div>
+                                            <div class="recovery-hidden-text">A new 12-word phrase will be generated and your previous one will stop working.</div>
 
                                             @if (!string.IsNullOrEmpty(recoveryError))
                                             {
                                                 <div class="error-text">@recoveryError</div>
                                             }
 
-                                            <GlassButton Primary="true" OnClick="HandleRevealRecovery" Disabled="@(string.IsNullOrEmpty(recoveryPassword) || isLoadingRecovery)">
+                                            <GlassButton Primary="true" OnClick="HandleRegenerateRecovery" Disabled="@isLoadingRecovery">
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
-                                                    <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
+                                                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                                                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                                                 </svg>
-                                                @(isLoadingRecovery ? "Loading..." : "Reveal recovery phrase")
+                                                @(isLoadingRecovery ? "Generating..." : "Generate new phrase")
                                             </GlassButton>
                                         </div>
 
                                         <div class="security-actions">
-                                            <GlassButton OnClick='() => { securityView = null; recoveryPassword = ""; }'>Close</GlassButton>
+                                            <GlassButton OnClick='() => { securityView = null; ResetRecoveryViewState(); }'>Close</GlassButton>
                                         </div>
                                     }
-                                    else if (recoveryPhrase != null)
+                                    else
                                     {
                                         <div class="recovery-info-row">
-                                            <div style="font-size: 11.5px; color: rgba(255,255,255,0.65);">Write these 12 words in order. They're case-insensitive.</div>
-                                            <button class="hide-btn" @onclick='() => { recoveryRevealed = false; recoveryPhrase = null; }'>Hide</button>
+                                            <div style="font-size: 11.5px; color: rgba(255,255,255,0.65);">Write these 12 words in order. We can't show them again.</div>
                                         </div>
 
                                         <div class="recovery-grid">
@@ -213,11 +210,11 @@
                                                     </svg>
                                                 }
                                             </span>
-                                            I've written down my recovery phrase in a safe place.
+                                            I've written down my new recovery phrase in a safe place.
                                         </button>
 
                                         <div class="security-actions">
-                                            <GlassButton Primary="true" OnClick='() => { securityView = null; recoveryRevealed = false; recoveryPhrase = null; recoveryPassword = ""; }' Disabled="@(!recoveryConfirmed)">
+                                            <GlassButton Primary="true" OnClick='() => { securityView = null; ResetRecoveryViewState(); }' Disabled="@(!recoveryConfirmed)">
                                                 Done
                                             </GlassButton>
                                         </div>
@@ -566,7 +563,7 @@
                                         <div class="security-row-label">Recovery phrase</div>
                                         <div class="security-row-value">@GetRecoveryInfoText()</div>
                                     </div>
-                                    <GlassButton Size="sm" OnClick='() => securityView = "recovery"'>View</GlassButton>
+                                    <GlassButton Size="sm" OnClick='() => securityView = "recovery"'>Manage</GlassButton>
                                 </div>
 
                                 <div class="security-row">
@@ -1898,7 +1895,6 @@
     // Security state
     private string? securityView;
     private DateTime? passwordChangedAt;
-    private DateTime? recoveryLastViewed;
     private List<SecurityClient.SessionInfo> sessions = new();
 
     // Password change state
@@ -1908,10 +1904,9 @@
     private string? passwordError;
     private bool isChangingPassword;
 
-    // Recovery phrase state
-    private string recoveryPassword = "";
+    // Recovery phrase state — Reveal removed (server stores only a hash);
+    // only the post-Regenerate display path needs these.
     private List<string>? recoveryPhrase;
-    private bool recoveryRevealed;
     private bool recoveryConfirmed;
     private string? recoveryError;
     private bool isLoadingRecovery;
@@ -2213,16 +2208,12 @@
     private async Task LoadSecurityInfo()
     {
         var passwordTask = _securityClient.GetPasswordInfoAsync();
-        var recoveryTask = _securityClient.GetRecoveryInfoAsync();
         var sessionsTask = _securityClient.GetSessionsAsync();
 
-        await Task.WhenAll(passwordTask, recoveryTask, sessionsTask);
+        await Task.WhenAll(passwordTask, sessionsTask);
 
         if (passwordTask.Result.Success)
             passwordChangedAt = passwordTask.Result.Value?.ChangedAt;
-
-        if (recoveryTask.Result.Success)
-            recoveryLastViewed = recoveryTask.Result.Value?.LastViewed;
 
         if (sessionsTask.Result.Success && sessionsTask.Result.Value != null)
             sessions = sessionsTask.Result.Value.Sessions;
@@ -2248,16 +2239,8 @@
 
     private string GetRecoveryInfoText()
     {
-        if (!recoveryLastViewed.HasValue)
-            return "12 words · never viewed";
-
-        var days = (DateTime.UtcNow - recoveryLastViewed.Value).Days;
-        return days switch
-        {
-            0 => "12 words · viewed today",
-            1 => "12 words · viewed yesterday",
-            _ => $"12 words · last viewed {days} days ago"
-        };
+        // The server never reveals existing phrases — only regenerate is offered.
+        return "12 words · regenerate if lost";
     }
 
     private string GetSessionsInfoText()
@@ -2345,26 +2328,26 @@
         }
     }
 
-    private async Task HandleRevealRecovery()
+    private async Task HandleRegenerateRecovery()
     {
-        if (string.IsNullOrEmpty(recoveryPassword)) return;
-
         isLoadingRecovery = true;
         recoveryError = null;
         StateHasChanged();
 
         try
         {
-            var result = await _securityClient.GetRecoveryPhraseAsync(recoveryPassword);
+            // The Password field on RecoveryPhraseRequestDTO is [Required] for
+            // model validation but unused by the current server implementation
+            // — auth is via cookie. Pass a placeholder so ModelState is valid.
+            var result = await _securityClient.RegenerateRecoveryPhraseAsync("regenerate");
             if (result.Success && result.Value != null)
             {
-                recoveryPhrase = result.Value.Words;
-                recoveryRevealed = true;
-                recoveryLastViewed = DateTime.UtcNow;
+                recoveryPhrase = result.Value.Words.ToList();
+                recoveryConfirmed = false;
             }
             else
             {
-                recoveryError = result.Error ?? "Invalid password";
+                recoveryError = result.Error ?? "Failed to regenerate recovery phrase.";
             }
         }
         finally
@@ -2386,6 +2369,14 @@
         {
             // Fallback for older browsers - silently fail
         }
+    }
+
+    private void ResetRecoveryViewState()
+    {
+        recoveryPhrase = null;
+        recoveryConfirmed = false;
+        recoveryError = null;
+        isLoadingRecovery = false;
     }
 
     private async Task OpenSessionsView()

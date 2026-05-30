@@ -141,24 +141,6 @@ public class SecurityClient(HttpClient httpClient)
         }
     }
 
-    public async Task<Result<RecoveryPhrase>> GetRecoveryPhraseAsync(string password)
-    {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("api/Security/recovery", new { Password = password });
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<RecoveryPhrase>();
-                return Result<RecoveryPhrase>.Ok(result!);
-            }
-            return Result<RecoveryPhrase>.Fail("Invalid password");
-        }
-        catch (Exception ex)
-        {
-            return Result<RecoveryPhrase>.Fail(ex.Message);
-        }
-    }
-
     public async Task<Result<RecoveryPhrase>> RegenerateRecoveryPhraseAsync(string password)
     {
         try
