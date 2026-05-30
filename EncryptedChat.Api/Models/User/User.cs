@@ -44,6 +44,9 @@ public class User : IdentityUser
     [MaxLength(500)]
     public string? RecoveryPhraseHash { get; set; }
 
+    [MaxLength(64)]
+    public string? RecoveryPhraseSalt { get; set; }
+
     public DateTime? RecoveryPhraseLastViewed { get; set; }
 
     public DateTime? PasswordChangedAt { get; set; }
