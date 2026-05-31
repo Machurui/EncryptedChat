@@ -20,9 +20,20 @@ public class AttachmentController(
 
     private string? GetCurrentUserId() => User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
+    // Clients POST the already-ciphered blob + envelope as multipart/form-data.
+    // The server treats every field as opaque (it can't decrypt) and
+    // only validates size, declared MIME, and team membership.
     [HttpPost]
     [EnableRateLimiting("AttachmentUpload")]
-    public async Task<IActionResult> Upload(IFormFile file, [FromForm] Guid messageId)
+    public async Task<IActionResult> Upload(
+        IFormFile file,
+        [FromForm] Guid messageId,
+        [FromForm] string encryptedFileName,
+        [FromForm] string fileNameIv,
+        [FromForm] string fileIv,
+        [FromForm] string signature,
+        [FromForm] string mimeType,
+        [FromForm] int keyGeneration)
     {
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))
@@ -37,8 +48,19 @@ public class AttachmentController(
         using MemoryStream ms = new();
         await file.CopyToAsync(ms);
 
-        (AttachmentDTOPublic? attachment, string? error, bool isForbidden) = await _attachmentService.CreateAsync(
-            messageId, file.FileName, file.ContentType, ms.ToArray(), userId);
+        AttachmentUploadDTO upload = new()
+        {
+            EncryptedContent = ms.ToArray(),
+            EncryptedFileName = encryptedFileName ?? string.Empty,
+            FileNameIv = fileNameIv ?? string.Empty,
+            FileIv = fileIv ?? string.Empty,
+            Signature = signature ?? string.Empty,
+            MimeType = mimeType ?? string.Empty,
+            KeyGeneration = keyGeneration
+        };
+
+        (AttachmentDTOPublic? attachment, string? error, bool isForbidden) =
+            await _attachmentService.CreateAsync(messageId, upload, userId);
 
         if (attachment == null)
             return isForbidden ? Forbid() : BadRequest(new { Message = error });
@@ -64,6 +86,9 @@ public class AttachmentController(
         return attachment == null ? NotFound() : Ok(attachment);
     }
 
+    // Returns the raw ciphertext as application/octet-stream alongside
+    // headers describing the envelope. Clients decrypt locally before
+    // showing anything to the user.
     [HttpGet("{id}/download")]
     public async Task<IActionResult> Download(Guid id)
     {
@@ -71,12 +96,18 @@ public class AttachmentController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        (byte[] Content, string FileName, string MimeType)? result = await _attachmentService.DownloadAsync(id, userId);
+        AttachmentDownloadDTO? result = await _attachmentService.DownloadAsync(id, userId);
         if (result == null)
             return NotFound();
 
-        (byte[] content, string fileName, string mimeType) = result.Value;
-        return File(content, mimeType, fileName);
+        Response.Headers["X-Encrypted-FileName"] = result.EncryptedFileName;
+        Response.Headers["X-FileName-Iv"] = result.FileNameIv;
+        Response.Headers["X-File-Iv"] = result.FileIv;
+        Response.Headers["X-Signature"] = result.Signature;
+        Response.Headers["X-Key-Generation"] = result.KeyGeneration.ToString();
+        Response.Headers["X-Mime-Type"] = result.MimeType;
+
+        return File(result.EncryptedContent, "application/octet-stream");
     }
 
     [HttpDelete("{id}")]

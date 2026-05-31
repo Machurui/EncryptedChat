@@ -61,6 +61,9 @@ public class AttachmentControllerTests
         return file.Object;
     }
 
+    private Task<IActionResult> InvokeUpload(AttachmentController controller, IFormFile file, Guid messageId)
+        => controller.Upload(file, messageId, "encfile", "fniv", "fiv", "sig", "text/plain", 1);
+
     #region Upload
 
     [Fact]
@@ -71,18 +74,21 @@ public class AttachmentControllerTests
         {
             Id = _attachmentId,
             MessageId = _messageId,
-            FileName = "test.txt",
+            EncryptedFileName = "encfile",
+            FileNameIv = "fniv",
             MimeType = "text/plain",
             Size = 11,
-            SignatureVerified = true
+            FileIv = "fiv",
+            Signature = "sig",
+            KeyGeneration = 1
         };
 
         _mockAttachmentService
-            .Setup(s => s.CreateAsync(_messageId, "test.txt", "text/plain", It.IsAny<byte[]>(), _userId))
+            .Setup(s => s.CreateAsync(_messageId, It.IsAny<AttachmentUploadDTO>(), _userId))
             .ReturnsAsync((attachment, null, false));
 
         var controller = CreateController(_userId);
-        var result = await controller.Upload(file, _messageId);
+        var result = await InvokeUpload(controller, file, _messageId);
 
         var createdResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
         createdResult.ActionName.Should().Be(nameof(AttachmentController.GetMetadata));
@@ -95,7 +101,7 @@ public class AttachmentControllerTests
         var file = CreateMockFile("test.txt", "content");
 
         var controller = CreateController(userId: null);
-        var result = await controller.Upload(file, _messageId);
+        var result = await InvokeUpload(controller, file, _messageId);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -104,7 +110,7 @@ public class AttachmentControllerTests
     public async Task Upload_ReturnsBadRequest_WhenNoFile()
     {
         var controller = CreateController(_userId);
-        var result = await controller.Upload(null!, _messageId);
+        var result = await InvokeUpload(controller, null!, _messageId);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -115,11 +121,11 @@ public class AttachmentControllerTests
         var file = CreateMockFile("test.txt", "content");
 
         _mockAttachmentService
-            .Setup(s => s.CreateAsync(_messageId, "test.txt", "text/plain", It.IsAny<byte[]>(), _userId))
+            .Setup(s => s.CreateAsync(_messageId, It.IsAny<AttachmentUploadDTO>(), _userId))
             .ReturnsAsync(((AttachmentDTOPublic?)null, "Accès non autorisé", true));
 
         var controller = CreateController(_userId);
-        var result = await controller.Upload(file, _messageId);
+        var result = await InvokeUpload(controller, file, _messageId);
 
         result.Should().BeOfType<ForbidResult>();
     }
@@ -130,11 +136,11 @@ public class AttachmentControllerTests
         var file = CreateMockFile("malware.exe", "bad content");
 
         _mockAttachmentService
-            .Setup(s => s.CreateAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<byte[]>(), _userId))
+            .Setup(s => s.CreateAsync(It.IsAny<Guid>(), It.IsAny<AttachmentUploadDTO>(), _userId))
             .ReturnsAsync(((AttachmentDTOPublic?)null, "Extension '.exe' non autorisée", false));
 
         var controller = CreateController(_userId);
-        var result = await controller.Upload(file, _messageId);
+        var result = await InvokeUpload(controller, file, _messageId);
 
         var badRequest = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         badRequest.Value.Should().BeEquivalentTo(new { Message = "Extension '.exe' non autorisée" });
@@ -147,11 +153,11 @@ public class AttachmentControllerTests
         var nonExistentMessageId = Guid.NewGuid();
 
         _mockAttachmentService
-            .Setup(s => s.CreateAsync(nonExistentMessageId, "test.txt", "text/plain", It.IsAny<byte[]>(), _userId))
+            .Setup(s => s.CreateAsync(nonExistentMessageId, It.IsAny<AttachmentUploadDTO>(), _userId))
             .ReturnsAsync(((AttachmentDTOPublic?)null, "Message introuvable", false));
 
         var controller = CreateController(_userId);
-        var result = await controller.Upload(file, nonExistentMessageId);
+        var result = await InvokeUpload(controller, file, nonExistentMessageId);
 
         var badRequest = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         badRequest.Value.Should().BeEquivalentTo(new { Message = "Message introuvable" });
@@ -168,9 +174,13 @@ public class AttachmentControllerTests
         {
             Id = _attachmentId,
             MessageId = _messageId,
-            FileName = "test.txt",
+            EncryptedFileName = "encfile",
+            FileNameIv = "fniv",
             MimeType = "text/plain",
-            Size = 100
+            Size = 100,
+            FileIv = "fiv",
+            Signature = "sig",
+            KeyGeneration = 1
         };
 
         _mockAttachmentService.Setup(s => s.GetByIdAsync(_attachmentId, _userId)).ReturnsAsync(attachment);
@@ -222,18 +232,27 @@ public class AttachmentControllerTests
     public async Task Download_ReturnsFile_WhenAuthorized()
     {
         var content = new byte[] { 0x01, 0x02, 0x03 };
+        var download = new AttachmentDownloadDTO
+        {
+            EncryptedContent = content,
+            EncryptedFileName = "encfile",
+            FileNameIv = "fniv",
+            FileIv = "fiv",
+            Signature = "sig",
+            MimeType = "application/pdf",
+            KeyGeneration = 1
+        };
 
         _mockAttachmentService
             .Setup(s => s.DownloadAsync(_attachmentId, _userId))
-            .ReturnsAsync((content, "test.pdf", "application/pdf"));
+            .ReturnsAsync(download);
 
         var controller = CreateController(_userId);
         var result = await controller.Download(_attachmentId);
 
         var fileResult = result.Should().BeOfType<FileContentResult>().Subject;
         fileResult.FileContents.Should().BeEquivalentTo(content);
-        fileResult.ContentType.Should().Be("application/pdf");
-        fileResult.FileDownloadName.Should().Be("test.pdf");
+        fileResult.ContentType.Should().Be("application/octet-stream");
     }
 
     [Fact]
@@ -241,7 +260,7 @@ public class AttachmentControllerTests
     {
         _mockAttachmentService
             .Setup(s => s.DownloadAsync(_attachmentId, _userId))
-            .ReturnsAsync(((byte[], string, string)?)null);
+            .ReturnsAsync((AttachmentDownloadDTO?)null);
 
         var controller = CreateController(_userId);
         var result = await controller.Download(_attachmentId);

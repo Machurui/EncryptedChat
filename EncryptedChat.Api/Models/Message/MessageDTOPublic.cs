@@ -2,12 +2,25 @@ using System.ComponentModel.DataAnnotations;
 
 namespace EncryptedChat.Models;
 
+// Wire shape returned to clients for every read. The server passes the
+// encrypted envelope through verbatim; the client is responsible for
+// AES-GCM decryption and ECDSA signature verification under the sender's
+// public key + the team key for the given KeyGeneration.
 public class MessageDTOPublic
 {
     public Guid Id { get; set; }
 
     [Required]
-    public string Text { get; set; } = string.Empty;
+    public string EncryptedText { get; set; } = string.Empty;
+
+    [Required]
+    public string Iv { get; set; } = string.Empty;
+
+    [Required]
+    public string Signature { get; set; } = string.Empty;
+
+    [Required]
+    public int KeyGeneration { get; set; }
 
     [Required]
     public MessageSenderDTO? Sender { get; set; }
@@ -17,8 +30,6 @@ public class MessageDTOPublic
 
     [Required]
     public DateTime Date { get; set; } = DateTime.UtcNow;
-
-    public bool SignatureVerified { get; set; } = true;
 
     public IReadOnlyList<AttachmentDTOPublic> Attachments { get; set; } = [];
 }

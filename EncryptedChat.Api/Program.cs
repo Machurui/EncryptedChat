@@ -250,8 +250,6 @@ builder.Services.AddSingleton<IPresenceService, PresenceService>();
 // Token generator
 builder.Services.AddScoped<JwtTokenService>();
 
-builder.Services.AddSingleton<ICryptoService, CryptoService>();
-
 // File storage
 builder.Services.Configure<FileStorageOptions>(
     builder.Configuration.GetSection("FileStorage"));

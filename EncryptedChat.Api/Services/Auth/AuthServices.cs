@@ -56,7 +56,6 @@ public class AuthService(
             Handle = handle,
             Email = model.Email,
             Level = 1
-            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
 
         IdentityResult result = await _userManager.CreateAsync(user, model.Password);

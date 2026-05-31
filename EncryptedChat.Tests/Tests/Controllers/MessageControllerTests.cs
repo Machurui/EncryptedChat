@@ -48,6 +48,26 @@ public class MessageControllerTests
         return controller;
     }
 
+    private static MessageDTOPublic MakeMessageDto(Guid id, Guid teamId, string userId, string name = "User") => new()
+    {
+        Id = id,
+        EncryptedText = "ciphertext",
+        Iv = "iv",
+        Signature = "sig",
+        KeyGeneration = 1,
+        TeamId = teamId,
+        Sender = new MessageSenderDTO { Id = userId, Name = name }
+    };
+
+    private static MessageCreateDTO MakeCreateDto(Guid teamId) => new()
+    {
+        Team = teamId,
+        EncryptedText = "ciphertext",
+        Iv = "iv",
+        Signature = "sig",
+        KeyGeneration = 1
+    };
+
     #region GetMessagesByTeam
 
     [Fact]
@@ -55,12 +75,12 @@ public class MessageControllerTests
     {
         var messages = new List<MessageDTOPublic>
         {
-            new() { Id = Guid.NewGuid(), Text = "Hello", TeamId = _teamId, Sender = new MessageSenderDTO { Id = _userId, Name = "User" } },
-            new() { Id = Guid.NewGuid(), Text = "World", TeamId = _teamId, Sender = new MessageSenderDTO { Id = _userId, Name = "User" } }
+            MakeMessageDto(Guid.NewGuid(), _teamId, _userId),
+            MakeMessageDto(Guid.NewGuid(), _teamId, _userId)
         };
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
-        _mockMessageService.Setup(s => s.GetAllByTeamAsync(_teamId, 1, 50)).ReturnsAsync(messages);
+        _mockMessageService.Setup(s => s.GetAllByTeamAsync(_userId, _teamId, 1, 50)).ReturnsAsync(messages);
 
         var controller = CreateController(_userId);
         var result = await controller.GetMessagesByTeam(_teamId);
@@ -74,11 +94,11 @@ public class MessageControllerTests
     {
         var messages = new List<MessageDTOPublic>
         {
-            new() { Id = Guid.NewGuid(), Text = "Page 2", TeamId = _teamId }
+            MakeMessageDto(Guid.NewGuid(), _teamId, _userId)
         };
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
-        _mockMessageService.Setup(s => s.GetAllByTeamAsync(_teamId, 2, 10)).ReturnsAsync(messages);
+        _mockMessageService.Setup(s => s.GetAllByTeamAsync(_userId, _teamId, 2, 10)).ReturnsAsync(messages);
 
         var controller = CreateController(_userId);
         var result = await controller.GetMessagesByTeam(_teamId, page: 2, pageSize: 10);
@@ -111,7 +131,7 @@ public class MessageControllerTests
     public async Task GetMessagesByTeam_ReturnsNotFound_WhenTeamDoesNotExist()
     {
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
-        _mockMessageService.Setup(s => s.GetAllByTeamAsync(_teamId, 1, 50)).ReturnsAsync((IReadOnlyList<MessageDTOPublic>?)null);
+        _mockMessageService.Setup(s => s.GetAllByTeamAsync(_userId, _teamId, 1, 50)).ReturnsAsync((IReadOnlyList<MessageDTOPublic>?)null);
 
         var controller = CreateController(_userId);
         var result = await controller.GetMessagesByTeam(_teamId);
@@ -126,16 +146,9 @@ public class MessageControllerTests
     [Fact]
     public async Task GetMessage_ReturnsOk_WhenUserIsMember()
     {
-        var message = new MessageDTOPublic
-        {
-            Id = _messageId,
-            Text = "Hello",
-            TeamId = _teamId,
-            Sender = new MessageSenderDTO { Id = _userId, Name = "User" }
-        };
+        var message = MakeMessageDto(_messageId, _teamId, _userId);
 
-        _mockMessageService.Setup(s => s.GetByIdAsync(_messageId)).ReturnsAsync(message);
-        _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
+        _mockMessageService.Setup(s => s.GetByIdAsync(_messageId, _userId)).ReturnsAsync(message);
 
         var controller = CreateController(_userId);
         var result = await controller.GetMessage(_messageId);
@@ -157,7 +170,7 @@ public class MessageControllerTests
     public async Task GetMessage_ReturnsNotFound_WhenMessageDoesNotExist()
     {
         var nonExistentId = Guid.NewGuid();
-        _mockMessageService.Setup(s => s.GetByIdAsync(nonExistentId)).ReturnsAsync((MessageDTOPublic?)null);
+        _mockMessageService.Setup(s => s.GetByIdAsync(nonExistentId, _userId)).ReturnsAsync((MessageDTOPublic?)null);
 
         var controller = CreateController(_userId);
         var result = await controller.GetMessage(nonExistentId);
@@ -166,24 +179,18 @@ public class MessageControllerTests
     }
 
     [Fact]
-    public async Task GetMessage_ReturnsForbid_WhenNotMemberOfTeam()
+    public async Task GetMessage_ReturnsNotFound_WhenServiceRejectsAccess()
     {
-        var otherTeamId = Guid.NewGuid();
-        var message = new MessageDTOPublic
-        {
-            Id = _messageId,
-            Text = "Secret",
-            TeamId = otherTeamId,
-            Sender = new MessageSenderDTO { Id = "other-user", Name = "Other" }
-        };
-
-        _mockMessageService.Setup(s => s.GetByIdAsync(_messageId)).ReturnsAsync(message);
-        _mockTeamService.Setup(s => s.IsMemberAsync(_userId, otherTeamId)).ReturnsAsync(false);
+        // After True E2E v1, membership enforcement moved into the service
+        // layer (GetByIdAsync filters by userId). The controller no longer
+        // double-checks via ITeamService — a denied read just returns null,
+        // which the controller surfaces as 404 to avoid leaking existence.
+        _mockMessageService.Setup(s => s.GetByIdAsync(_messageId, _userId)).ReturnsAsync((MessageDTOPublic?)null);
 
         var controller = CreateController(_userId);
         var result = await controller.GetMessage(_messageId);
 
-        result.Should().BeOfType<ForbidResult>();
+        result.Should().BeOfType<NotFoundResult>();
     }
 
     #endregion
@@ -193,20 +200,13 @@ public class MessageControllerTests
     [Fact]
     public async Task PostMessage_ReturnsCreatedAtAction_WhenSuccessful()
     {
-        var createDto = new MessageCreateDTO { Text = "Hello team!", Team = _teamId };
-        var createdMessage = new MessageDTOPublic
-        {
-            Id = _messageId,
-            Text = "Hello team!",
-            TeamId = _teamId,
-            Sender = new MessageSenderDTO { Id = _userId, Name = "User" },
-            SignatureVerified = true
-        };
+        var createDto = MakeCreateDto(_teamId);
+        var createdMessage = MakeMessageDto(_messageId, _teamId, _userId);
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
         _mockTeamService.Setup(s => s.GetMemberUserIdsAsync(_teamId)).ReturnsAsync(new List<string> { _userId });
         _mockMessageService.Setup(s => s.CreateAsync(It.Is<MessageDTO>(m =>
-            m.Text == "Hello team!" && m.Team == _teamId
+            m.EncryptedText == "ciphertext" && m.Team == _teamId
         ), _userId)).ReturnsAsync(createdMessage);
 
         var controller = CreateController(_userId);
@@ -221,7 +221,7 @@ public class MessageControllerTests
     [Fact]
     public async Task PostMessage_ReturnsUnauthorized_WhenNoUserId()
     {
-        var createDto = new MessageCreateDTO { Text = "Hello", Team = _teamId };
+        var createDto = MakeCreateDto(_teamId);
 
         var controller = CreateController(userId: null);
         var result = await controller.PostMessage(createDto);
@@ -232,7 +232,7 @@ public class MessageControllerTests
     [Fact]
     public async Task PostMessage_ReturnsForbid_WhenNotMember()
     {
-        var createDto = new MessageCreateDTO { Text = "Hello", Team = _teamId };
+        var createDto = MakeCreateDto(_teamId);
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(false);
 
@@ -245,7 +245,7 @@ public class MessageControllerTests
     [Fact]
     public async Task PostMessage_ReturnsBadRequest_WhenServiceRejectsInput()
     {
-        var createDto = new MessageCreateDTO { Text = "", Team = _teamId };
+        var createDto = MakeCreateDto(_teamId);
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
         _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>(), _userId)).ReturnsAsync((MessageDTOPublic?)null);
@@ -259,14 +259,14 @@ public class MessageControllerTests
     [Fact]
     public async Task PostMessage_UsesSenderFromJwt_NotFromClient()
     {
-        var createDto = new MessageCreateDTO { Text = "Hello", Team = _teamId };
+        var createDto = MakeCreateDto(_teamId);
         string? capturedSenderId = null;
 
         _mockTeamService.Setup(s => s.IsMemberAsync(_userId, _teamId)).ReturnsAsync(true);
         _mockTeamService.Setup(s => s.GetMemberUserIdsAsync(_teamId)).ReturnsAsync(new List<string> { _userId });
         _mockMessageService.Setup(s => s.CreateAsync(It.IsAny<MessageDTO>(), It.IsAny<string>()))
             .Callback<MessageDTO, string>((dto, senderId) => capturedSenderId = senderId)
-            .ReturnsAsync(new MessageDTOPublic { Id = _messageId, Text = "Hello", TeamId = _teamId });
+            .ReturnsAsync(MakeMessageDto(_messageId, _teamId, _userId));
 
         var controller = CreateController(_userId);
         await controller.PostMessage(createDto);
@@ -281,13 +281,7 @@ public class MessageControllerTests
     [Fact]
     public async Task DeleteMessage_ReturnsNoContent_WhenServiceSucceeds()
     {
-        var message = new MessageDTOPublic
-        {
-            Id = _messageId,
-            Text = "My message",
-            TeamId = _teamId,
-            Sender = new MessageSenderDTO { Id = _userId, Name = "User" }
-        };
+        var message = MakeMessageDto(_messageId, _teamId, _userId);
 
         _mockMessageService.Setup(s => s.DeleteAsync(_messageId, _userId)).ReturnsAsync(message);
 

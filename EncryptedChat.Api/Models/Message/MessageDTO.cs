@@ -1,15 +1,24 @@
-namespace EncryptedChat.Models;
 using System.ComponentModel.DataAnnotations;
 
-// Utilisé lors de création et MAJ
+namespace EncryptedChat.Models;
+
+// Internal DTO between Controller and Service for write paths. Carries
+// the E2E envelope produced by the client. Unused for reads — those go
+// through MessageDTOPublic.
 public class MessageDTO
 {
-    public string? Text { get; set; } = string.Empty;
+    [Required]
+    public Guid Team { get; set; }
 
     [Required]
-    public string? Sender { get; set; }
+    public string EncryptedText { get; set; } = string.Empty;
 
     [Required]
-    public Guid? Team { get; set; }
+    public string Iv { get; set; } = string.Empty;
 
+    [Required]
+    public string Signature { get; set; } = string.Empty;
+
+    [Required]
+    public int KeyGeneration { get; set; }
 }

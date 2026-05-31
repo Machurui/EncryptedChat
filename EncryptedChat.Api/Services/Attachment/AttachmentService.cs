@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using EncryptedChat.Data;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
@@ -7,31 +5,48 @@ using Microsoft.Extensions.Options;
 
 namespace EncryptedChat.Services;
 
+// True E2E: the server never decrypts the file content or the filename.
+// We validate membership + size + declared MIME type, store the cipher
+// blob to disk verbatim, and persist the envelope alongside it.
+//
+// Note: the magic-byte content sniff that lived here under server-side
+// crypto is intentionally gone — it can't run against ciphertext. Clients
+// are responsible for filename / extension trust decisions after they
+// decrypt the envelope, and the rendering surface is responsible for
+// sandboxing untrusted content (e.g. images via <img>, never <script>).
 public class AttachmentService(
     EncryptedChatContext context,
-    ICryptoService crypto,
     IFileStorageService storage,
     MimeTypeValidator validator,
     IOptions<FileStorageOptions> options) : IAttachmentService
 {
     private readonly EncryptedChatContext _context = context;
-    private readonly ICryptoService _crypto = crypto;
     private readonly IFileStorageService _storage = storage;
     private readonly MimeTypeValidator _validator = validator;
     private readonly long _maxFileSize = options.Value.MaxFileSizeBytes;
 
     public async Task<(AttachmentDTOPublic? Attachment, string? Error, bool IsForbidden)> CreateAsync(
-        Guid messageId, string fileName, string mimeType, byte[] content, string userId)
+        Guid messageId, AttachmentUploadDTO upload, string userId)
     {
-        if (content.Length == 0)
+        if (upload == null || upload.EncryptedContent.Length == 0)
             return (null, "Le fichier est vide", false);
 
-        if (content.Length > _maxFileSize)
-            return (null, $"Fichier trop volumineux ({content.Length / 1_048_576} Mo). Limite : {_maxFileSize / 1_048_576} Mo", false);
+        if (upload.EncryptedContent.Length > _maxFileSize)
+            return (null, $"Fichier trop volumineux ({upload.EncryptedContent.Length / 1_048_576} Mo). Limite : {_maxFileSize / 1_048_576} Mo", false);
 
-        FileValidationResult validation = _validator.Validate(content, mimeType, fileName);
-        if (!validation.IsValid)
-            return (null, validation.ErrorMessage, false);
+        if (string.IsNullOrWhiteSpace(upload.EncryptedFileName)
+            || string.IsNullOrWhiteSpace(upload.FileNameIv)
+            || string.IsNullOrWhiteSpace(upload.FileIv)
+            || string.IsNullOrWhiteSpace(upload.Signature)
+            || string.IsNullOrWhiteSpace(upload.MimeType))
+            return (null, "Enveloppe incomplète", false);
+
+        // Declared-MIME allow-list. We can't sniff content (it's
+        // ciphertext) so this is the only MIME gate left. Clients should
+        // refuse to render anything they can't match against their own
+        // post-decryption sniff.
+        if (!_validator.IsDeclaredMimeTypeAllowed(upload.MimeType))
+            return (null, $"Type MIME '{upload.MimeType}' non autorisé", false);
 
         Message? message = await GetMessageWithTeamAsync(messageId);
         if (message?.Team == null || message.Sender == null)
@@ -40,26 +55,24 @@ public class AttachmentService(
         if (!await IsMemberAsync(message.Team.Id, userId))
             return (null, "Accès non autorisé", true);
 
-        // TEMP-Task3: (byte[] encryptedContent, string fileIv) = _crypto.EncryptBytes(content, message.Team.Secret);
-        // TEMP-Task3: (byte[] encryptedFileName, string fileNameIv) = _crypto.EncryptBytes(Encoding.UTF8.GetBytes(fileName), message.Team.Secret);
-        byte[] encryptedContent = content;
-        string fileIv = string.Empty;
-        byte[] encryptedFileName = Encoding.UTF8.GetBytes(fileName);
-        string fileNameIv = string.Empty;
+        // E2E invariant: attachments must be encrypted under the team's
+        // current generation, same as messages.
+        if (upload.KeyGeneration != message.Team.KeyGeneration)
+            return (null, "Generation de clé invalide", false);
 
-        string storagePath = await _storage.SaveAsync(encryptedContent, message.Team.Id);
+        string storagePath = await _storage.SaveAsync(upload.EncryptedContent, message.Team.Id);
 
         Attachment attachment = new()
         {
             MessageId = messageId,
-            EncryptedFileName = Convert.ToBase64String(encryptedFileName),
-            FileNameIv = fileNameIv,
-            MimeType = mimeType,
-            Size = content.Length,
+            EncryptedFileName = upload.EncryptedFileName,
+            FileNameIv = upload.FileNameIv,
+            MimeType = upload.MimeType,
+            Size = upload.EncryptedContent.Length,
             StoragePath = storagePath,
-            FileIv = fileIv,
-            // TEMP-Task3: Signature = _crypto.SignBytes(content, message.Sender.Secret),
-            Signature = string.Empty,
+            FileIv = upload.FileIv,
+            Signature = upload.Signature,
+            KeyGeneration = upload.KeyGeneration,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -74,7 +87,7 @@ public class AttachmentService(
             throw;
         }
 
-        return (ToDTO(attachment, fileName), null, false);
+        return (ToDTO(attachment), null, false);
     }
 
     public async Task<AttachmentDTOPublic?> GetByIdAsync(Guid id, string userId)
@@ -86,7 +99,7 @@ public class AttachmentService(
         if (!await IsMemberAsync(attachment.Message.Team.Id, userId))
             return null;
 
-        return DecryptMetadata(attachment);
+        return ToDTO(attachment);
     }
 
     public async Task<IReadOnlyList<AttachmentDTOPublic>> GetByMessageIdAsync(Guid messageId, string userId)
@@ -102,7 +115,7 @@ public class AttachmentService(
             .OrderBy(a => a.CreatedAt)
             .ToListAsync();
 
-        return attachments.Select(DecryptMetadata).ToList();
+        return attachments.Select(ToDTO).ToList();
     }
 
     public async Task<bool> CanAccessMessageAsync(Guid messageId, string userId)
@@ -111,7 +124,7 @@ public class AttachmentService(
         return message?.Team != null && await IsMemberAsync(message.Team.Id, userId);
     }
 
-    public async Task<(byte[] Content, string FileName, string MimeType)?> DownloadAsync(Guid id, string userId)
+    public async Task<AttachmentDownloadDTO?> DownloadAsync(Guid id, string userId)
     {
         Attachment? attachment = await _context.Attachments
             .Include(a => a.Message).ThenInclude(m => m!.Team)
@@ -120,14 +133,18 @@ public class AttachmentService(
         if (attachment?.Message?.Team == null || !await IsMemberAsync(attachment.Message.Team.Id, userId))
             return null;
 
-        // TEMP-Task3: string teamSecret = attachment.Message.Team.Secret;
-        // TEMP-Task3: byte[] content = _crypto.DecryptBytes(await _storage.LoadAsync(attachment.StoragePath), attachment.FileIv, teamSecret);
-        // TEMP-Task3: string fileName = Encoding.UTF8.GetString(
-        // TEMP-Task3:     _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
-        byte[] content = await _storage.LoadAsync(attachment.StoragePath);
-        string fileName = attachment.EncryptedFileName;
+        byte[] encryptedContent = await _storage.LoadAsync(attachment.StoragePath);
 
-        return (content, fileName, attachment.MimeType);
+        return new AttachmentDownloadDTO
+        {
+            EncryptedContent = encryptedContent,
+            EncryptedFileName = attachment.EncryptedFileName,
+            FileNameIv = attachment.FileNameIv,
+            FileIv = attachment.FileIv,
+            Signature = attachment.Signature,
+            MimeType = attachment.MimeType,
+            KeyGeneration = attachment.KeyGeneration
+        };
     }
 
     public async Task<bool> DeleteAsync(Guid id, string userId)
@@ -190,31 +207,17 @@ public class AttachmentService(
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.Id == id);
 
-    private AttachmentDTOPublic DecryptMetadata(Attachment attachment)
-    {
-        string fileName;
-
-        try
-        {
-            // TEMP-Task3: string teamSecret = attachment.Message?.Team?.Secret ?? string.Empty;
-            // TEMP-Task3: fileName = Encoding.UTF8.GetString(
-            // TEMP-Task3:     _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
-            fileName = attachment.EncryptedFileName;
-        }
-        catch (CryptographicException) { fileName = "[Decryption failed]"; }
-        catch (FormatException) { fileName = "[Invalid format]"; }
-
-        return ToDTO(attachment, fileName);
-    }
-
-    private static AttachmentDTOPublic ToDTO(Attachment attachment, string fileName) => new()
+    private static AttachmentDTOPublic ToDTO(Attachment attachment) => new()
     {
         Id = attachment.Id,
         MessageId = attachment.MessageId,
-        FileName = fileName,
+        EncryptedFileName = attachment.EncryptedFileName,
+        FileNameIv = attachment.FileNameIv,
         MimeType = attachment.MimeType,
         Size = attachment.Size,
-        CreatedAt = attachment.CreatedAt,
-        SignatureVerified = false
+        FileIv = attachment.FileIv,
+        Signature = attachment.Signature,
+        KeyGeneration = attachment.KeyGeneration,
+        CreatedAt = attachment.CreatedAt
     };
 }

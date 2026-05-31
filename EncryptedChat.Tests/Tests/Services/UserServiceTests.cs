@@ -17,7 +17,6 @@ public class UserServiceTests : IDisposable
     private readonly EncryptedChatContext _context;
     private readonly UserManager<User> _userManager;
     private readonly UserService _service;
-    private readonly Mock<ICryptoService> _cryptoMock;
     private readonly Mock<IPresenceService> _presenceServiceMock;
 
     public UserServiceTests()
@@ -28,12 +27,9 @@ public class UserServiceTests : IDisposable
 
         _context = new EncryptedChatContext(options);
         _userManager = CreateUserManager(_context);
-        _cryptoMock = new Mock<ICryptoService>();
-        _cryptoMock.Setup(c => c.Decrypt(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns("Test message");
         _presenceServiceMock = new Mock<IPresenceService>();
         _presenceServiceMock.Setup(p => p.IsOnline(It.IsAny<string>())).Returns(false);
-        _service = new UserService(_context, _userManager, _cryptoMock.Object, _presenceServiceMock.Object);
+        _service = new UserService(_context, _userManager, _presenceServiceMock.Object);
     }
 
     public void Dispose()
@@ -70,7 +66,6 @@ public class UserServiceTests : IDisposable
             UserName = email,
             NormalizedUserName = email.ToUpperInvariant(),
             Level = 1,
-            // TEMP-Task3: Secret = "secret"
         };
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
@@ -141,7 +136,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "SharedTeam",
             Slug = "shared-team",
-            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -201,7 +195,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -239,7 +232,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team1",
             Slug = "team1",
-            // TEMP-Task3: Secret = "team-secret"
         };
 
         _context.Teams.Add(team);
@@ -275,7 +267,6 @@ public class UserServiceTests : IDisposable
                 Id = Guid.NewGuid(),
                 Name = $"Team{i}",
                 Slug = $"team{i}",
-                // TEMP-Task3: Secret = "secret"
             };
             _context.Teams.Add(team);
             _context.Members.Add(new Member
@@ -305,7 +296,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team1",
             Slug = "team1",
-            // TEMP-Task3: Secret = "secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -556,7 +546,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -589,7 +578,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -628,7 +616,6 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         await _context.SaveChangesAsync();
@@ -646,7 +633,6 @@ public class UserServiceTests : IDisposable
     public async Task SetOwnBubbleColorAsync_NullColorOnAbsentPreferenceReturnsSuccess()
     {
         Guid teamId = Guid.NewGuid();
-        // TEMP-Task3: _context.Teams.Add(new Team { Id = teamId, Name = "T", Slug = "t-noprev", Secret = "s" });
         _context.Teams.Add(new Team { Id = teamId, Name = "T", Slug = "t-noprev" });
         _context.Members.Add(new Member { UserId = "userA", TeamId = teamId, Role = "Member" });
         await _context.SaveChangesAsync();

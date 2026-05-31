@@ -83,7 +83,6 @@ public sealed class AuthServiceTests : IDisposable
             NormalizedUserName = "USER@TEST.COM",
             Name = "User",
             Level = 1,
-            // TEMP-Task3: Secret = "secret"
         };
         await _userManager.CreateAsync(user);
 
@@ -122,7 +121,6 @@ public sealed class AuthServiceTests : IDisposable
             NormalizedUserName = "FK@TEST.COM",
             Name = "FK User",
             Level = 1,
-            // TEMP-Task3: Secret = "secret"
         };
         await _userManager.CreateAsync(user);
 
@@ -204,7 +202,6 @@ public sealed class AuthServiceTests : IDisposable
             Name = "existing",
             Handle = "taken",
             Level = 1,
-            // TEMP-Task3: Secret = "secret"
         };
         await _userManager.CreateAsync(existing);
 
@@ -233,7 +230,6 @@ public sealed class AuthServiceTests : IDisposable
             Name = "first",
             Handle = "first",
             Level = 1,
-            // TEMP-Task3: Secret = "secret"
         };
         await _userManager.CreateAsync(existing);
 
@@ -492,7 +488,6 @@ public sealed class AuthServiceTests : IDisposable
             Name = handle,
             Handle = handle,
             Level = 1,
-            // TEMP-Task3: Secret = "s"
         };
         await _userManager.CreateAsync(user, password);
     }

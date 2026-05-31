@@ -30,7 +30,7 @@ public class MessageController(IMessageService messageService, ITeamService team
         if (!isMember)
             return Forbid();
 
-        IReadOnlyList<MessageDTOPublic>? messages = await _messageService.GetAllByTeamAsync(teamId, page, pageSize);
+        IReadOnlyList<MessageDTOPublic>? messages = await _messageService.GetAllByTeamAsync(userId, teamId, page, pageSize);
         if (messages is null)
             return NotFound();
 
@@ -44,13 +44,9 @@ public class MessageController(IMessageService messageService, ITeamService team
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        MessageDTOPublic? message = await _messageService.GetByIdAsync(id);
+        MessageDTOPublic? message = await _messageService.GetByIdAsync(id, userId);
         if (message is null)
             return NotFound();
-
-        bool isMember = await _teamService.IsMemberAsync(userId, message.TeamId);
-        if (!isMember)
-            return Forbid();
 
         return Ok(message);
     }
@@ -75,8 +71,11 @@ public class MessageController(IMessageService messageService, ITeamService team
 
         MessageDTO messageDto = new()
         {
-            Text = dto.Text,
-            Team = dto.Team
+            Team = dto.Team,
+            EncryptedText = dto.EncryptedText,
+            Iv = dto.Iv,
+            Signature = dto.Signature,
+            KeyGeneration = dto.KeyGeneration
         };
 
         MessageDTOPublic? message = await _messageService.CreateAsync(messageDto, userId);
@@ -86,16 +85,15 @@ public class MessageController(IMessageService messageService, ITeamService team
         // Broadcast to team members
         await _realtimeService.BroadcastMessageAsync(dto.Team, message);
 
-        // Update last message for sidebar
+        // Update last message for sidebar. The server cannot read the
+        // plaintext anymore, so it ships the envelope; clients decrypt
+        // locally and render their own preview. Empty preview is fine —
+        // the timestamp + sender name are still useful.
         IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(dto.Team);
         if (memberIds.Count > 0)
         {
-            string preview = (message.Text?.Length ?? 0) > 50
-                ? message.Text![..50] + "..."
-                : message.Text ?? "";
-            preview = preview.Replace("\n", " ").Trim();
             await _realtimeService.BroadcastTeamLastMessageAsync(
-                dto.Team, memberIds, preview, message.Date, message.Sender?.Name);
+                dto.Team, memberIds, string.Empty, message.Date, message.Sender?.Name);
         }
 
         return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);

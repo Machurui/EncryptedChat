@@ -1,27 +1,22 @@
-using System.Security.Cryptography;
-using System.Text;
 using EncryptedChat.Data;
 using EncryptedChat.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
+// True E2E: server never decrypts. Pinned messages carry the same
+// encrypted envelope as regular messages; clients decrypt locally.
 public class PinnedMessageService(
     EncryptedChatContext context,
-    ITeamService teamService,
-    ICryptoService crypto) : IPinnedMessageService
+    ITeamService teamService) : IPinnedMessageService
 {
     private readonly EncryptedChatContext _context = context;
     private readonly ITeamService _teamService = teamService;
-    private readonly ICryptoService _crypto = crypto;
 
     public async Task<List<PinnedMessageDTO>> GetPinnedMessagesAsync(Guid teamId, string userId)
     {
         bool isMember = await _teamService.IsMemberAsync(userId, teamId);
         if (!isMember) return [];
-
-        var team = await _context.Teams.FindAsync(teamId);
-        if (team == null) return [];
 
         var pins = await _context.PinnedMessages
             .Where(p => p.TeamId == teamId)
@@ -35,8 +30,7 @@ public class PinnedMessageService(
             .AsNoTracking()
             .ToListAsync();
 
-        // TEMP-Task3: return pins.Select(p => MapToDTO(p, team.Secret)).ToList();
-        return pins.Select(p => MapToDTO(p, string.Empty)).ToList();
+        return pins.Select(MapToDTO).ToList();
     }
 
     public async Task<PinnedMessageDTO?> PinMessageAsync(Guid teamId, Guid messageId, string userId)
@@ -76,8 +70,7 @@ public class PinnedMessageService(
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
-        // TEMP-Task3: return created == null ? null : MapToDTO(created, team.Secret);
-        return created == null ? null : MapToDTO(created, string.Empty);
+        return created == null ? null : MapToDTO(created);
     }
 
     public async Task<bool> UnpinMessageAsync(Guid teamId, Guid messageId, string userId)
@@ -100,62 +93,35 @@ public class PinnedMessageService(
         return await _context.PinnedMessages.CountAsync(p => p.TeamId == teamId);
     }
 
-    private MessageDTOPublic DecryptMessage(PinnedMessage pin, string teamSecret)
+    private static MessageDTOPublic MapMessage(PinnedMessage pin)
     {
         Message message = pin.Message;
-
-        string plaintext;
-        bool signatureVerified = false;
-
-        try
-        {
-            // TEMP-Task3: plaintext = _crypto.Decrypt(message.EncryptedText, message.Iv, teamSecret);
-            // TEMP-Task3: string senderSecret = message.Sender?.Secret ?? string.Empty;
-            // TEMP-Task3: signatureVerified = _crypto.Verify(plaintext, message.Signature, senderSecret);
-            plaintext = message.EncryptedText;
-            signatureVerified = false;
-        }
-        catch (CryptographicException)
-        {
-            plaintext = "[Decryption failed]";
-        }
-        catch (FormatException)
-        {
-            plaintext = "[Invalid message format]";
-        }
 
         List<AttachmentDTOPublic> attachments = [];
         foreach (var attachment in message.Attachments ?? [])
         {
-            string fileName;
-            try
-            {
-                // TEMP-Task3: byte[] encryptedFileName = Convert.FromBase64String(attachment.EncryptedFileName);
-                // TEMP-Task3: byte[] fileNameBytes = _crypto.DecryptBytes(encryptedFileName, attachment.FileNameIv, teamSecret);
-                // TEMP-Task3: fileName = Encoding.UTF8.GetString(fileNameBytes);
-                fileName = attachment.EncryptedFileName;
-            }
-            catch
-            {
-                fileName = "[Decryption failed]";
-            }
-
             attachments.Add(new AttachmentDTOPublic
             {
                 Id = attachment.Id,
                 MessageId = attachment.MessageId,
-                FileName = fileName,
+                EncryptedFileName = attachment.EncryptedFileName,
+                FileNameIv = attachment.FileNameIv,
                 MimeType = attachment.MimeType,
                 Size = attachment.Size,
-                CreatedAt = attachment.CreatedAt,
-                SignatureVerified = false
+                FileIv = attachment.FileIv,
+                Signature = attachment.Signature,
+                KeyGeneration = attachment.KeyGeneration,
+                CreatedAt = attachment.CreatedAt
             });
         }
 
         return new MessageDTOPublic
         {
             Id = message.Id,
-            Text = plaintext,
+            EncryptedText = message.EncryptedText,
+            Iv = message.Iv,
+            Signature = message.Signature,
+            KeyGeneration = message.KeyGeneration,
             Sender = new MessageSenderDTO
             {
                 Id = message.Sender?.Id ?? string.Empty,
@@ -166,17 +132,16 @@ public class PinnedMessageService(
             },
             TeamId = pin.TeamId,
             Date = message.Date,
-            SignatureVerified = signatureVerified,
             Attachments = attachments
         };
     }
 
-    private PinnedMessageDTO MapToDTO(PinnedMessage pin, string teamSecret)
+    private static PinnedMessageDTO MapToDTO(PinnedMessage pin)
     {
         return new PinnedMessageDTO(
             pin.Id,
             pin.MessageId,
-            DecryptMessage(pin, teamSecret),
+            MapMessage(pin),
             pin.PinnedById,
             pin.PinnedBy?.Name ?? "Unknown",
             pin.PinnedAt

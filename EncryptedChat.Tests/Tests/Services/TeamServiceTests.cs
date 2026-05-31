@@ -45,7 +45,6 @@ public class TeamServiceTests : IDisposable
             NormalizedEmail = $"{id}@TEST.COM",
             UserName = $"{id}@test.com",
             NormalizedUserName = $"{id}@TEST.COM",
-            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
@@ -59,7 +58,6 @@ public class TeamServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = name,
             Slug = name.ToLowerInvariant().Replace(" ", "-"),
-            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
         team.Members.Add(new Member
         {

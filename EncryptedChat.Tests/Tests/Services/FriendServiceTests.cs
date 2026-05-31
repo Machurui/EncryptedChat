@@ -26,8 +26,6 @@ public class FriendServiceTests
 
     private async Task<(string userId, string friendId)> SetupAcceptedFriendshipAsync()
     {
-        // TEMP-Task3: var user = new User { Id = Guid.NewGuid().ToString(), UserName = "alice", Name = "Alice", NameColor = "#FFFFFF", Secret = "secret-a" };
-        // TEMP-Task3: var friend = new User { Id = Guid.NewGuid().ToString(), UserName = "bob", Name = "Bob", NameColor = "#FFFFFF", Secret = "secret-b" };
         var user = new User { Id = Guid.NewGuid().ToString(), UserName = "alice", Name = "Alice", NameColor = "#FFFFFF" };
         var friend = new User { Id = Guid.NewGuid().ToString(), UserName = "bob", Name = "Bob", NameColor = "#FFFFFF" };
         _context.Users.AddRange(user, friend);
@@ -55,7 +53,6 @@ public class FriendServiceTests
             Slug = $"dm-{Guid.NewGuid():N}",
             Glyph = "◆",
             Color = "oklch(0.65 0.16 165)",
-            // TEMP-Task3: Secret = "dm-secret",
             IsDirect = true,
         };
         _context.Teams.Add(dm);

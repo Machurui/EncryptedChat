@@ -98,7 +98,6 @@ public class TeamService : ITeamService
         {
             Name = trimmedName,
             Slug = slug,
-            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N"),
             Glyph = glyph,
             Color = color,
             MessageLifetime = messageLifetime,
@@ -520,7 +519,6 @@ public class TeamService : ITeamService
             Id = Guid.NewGuid(),
             Name = dmName,
             Slug = $"dm-{Guid.NewGuid():N}",
-            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N"),
             IsDirect = true,
             Glyph = "💬",
             Color = "oklch(0.65 0.16 165)",
@@ -590,7 +588,6 @@ public class TeamService : ITeamService
             Id = Guid.NewGuid(),
             Name = $"{user.Name} & {friend.Name}",
             Slug = $"dm-{Guid.NewGuid():N}",
-            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N"),
             IsDirect = true,
             Glyph = "💬",
             Color = "oklch(0.65 0.16 165)",

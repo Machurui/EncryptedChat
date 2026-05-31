@@ -3,15 +3,13 @@ using EncryptedChat.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
-using System.Security.Cryptography;
 
 namespace EncryptedChat.Services;
 
-public class UserService(EncryptedChatContext context, UserManager<User> userManager, ICryptoService crypto, IPresenceService presenceService) : IUserService
+public class UserService(EncryptedChatContext context, UserManager<User> userManager, IPresenceService presenceService) : IUserService
 {
     private readonly EncryptedChatContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
-    private readonly ICryptoService _crypto = crypto;
     private readonly IPresenceService _presenceService = presenceService;
 
     private static readonly System.Text.RegularExpressions.Regex HandleRegex =
@@ -106,12 +104,15 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .AsNoTracking()
             .Include(m => m.Team)
             .Where(m => m.UserId == userId && m.Team != null)
-            // TEMP-Task3: .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Team.Secret, m.Role })
-            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, Secret = string.Empty, m.Role })
+            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Role })
             .ToListAsync();
 
         var teamIds = userTeams.Select(t => t.Id).ToList();
 
+        // Only carry timing + sender name to the client for last-message
+        // metadata — the server no longer holds the team key so it cannot
+        // produce a plaintext preview. Clients render their own preview
+        // from messages they've already decrypted, or display nothing.
         var lastMessages = await _context.Messages
             .AsNoTracking()
             .Include(m => m.Sender)
@@ -139,24 +140,11 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
 
         foreach (var team in teams)
         {
-            var userTeam = userTeams.First(t => t.Id == team.Id);
             if (lastMsgDict.TryGetValue(team.Id, out var lastMsg) && lastMsg != null)
             {
                 team.LastMessageTime = lastMsg.Date;
                 team.LastMessageSenderName = lastMsg.Sender?.Name;
-
-                try
-                {
-                    // TEMP-Task3: string plaintext = _crypto.Decrypt(lastMsg.EncryptedText, lastMsg.Iv, userTeam.Secret);
-                    string plaintext = lastMsg.EncryptedText;
-                    string preview = plaintext.Replace("\n", " ").Trim();
-                    if (preview.Length > 50) preview = preview[..50] + "...";
-                    team.LastMessagePreview = preview;
-                }
-                catch (CryptographicException)
-                {
-                    team.LastMessagePreview = "[Encrypted]";
-                }
+                team.LastMessagePreview = null;
             }
         }
 

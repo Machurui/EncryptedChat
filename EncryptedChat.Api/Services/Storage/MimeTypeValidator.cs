@@ -98,6 +98,19 @@ public class MimeTypeValidator(IOptions<FileStorageOptions> options)
         return string.Join(", ", _allowedExtensions.OrderBy(e => e));
     }
 
+    // Declared-MIME allow-list. Used when the server cannot inspect file
+    // content (e.g. True E2E attachments that arrive already ciphered).
+    // No magic-byte sniff is possible against ciphertext, so this is the
+    // only MIME check left for E2E uploads.
+    public bool IsDeclaredMimeTypeAllowed(string declaredMimeType)
+    {
+        if (string.IsNullOrWhiteSpace(declaredMimeType))
+            return false;
+
+        string normalized = declaredMimeType.ToLowerInvariant();
+        return AllowedMimeTypes.Contains(normalized) || normalized.StartsWith("text/");
+    }
+
     private static string? DetectMimeType(byte[] content)
     {
         if (content.Length < 8)
