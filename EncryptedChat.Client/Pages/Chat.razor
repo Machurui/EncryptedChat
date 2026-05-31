@@ -5821,12 +5821,18 @@ private async Task SelectStatus(string status)
     {
         headerSearchMode = false;
         headerSearchQuery = "";
+        StateHasChanged();
     }
 
     private void HandleHeaderSearchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
+        {
+            // The input element is wrapped in `@if (headerSearchMode)`, so
+            // setting headerSearchMode = false removes it from the DOM and
+            // the browser drops focus naturally — no manual blur needed.
             CloseHeaderSearch();
+        }
     }
 
     private int GetSearchMatchCount()
@@ -5868,17 +5874,36 @@ private async Task SelectStatus(string status)
 
     private void ToggleBubbleColorPicker() => showBubbleColorPicker = !showBubbleColorPicker;
 
+    private CancellationTokenSource? _bubbleColorSaveCts;
+
     private async Task HandleMyBubbleColorChange(ChangeEventArgs e)
     {
         if (!selectedTeamId.HasValue) return;
         string? color = e.Value?.ToString();
         if (string.IsNullOrWhiteSpace(color)) return;
 
-        if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, color))
+        Guid teamId = selectedTeamId.Value;
+
+        // Optimistic local update so the bubble re-paints immediately. The
+        // server save runs in the background; if it fails we just keep the
+        // local color and let the next page-load reconcile.
+        userBubbleColors[teamId] = color;
+
+        // Debounce the network save — some browsers (notably Safari) fire
+        // onchange multiple times while the picker is open, which would
+        // otherwise spam the server and queue up roundtrips that lag the UI.
+        _bubbleColorSaveCts?.Cancel();
+        _bubbleColorSaveCts = new CancellationTokenSource();
+        var ct = _bubbleColorSaveCts.Token;
+        _ = Task.Run(async () =>
         {
-            userBubbleColors[selectedTeamId.Value] = color;
-            StateHasChanged();
-        }
+            try
+            {
+                await Task.Delay(250, ct);
+                await BubbleColorClient.SetBubbleColorAsync(teamId, color);
+            }
+            catch (TaskCanceledException) { /* superseded by a newer pick */ }
+        });
     }
 
     private async Task ResetMyBubbleColor()
