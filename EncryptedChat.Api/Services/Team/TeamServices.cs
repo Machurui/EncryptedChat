@@ -132,6 +132,24 @@ public class TeamService : ITeamService
         _context.Teams.Add(team);
         await _context.SaveChangesAsync();
 
+        // Insert the creator's TeamKeyShare at generation 1 (the client wrapped
+        // the freshly-generated Team.Secret with its own EncryptionPublicKey
+        // before POSTing). InitialKeyShare is required for E2E teams; the
+        // server never sees the plaintext secret.
+        if (!string.IsNullOrEmpty(newTeam.InitialKeyShare))
+        {
+            _context.TeamKeyShares.Add(new TeamKeyShare
+            {
+                Id = Guid.NewGuid(),
+                TeamId = team.Id,
+                MemberId = creatorId,
+                Generation = team.KeyGeneration,
+                WrappedKey = newTeam.InitialKeyShare,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+        }
+
         return ItemToDTO(team);
     }
 

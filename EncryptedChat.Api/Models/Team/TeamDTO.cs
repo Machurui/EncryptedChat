@@ -24,4 +24,11 @@ public class TeamDTO
 
     [MaxLength(10)]
     public string? MessageLifetime { get; set; }
+
+    // Base64 ECIES-wrapped Team.Secret for the creator. Generated client-side at
+    // team creation. Server stores it in TeamKeyShare(team, creator, gen=1, this).
+    // Null only for the legacy GetOrCreateDirectMessage path which v2 will
+    // handle with a deferred key-share provisioning step.
+    [MaxLength(256)]
+    public string? InitialKeyShare { get; set; }
 }
