@@ -115,7 +115,8 @@ public class ChatClient
 
         var payload = new
         {
-            TeamId = teamId,
+            // Server-side MessageCreateDTO calls this field "Team", not "TeamId".
+            Team = teamId,
             EncryptedText = envelope.EncryptedText,
             Iv = envelope.Iv,
             Signature = envelope.Signature,
