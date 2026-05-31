@@ -194,4 +194,18 @@
         deriveWrapKey, generateSalt, generateTeamSecret,
         sha256
     };
+
+    // Tiny blob URL helper used by EncryptedImage.razor to render decrypted
+    // attachment bytes directly in <img src="blob:...">. The component calls
+    // revoke() on dispose so URLs don't leak memory.
+    window.encryptedChatBlob = {
+        fromBytes(b64, mimeType) {
+            const bytes = b64Decode(b64);
+            const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+            return URL.createObjectURL(blob);
+        },
+        revoke(url) {
+            URL.revokeObjectURL(url);
+        }
+    };
 })();

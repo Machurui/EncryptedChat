@@ -1,0 +1,78 @@
+@namespace EncryptedChat.Client.Pages.Components
+@using EncryptedChat.Client.Services
+@using EncryptedChat.Client.Services.Crypto
+@inject HttpClient Http
+@inject CryptoService Crypto
+@inject TeamKeyCacheService KeyCache
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (!string.IsNullOrEmpty(_blobUrl))
+{
+    <img src="@_blobUrl" alt="@Alt" loading="lazy" @attributes="ExtraAttributes" />
+}
+else if (_failed)
+{
+    <span style="font-size: 12px; color: rgba(255,255,255,0.50);">🖼️ [unable to decrypt]</span>
+}
+else
+{
+    <span style="font-size: 12px; color: rgba(255,255,255,0.50);">🖼️ loading…</span>
+}
+
+@code {
+    [Parameter] public Guid AttachmentId { get; set; }
+    [Parameter] public Guid TeamId { get; set; }
+    [Parameter] public int KeyGeneration { get; set; }
+    [Parameter] public string FileIv { get; set; } = "";
+    [Parameter] public string? Alt { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? ExtraAttributes { get; set; }
+
+    private string? _blobUrl;
+    private bool _failed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_blobUrl != null) return;  // already loaded
+
+        byte[]? teamSecret = KeyCache.Get(TeamId, KeyGeneration);
+        if (teamSecret == null)
+        {
+            _failed = true;
+            return;
+        }
+
+        try
+        {
+            var res = await Http.GetAsync($"api/attachment/{AttachmentId}/download");
+            if (!res.IsSuccessStatusCode)
+            {
+                _failed = true;
+                return;
+            }
+            byte[] encrypted = await res.Content.ReadAsByteArrayAsync();
+            byte[] iv = Convert.FromBase64String(FileIv);
+            byte[] plain = await Crypto.DecryptAesGcmAsync(iv, encrypted, teamSecret);
+
+            // Wrap the decrypted bytes in a Blob and produce a blob: URL the
+            // browser can render directly in the <img src>.
+            _blobUrl = await JS.InvokeAsync<string>(
+                "encryptedChatBlob.fromBytes",
+                Convert.ToBase64String(plain),
+                "application/octet-stream");
+        }
+        catch
+        {
+            _failed = true;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!string.IsNullOrEmpty(_blobUrl))
+        {
+            try { await JS.InvokeVoidAsync("encryptedChatBlob.revoke", _blobUrl); }
+            catch { /* ignore */ }
+        }
+    }
+}

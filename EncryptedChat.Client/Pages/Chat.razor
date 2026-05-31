@@ -602,9 +602,13 @@
                                                                     {
                                                                         @if (IsImageMimeType(att.MimeType))
                                                                         {
-                                                                            <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="pinned-item-image">
-                                                                                <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
-                                                                            </a>
+                                                                            <div class="pinned-item-image">
+                                                                                <EncryptedImage AttachmentId="@att.Id"
+                                                                                                TeamId="@pin.Message.TeamId"
+                                                                                                KeyGeneration="@att.KeyGeneration"
+                                                                                                FileIv="@att.FileIv"
+                                                                                                Alt="encrypted attachment" />
+                                                                            </div>
                                                                         }
                                                                         else
                                                                         {
@@ -800,9 +804,13 @@
                                                     {
                                                         @if (IsImageMimeType(att.MimeType))
                                                         {
-                                                            <a href="@GetAttachmentDownloadUrl(att.Id)" target="_blank" class="message-image-attachment">
-                                                                <img src="@GetAttachmentDownloadUrl(att.Id)" alt="@att.FileName" loading="lazy" />
-                                                            </a>
+                                                            <div class="message-image-attachment">
+                                                                <EncryptedImage AttachmentId="@att.Id"
+                                                                                TeamId="@msg.TeamId"
+                                                                                KeyGeneration="@att.KeyGeneration"
+                                                                                FileIv="@att.FileIv"
+                                                                                Alt="encrypted attachment" />
+                                                            </div>
                                                         }
                                                         else
                                                         {
