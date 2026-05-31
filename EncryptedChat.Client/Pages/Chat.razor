@@ -4594,6 +4594,17 @@ private async Task SelectStatus(string status)
                 hasMoreMessages = false;
 
             var olderSorted = fetched.OrderBy(m => m.Date).ToList();
+
+            // E2E: decrypt each older message's envelope into DisplayText
+            // before they hit the UI. Without this the text shows empty
+            // ("[encrypted]" via the shim); images would still render because
+            // EncryptedImage does its own decrypt on mount.
+            if (!string.IsNullOrEmpty(_userId))
+            {
+                foreach (var msg in olderSorted)
+                    await ChatClient.DecryptMessageAsync(msg, _userId);
+            }
+
             messages = olderSorted.Concat(messages).ToList();
             teamMessages[selectedTeamId.Value] = messages;
             currentPage = nextPage;
