@@ -1,7 +1,9 @@
 @namespace EncryptedChat.Client.Pages.Components
 @using EncryptedChat.Client.Services
 
+@using EncryptedChat.Client.Services.Crypto
 @inject AuthClient Auth
+@inject BootstrapKeyService BootstrapKeys
 @inject IJSRuntime JS
 
 @if (IsOpen)
@@ -196,6 +198,29 @@
 
             if (result.Success && result.Value != null)
             {
+                // After password recovery the server issued a JWT, so the inline
+                // key-bundle calls authenticate as the recovered user. Use the
+                // OLD phrase (still in memory) to unwrap the existing bundle,
+                // then re-wrap with the NEW phrase the server returned and
+                // upload — preserves identity keys + message history across
+                // recovery.
+                string? userId = ExtractUserIdFromJwt(result.Value.AccessToken);
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    string oldPhrase = string.Join(' ', words);
+                    var unwrap = await BootstrapKeys.BootstrapAsync(userId, oldPhrase);
+                    if (unwrap == BootstrapKeyService.BootstrapOutcome.UnwrappedFromServer
+                        || unwrap == BootstrapKeyService.BootstrapOutcome.AlreadyBootstrapped
+                        || unwrap == BootstrapKeyService.BootstrapOutcome.FreshGeneratedAndUploaded)
+                    {
+                        string newPhrase = string.Join(' ', result.Value.NewRecoveryWords);
+                        await BootstrapKeys.ReWrapAsync(userId, newPhrase);
+                    }
+                    // If unwrap failed, keys stay on the old bundle — the user
+                    // can still reach the chat (which will show empty until they
+                    // re-bootstrap via the next login).
+                }
+
                 newRecoveryWords = result.Value.NewRecoveryWords;
                 confirmed = false;
                 copied = false;
@@ -223,5 +248,30 @@
         {
             // Silently ignore copy failures.
         }
+    }
+
+    // Decodes the JWT body (no signature verification — we just need the sub/nameid
+    // claim to identify the user for the key-bundle PUT).
+    private static string? ExtractUserIdFromJwt(string jwt)
+    {
+        if (string.IsNullOrEmpty(jwt)) return null;
+        var parts = jwt.Split('.');
+        if (parts.Length != 3) return null;
+        string payloadB64 = parts[1].Replace('-', '+').Replace('_', '/');
+        payloadB64 += new string('=', (4 - payloadB64.Length % 4) % 4);
+        try
+        {
+            byte[] payloadBytes = Convert.FromBase64String(payloadB64);
+            using var doc = System.Text.Json.JsonDocument.Parse(payloadBytes);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("sub", out var sub) && sub.ValueKind == System.Text.Json.JsonValueKind.String)
+                return sub.GetString();
+            if (root.TryGetProperty("nameid", out var nid) && nid.ValueKind == System.Text.Json.JsonValueKind.String)
+                return nid.GetString();
+            if (root.TryGetProperty("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", out var nidLong) && nidLong.ValueKind == System.Text.Json.JsonValueKind.String)
+                return nidLong.GetString();
+        }
+        catch { }
+        return null;
     }
 }

@@ -665,6 +665,7 @@ public class TeamService : ITeamService
             Color = team.Color,
             MessageLifetime = team.MessageLifetime,
             IsDirect = team.IsDirect,
+            KeyGeneration = team.KeyGeneration,
             Members = [.. (team.Members ?? Enumerable.Empty<Member>()).Select(MapMember)]
         };
 

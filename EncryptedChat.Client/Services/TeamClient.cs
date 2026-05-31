@@ -37,7 +37,8 @@ public class TeamClient
         string? LastMessagePreview = null,
         DateTime? LastMessageTime = null,
         string? LastMessageSenderName = null,
-        string UrlToken = "");
+        string UrlToken = "",
+        int KeyGeneration = 1);
     public record TeamUpdateDTO(string? Name = null, string? Glyph = null, string? Color = null, string? MessageLifetime = null);
 
     public class Result

@@ -33,4 +33,8 @@ public class TeamDTOPublic
 
     [MaxLength(16)]
     public string UrlToken { get; set; } = string.Empty;
+
+    // Current key generation. Clients must encrypt new messages under this
+    // generation (server rejects sends whose KeyGeneration mismatches).
+    public int KeyGeneration { get; set; } = 1;
 }

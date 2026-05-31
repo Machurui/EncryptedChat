@@ -1,6 +1,7 @@
 @namespace EncryptedChat.Client.Pages.Components
 @inject UserClient UserClient
 @inject SecurityClient _securityClient
+@inject EncryptedChat.Client.Services.Crypto.BootstrapKeyService BootstrapKeys
 @inject IJSRuntime JS
 @inject RecentNameColorsService RecentNameColors
 
@@ -2342,6 +2343,21 @@
             var result = await _securityClient.RegenerateRecoveryPhraseAsync("regenerate");
             if (result.Success && result.Value != null)
             {
+                // Re-wrap the identity private keys with the freshly-derived
+                // wrap-key so they stay unwrap-able with the new phrase
+                // (otherwise the user's bundle would orphan: old phrase still
+                // unwraps it on the server, but the old phrase is now invalid).
+                var profile = await UserClient.GetProfileAsync();
+                if (profile.Success && profile.Value != null)
+                {
+                    string newPhrase = string.Join(' ', result.Value.Words);
+                    bool rewrapped = await BootstrapKeys.ReWrapAsync(profile.Value.Id, newPhrase);
+                    if (!rewrapped)
+                    {
+                        recoveryError = "Phrase regenerated but the key bundle re-wrap failed. The old phrase may still unwrap the server-side bundle until you regenerate again or log out.";
+                    }
+                }
+
                 recoveryPhrase = result.Value.Words.ToList();
                 recoveryConfirmed = false;
             }

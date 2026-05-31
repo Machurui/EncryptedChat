@@ -4391,6 +4391,14 @@ private async Task SelectStatus(string status)
 
             if (selectedTeam == null) return;
 
+            // E2E: load this team's TeamKeyShare rows + unwrap them into the
+            // in-memory cache so SendMessageAsync / DecryptMessageAsync work
+            // immediately. Idempotent.
+            if (!string.IsNullOrEmpty(_userId))
+            {
+                await TeamClient.LoadKeySharesIntoCacheAsync(teamId, _userId);
+            }
+
             // Check for unread BEFORE marking as read
             var hadUnread = GetUnreadCount(teamId) > 0;
             var isFirstVisit = !_visitedTeams.Contains(teamId);
@@ -4512,10 +4520,26 @@ private async Task SelectStatus(string status)
             hasMoreMessages = fetched.Count == MessagesPageSize;
             messagesState = messages.Any() ? LoadState.Success : LoadState.Empty;
 
+            // E2E: decrypt each message's envelope into DisplayText for the UI.
+            // Failures stay null and the UI shows the placeholder shim.
+            if (!string.IsNullOrEmpty(_userId))
+            {
+                foreach (var msg in messages)
+                    await ChatClient.DecryptMessageAsync(msg, _userId);
+            }
+
             // Load pinned messages alongside so we can highlight them in the messages list
             var pinsResult = await PinnedMessageClient.GetPinnedMessagesAsync(selectedTeamId.Value);
             if (pinsResult.Success)
+            {
                 pinnedMessages = pinsResult.Value ?? [];
+                if (!string.IsNullOrEmpty(_userId))
+                {
+                    foreach (var pin in pinnedMessages)
+                        if (pin.Message != null)
+                            await ChatClient.DecryptMessageAsync(pin.Message, _userId);
+                }
+            }
 
             if (scrollToBottom)
             {
@@ -4608,6 +4632,12 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<ChatClient.MessageDTOPublic>("ReceiveMessage", async message =>
             {
+                // E2E: decrypt the envelope into DisplayText before storing so
+                // the UI renders the plaintext. Failures leave DisplayText null;
+                // the shim falls back to "[encrypted]" via the Text accessor.
+                if (!string.IsNullOrEmpty(_userId))
+                    await ChatClient.DecryptMessageAsync(message, _userId);
+
                 // Store message (check for duplicates by Id)
                 if (!teamMessages.ContainsKey(message.TeamId))
                     teamMessages[message.TeamId] = new();
@@ -5270,11 +5300,15 @@ private async Task SelectStatus(string status)
         {
             await StopTypingIndicator();
 
-            // If we have an attachment, use REST API
+            // E2E: encrypt + sign client-side and POST via REST. The server
+            // never sees plaintext.
+            int teamGen = selectedTeam?.KeyGeneration ?? 1;
+
+            // If we have an attachment, send the message first then the file
             if (selectedFile != null)
             {
                 var messageText = newMessageText?.Trim() ?? "";
-                var result = await ChatClient.CreateMessageAsync(selectedTeamId.Value, messageText);
+                var result = await ChatClient.SendMessageAsync(selectedTeamId.Value, messageText, teamGen, _userId!);
 
                 if (result.RateLimited)
                 {
@@ -5284,7 +5318,6 @@ private async Task SelectStatus(string status)
 
                 if (result.Success && result.Value != null)
                 {
-                    // Message appears via "ReceiveMessage" broadcast from server
                     var messageId = result.Value.Id;
                     var fileName = selectedFile.Name;
                     var contentType = selectedFile.ContentType ?? "application/octet-stream";
@@ -5292,32 +5325,43 @@ private async Task SelectStatus(string status)
                     using var stream = selectedFile.OpenReadStream(maxAllowedSize: 26_214_400);
                     using var ms = new MemoryStream();
                     await stream.CopyToAsync(ms);
-                    // TEMP-Task14: hardcoded generation=1 until Chat.razor learns
-                    // selectedTeam.KeyGeneration. Sender E2E encrypt happens here.
-                    await AttachmentClient.UploadAsync(selectedTeamId.Value, messageId, 1, _userId!, fileName, contentType, ms.ToArray());
-                    // Attachment appears via "AttachmentAdded" broadcast from server
+                    await AttachmentClient.UploadAsync(selectedTeamId.Value, messageId, teamGen, _userId!, fileName, contentType, ms.ToArray());
+
+                    // Optimistic local render: the SendMessageAsync result already
+                    // carries DisplayText (set client-side), so the message shows
+                    // its plaintext immediately while the ReceiveMessage broadcast
+                    // will dedup by Id.
+                    if (result.Value.TeamId == selectedTeamId && !messages.Any(m => m.Id == result.Value.Id))
+                    {
+                        messages.Add(result.Value);
+                        if (messagesState != LoadState.Success)
+                            messagesState = LoadState.Success;
+                        TriggerMessageFadeIn(result.Value.Id);
+                    }
 
                     selectedFile = null;
                 }
 
                 newMessageText = string.Empty;
             }
-            else if (hubConnection?.State == HubConnectionState.Connected)
+            else
             {
                 _lastAttemptedSendText = newMessageText;
-                var sent = await hubConnection.InvokeAsync<ChatClient.MessageDTOPublic?>(
-                    "SendMessageToTeam", selectedTeamId.Value, newMessageText);
+                var result = await ChatClient.SendMessageAsync(selectedTeamId.Value, newMessageText, teamGen, _userId!);
 
-                // Optimistic local render — guarantees the sender sees their own message
-                // immediately, independent of whether the SignalR group broadcast reaches
-                // them (fresh-DM race etc.). The ReceiveMessage handler dedups by message.Id.
-                if (sent != null && sent.TeamId == selectedTeamId &&
-                    !messages.Any(m => m.Id == sent.Id))
+                if (result.RateLimited)
                 {
-                    messages.Add(sent);
+                    OnRateLimited(result.RetryAfterMs);
+                    return;
+                }
+
+                if (result.Success && result.Value != null && result.Value.TeamId == selectedTeamId &&
+                    !messages.Any(m => m.Id == result.Value.Id))
+                {
+                    messages.Add(result.Value);
                     if (messagesState != LoadState.Success)
                         messagesState = LoadState.Success;
-                    TriggerMessageFadeIn(sent.Id);
+                    TriggerMessageFadeIn(result.Value.Id);
                 }
 
                 // Only clear if not rate-limited. If RateLimited event arrived during the
