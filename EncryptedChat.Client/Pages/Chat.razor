@@ -6009,6 +6009,13 @@ private async Task SelectStatus(string status)
 
         if (result.Success && result.Value != null)
         {
+            // Refetch the teams list — the server returns a TeamDTOPublic that
+            // lacks the caller's per-membership Role + LastMessage fields that
+            // /api/user/me/teams populates, so the just-created team would
+            // render incomplete if we just append result.Value. LoadTeams() is
+            // idempotent w.r.t. the SignalR "TeamCreated" broadcast that also
+            // fires asynchronously.
+            await LoadTeams();
             await SelectTeam(result.Value.Id);
         }
     }
