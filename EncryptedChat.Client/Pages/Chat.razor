@@ -5974,13 +5974,22 @@ private async Task SelectStatus(string status)
                 Array.Empty<string>(),
                 newTeamName.Trim());
 
-            if (result.Success)
+            if (result.Success && result.Value != null)
             {
                 showNewTeamModal = false;
                 await LoadTeams();
+
+                // Join the SignalR group for the new team so we receive
+                // ReceiveMessage broadcasts. Same reason as HandleCreateTeam.
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try { await hubConnection.InvokeAsync("JoinTeam", result.Value.Id); }
+                    catch { /* silent */ }
+                }
+
                 if (teams.Any())
                 {
-                    var newTeam = teams.FirstOrDefault(t => t.Name == newTeamName.Trim());
+                    var newTeam = teams.FirstOrDefault(t => t.Id == result.Value.Id);
                     if (newTeam != null)
                         await SelectTeam(newTeam.Id);
                 }
@@ -6016,6 +6025,18 @@ private async Task SelectStatus(string status)
             // idempotent w.r.t. the SignalR "TeamCreated" broadcast that also
             // fires asynchronously.
             await LoadTeams();
+
+            // Join the SignalR group for the new team so we receive future
+            // ReceiveMessage broadcasts for this team in real time. The
+            // TeamCreated broadcast handler also calls JoinTeam, but it skips
+            // when the team already exists locally (LoadTeams added it above),
+            // so we must explicitly join here.
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                try { await hubConnection.InvokeAsync("JoinTeam", result.Value.Id); }
+                catch { /* silent — reconnect will retry */ }
+            }
+
             await SelectTeam(result.Value.Id);
         }
     }

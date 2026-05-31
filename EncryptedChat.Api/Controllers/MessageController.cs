@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
+using EncryptedChat.Hubs;
 using System.Security.Claims;
 
 namespace EncryptedChat.Controllers;
@@ -9,12 +11,18 @@ namespace EncryptedChat.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class MessageController(IMessageService messageService, ITeamService teamService, IRealtimeService realtimeService, IRateLimitService rateLimitService) : ControllerBase
+public class MessageController(
+    IMessageService messageService,
+    ITeamService teamService,
+    IRealtimeService realtimeService,
+    IRateLimitService rateLimitService,
+    IHubContext<ChatHub> hubContext) : ControllerBase
 {
     private readonly IMessageService _messageService = messageService;
     private readonly ITeamService _teamService = teamService;
     private readonly IRealtimeService _realtimeService = realtimeService;
     private readonly IRateLimitService _rateLimitService = rateLimitService;
+    private readonly IHubContext<ChatHub> _hubContext = hubContext;
 
     private string? GetCurrentUserId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -85,11 +93,32 @@ public class MessageController(IMessageService messageService, ITeamService team
         // Broadcast to team members
         await _realtimeService.BroadcastMessageAsync(dto.Team, message);
 
+        // First message in a DM? The other side wasn't joined to the team's
+        // SignalR group yet (their client never saw the DM exist), so the
+        // group broadcast above missed them. Notify them directly so they
+        // (a) see the new DM in their sidebar and (b) get the message in
+        // real time. Mirrors the ChatHub logic that lived on the legacy
+        // SendMessageToTeam path.
+        TeamDTOPublic? team = await _teamService.GetByIdAsync(dto.Team);
+        IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(dto.Team);
+        if (team?.IsDirect == true)
+        {
+            int messageCount = await _messageService.CountByTeamAsync(dto.Team);
+            if (messageCount == 1)
+            {
+                string? friendId = memberIds.FirstOrDefault(id => id != userId);
+                if (!string.IsNullOrEmpty(friendId))
+                {
+                    await _hubContext.Clients.User(friendId).SendAsync("DirectMessageCreated", team);
+                    await _hubContext.Clients.User(friendId).SendAsync("ReceiveMessage", message);
+                }
+            }
+        }
+
         // Update last message for sidebar. The server cannot read the
         // plaintext anymore, so it ships the envelope; clients decrypt
         // locally and render their own preview. Empty preview is fine —
         // the timestamp + sender name are still useful.
-        IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(dto.Team);
         if (memberIds.Count > 0)
         {
             await _realtimeService.BroadcastTeamLastMessageAsync(

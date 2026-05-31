@@ -31,7 +31,12 @@ public class MessageControllerTests
 
     private MessageController CreateController(string? userId = null)
     {
-        var controller = new MessageController(_mockMessageService.Object, _mockTeamService.Object, _mockRealtimeService.Object, _mockRateLimitService.Object);
+        var mockHubContext = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<EncryptedChat.Hubs.ChatHub>>();
+        var mockClients = new Mock<Microsoft.AspNetCore.SignalR.IHubClients>();
+        var mockClientProxy = new Mock<Microsoft.AspNetCore.SignalR.IClientProxy>();
+        mockClients.Setup(c => c.User(It.IsAny<string>())).Returns(mockClientProxy.Object);
+        mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+        var controller = new MessageController(_mockMessageService.Object, _mockTeamService.Object, _mockRealtimeService.Object, _mockRateLimitService.Object, mockHubContext.Object);
         var claims = new List<Claim>();
 
         if (userId != null)
