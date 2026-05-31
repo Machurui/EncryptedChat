@@ -1,6 +1,7 @@
 @page "/register"
 @layout EmptyLayout
 @inject EncryptedChat.Client.Services.AuthClient Auth
+@inject EncryptedChat.Client.Services.Crypto.BootstrapKeyService BootstrapKeys
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -229,8 +230,28 @@
 
             if (result.Success && result.Value != null)
             {
+                // Bootstrap the E2E identity keys before showing the phrase view.
+                // The server returned a JWT in the same response so the inline
+                // PUT /api/User/me/encryption-keys is authenticated.
+                string? userId = ExtractUserIdFromJwt(result.Value.AccessToken);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    errorMessage = "Signup succeeded but couldn't extract user identity from the access token. Log in to retry.";
+                    return;
+                }
+
+                string phrase = string.Join(' ', result.Value.RecoveryWords);
+                bool keyOk = await BootstrapKeys.SignupBootstrapAsync(userId, phrase);
+                if (!keyOk)
+                {
+                    errorMessage = "Signup succeeded but encryption-key upload failed. Log in to retry.";
+                    return;
+                }
+
                 // Switch to the one-shot recovery-phrase view. The phrase is
-                // returned by the server only on this success response.
+                // returned by the server only on this success response and is
+                // already used (above) to derive the wrap-key — the user must
+                // save it before navigating away.
                 signupRecoveryWords = result.Value.RecoveryWords;
                 signupRecoveryConfirmed = false;
                 recoveryCopied = false;
@@ -263,6 +284,40 @@
     private void ContinueToLogin()
     {
         Nav.NavigateTo("/login");
+    }
+
+    // Decodes the JWT body (no signature verification — we just need the sub/nameid
+    // claim to identify the user for the key-bootstrap PUT).
+    private static string? ExtractUserIdFromJwt(string jwt)
+    {
+        if (string.IsNullOrEmpty(jwt)) return null;
+
+        var parts = jwt.Split('.');
+        if (parts.Length != 3) return null;
+
+        string payloadB64 = parts[1];
+        // base64url → base64 + padding
+        payloadB64 = payloadB64.Replace('-', '+').Replace('_', '/');
+        payloadB64 += new string('=', (4 - payloadB64.Length % 4) % 4);
+
+        try
+        {
+            byte[] payloadBytes = Convert.FromBase64String(payloadB64);
+            using var doc = System.Text.Json.JsonDocument.Parse(payloadBytes);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("sub", out var sub) && sub.ValueKind == System.Text.Json.JsonValueKind.String)
+                return sub.GetString();
+            if (root.TryGetProperty("nameid", out var nid) && nid.ValueKind == System.Text.Json.JsonValueKind.String)
+                return nid.GetString();
+            if (root.TryGetProperty("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", out var nidLong) && nidLong.ValueKind == System.Text.Json.JsonValueKind.String)
+                return nidLong.GetString();
+        }
+        catch
+        {
+            // Malformed JWT
+        }
+        return null;
     }
 
     public class RegisterModel
