@@ -5839,7 +5839,17 @@ private async Task SelectStatus(string status)
         {
             var result = await PinnedMessageClient.GetPinnedMessagesAsync(selectedTeamId.Value);
             if (result.Success)
+            {
                 pinnedMessages = result.Value ?? [];
+                // E2E: decrypt each pinned message's envelope so the dropdown
+                // shows the plaintext (or rendered GIF URL) instead of nothing.
+                if (!string.IsNullOrEmpty(_userId))
+                {
+                    foreach (var pin in pinnedMessages)
+                        if (pin.Message != null)
+                            await ChatClient.DecryptMessageAsync(pin.Message, _userId);
+                }
+            }
         }
     }
 
@@ -6258,8 +6268,19 @@ private async Task SelectStatus(string status)
             }
             else
             {
-                sb.Append(System.Net.WebUtility.HtmlEncode(c.ToString()));
-                i++;
+                // Emojis are UTF-16 surrogate pairs (2 chars). Encode the
+                // pair as one unit so the resulting HTML carries a valid
+                // codepoint instead of two lone-surrogate "?" glyphs.
+                if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                {
+                    sb.Append(System.Net.WebUtility.HtmlEncode(text.Substring(i, 2)));
+                    i += 2;
+                }
+                else
+                {
+                    sb.Append(System.Net.WebUtility.HtmlEncode(c.ToString()));
+                    i++;
+                }
             }
         }
         return sb.ToString();
