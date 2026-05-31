@@ -169,14 +169,21 @@ public class ChatClient
         if (!string.IsNullOrEmpty(message.DisplayText))
             return message.DisplayText;
 
+        // Server populates Sender.Id; SenderId scalar is only populated for
+        // locally-sent messages (we set it before optimistic add).
+        string? senderId = !string.IsNullOrEmpty(message.SenderId)
+            ? message.SenderId
+            : message.Sender?.Id;
+        if (string.IsNullOrEmpty(senderId)) return null;
+
         byte[]? teamSecret = _keyCache.Get(message.TeamId, message.KeyGeneration);
         if (teamSecret == null) return null;
 
-        if (!_senderPubKeyCache.TryGetValue(message.SenderId, out var senderPubKeys))
+        if (!_senderPubKeyCache.TryGetValue(senderId, out var senderPubKeys))
         {
-            senderPubKeys = await _userClient.GetPublicKeysAsync(message.SenderId);
+            senderPubKeys = await _userClient.GetPublicKeysAsync(senderId);
             if (senderPubKeys != null)
-                _senderPubKeyCache[message.SenderId] = senderPubKeys;
+                _senderPubKeyCache[senderId] = senderPubKeys;
         }
         if (senderPubKeys == null) return null;
 
@@ -190,7 +197,7 @@ public class ChatClient
                 teamSecret,
                 senderSigning,
                 message.TeamId,
-                message.SenderId);
+                senderId);
             message.DisplayText = plaintext;
             return plaintext;
         }
