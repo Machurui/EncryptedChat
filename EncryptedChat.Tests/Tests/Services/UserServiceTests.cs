@@ -70,7 +70,7 @@ public class UserServiceTests : IDisposable
             UserName = email,
             NormalizedUserName = email.ToUpperInvariant(),
             Level = 1,
-            Secret = "secret"
+            // TEMP-Task3: Secret = "secret"
         };
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
@@ -141,7 +141,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "SharedTeam",
             Slug = "shared-team",
-            Secret = "team-secret"
+            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -201,7 +201,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            Secret = "team-secret"
+            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -239,7 +239,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team1",
             Slug = "team1",
-            Secret = "team-secret"
+            // TEMP-Task3: Secret = "team-secret"
         };
 
         _context.Teams.Add(team);
@@ -275,7 +275,7 @@ public class UserServiceTests : IDisposable
                 Id = Guid.NewGuid(),
                 Name = $"Team{i}",
                 Slug = $"team{i}",
-                Secret = "secret"
+                // TEMP-Task3: Secret = "secret"
             };
             _context.Teams.Add(team);
             _context.Members.Add(new Member
@@ -305,7 +305,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team1",
             Slug = "team1",
-            Secret = "secret"
+            // TEMP-Task3: Secret = "secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -556,7 +556,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            Secret = "team-secret"
+            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -589,7 +589,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            Secret = "team-secret"
+            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         _context.Members.Add(new Member
@@ -628,7 +628,7 @@ public class UserServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Team",
             Slug = "team",
-            Secret = "team-secret"
+            // TEMP-Task3: Secret = "team-secret"
         };
         _context.Teams.Add(team);
         await _context.SaveChangesAsync();
@@ -646,7 +646,8 @@ public class UserServiceTests : IDisposable
     public async Task SetOwnBubbleColorAsync_NullColorOnAbsentPreferenceReturnsSuccess()
     {
         Guid teamId = Guid.NewGuid();
-        _context.Teams.Add(new Team { Id = teamId, Name = "T", Slug = "t-noprev", Secret = "s" });
+        // TEMP-Task3: _context.Teams.Add(new Team { Id = teamId, Name = "T", Slug = "t-noprev", Secret = "s" });
+        _context.Teams.Add(new Team { Id = teamId, Name = "T", Slug = "t-noprev" });
         _context.Members.Add(new Member { UserId = "userA", TeamId = teamId, Role = "Member" });
         await _context.SaveChangesAsync();
 

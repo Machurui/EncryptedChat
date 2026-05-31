@@ -38,9 +38,11 @@ public class Attachment
     public string FileIv { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(64)]
+    [MaxLength(128)]
     public string Signature { get; set; } = string.Empty;
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public int KeyGeneration { get; set; } = 1;
 }

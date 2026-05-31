@@ -34,7 +34,8 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
             .Take(pageSize)
             .ToListAsync();
 
-        return messages.Select(m => DecryptAndMapMessage(m, team.Secret)).ToList();
+        // TEMP-Task3: return messages.Select(m => DecryptAndMapMessage(m, team.Secret)).ToList();
+        return messages.Select(m => DecryptAndMapMessage(m, string.Empty)).ToList();
     }
 
     public async Task<MessageDTOPublic?> GetByIdAsync(Guid id)
@@ -83,8 +84,11 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
             return null;
 
         string text = message?.Text ?? "";
-        (string encryptedText, string iv) = _crypto.Encrypt(text, team.Secret);
-        string signature = _crypto.Sign(text, sender.Secret);
+        // TEMP-Task3: (string encryptedText, string iv) = _crypto.Encrypt(text, team.Secret);
+        // TEMP-Task3: string signature = _crypto.Sign(text, sender.Secret);
+        string encryptedText = text;
+        string iv = string.Empty;
+        string signature = string.Empty;
 
         Message newMessage = new()
         {
@@ -128,8 +132,11 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
         if (actor == null)
             return null;
 
-        (string encryptedText, string iv) = _crypto.Encrypt(message.Text, messageToUpdate.Team.Secret);
-        string signature = _crypto.Sign(message.Text, actor.Secret);
+        // TEMP-Task3: (string encryptedText, string iv) = _crypto.Encrypt(message.Text, messageToUpdate.Team.Secret);
+        // TEMP-Task3: string signature = _crypto.Sign(message.Text, actor.Secret);
+        string encryptedText = message.Text;
+        string iv = string.Empty;
+        string signature = string.Empty;
 
         messageToUpdate.EncryptedText = encryptedText;
         messageToUpdate.Iv = iv;
@@ -184,15 +191,18 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
 
     private MessageDTOPublic DecryptAndMapMessage(Message message, string? teamSecret = null)
     {
-        string secret = teamSecret ?? message.Team?.Secret ?? string.Empty;
+        // TEMP-Task3: string secret = teamSecret ?? message.Team?.Secret ?? string.Empty;
+        string secret = teamSecret ?? string.Empty;
         string plaintext;
         bool signatureVerified = false;
 
         try
         {
-            plaintext = _crypto.Decrypt(message.EncryptedText, message.Iv, secret);
-            string senderSecret = message.Sender?.Secret ?? string.Empty;
-            signatureVerified = _crypto.Verify(plaintext, message.Signature, senderSecret);
+            // TEMP-Task3: plaintext = _crypto.Decrypt(message.EncryptedText, message.Iv, secret);
+            // TEMP-Task3: string senderSecret = message.Sender?.Secret ?? string.Empty;
+            // TEMP-Task3: signatureVerified = _crypto.Verify(plaintext, message.Signature, senderSecret);
+            plaintext = message.EncryptedText;
+            signatureVerified = false;
         }
         catch (CryptographicException)
         {
@@ -208,7 +218,7 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
 
     private MessageDTOPublic ItemToDTO(Message message, string text, bool signatureVerified)
     {
-        string teamSecret = message.Team?.Secret ?? string.Empty;
+        // TEMP-Task3: string teamSecret = message.Team?.Secret ?? string.Empty;
 
         List<AttachmentDTOPublic> attachments = [];
         if (message.Attachments != null)
@@ -218,9 +228,10 @@ public class MessageService(EncryptedChatContext context, ICryptoService crypto)
                 string fileName;
                 try
                 {
-                    byte[] encryptedFileName = Convert.FromBase64String(attachment.EncryptedFileName);
-                    byte[] fileNameBytes = _crypto.DecryptBytes(encryptedFileName, attachment.FileNameIv, teamSecret);
-                    fileName = Encoding.UTF8.GetString(fileNameBytes);
+                    // TEMP-Task3: byte[] encryptedFileName = Convert.FromBase64String(attachment.EncryptedFileName);
+                    // TEMP-Task3: byte[] fileNameBytes = _crypto.DecryptBytes(encryptedFileName, attachment.FileNameIv, teamSecret);
+                    // TEMP-Task3: fileName = Encoding.UTF8.GetString(fileNameBytes);
+                    fileName = attachment.EncryptedFileName;
                 }
                 catch
                 {

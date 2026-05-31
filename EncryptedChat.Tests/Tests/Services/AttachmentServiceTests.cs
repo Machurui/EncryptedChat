@@ -53,7 +53,7 @@ public class AttachmentServiceTests : IDisposable
             NormalizedEmail = $"{id}@TEST.COM",
             UserName = $"{id}@test.com",
             NormalizedUserName = $"{id}@TEST.COM",
-            Secret = Guid.NewGuid().ToString("N")
+            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
@@ -67,7 +67,7 @@ public class AttachmentServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = name,
             Slug = name.ToLowerInvariant().Replace(" ", "-"),
-            Secret = Guid.NewGuid().ToString("N")
+            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
         team.Members.Add(new Member
         {
@@ -83,8 +83,11 @@ public class AttachmentServiceTests : IDisposable
 
     private async Task<Message> CreateMessage(User sender, Team team)
     {
-        (string encrypted, string iv) = _crypto.Encrypt("Test message", team.Secret);
-        string signature = _crypto.Sign("Test message", sender.Secret);
+        // TEMP-Task3: (string encrypted, string iv) = _crypto.Encrypt("Test message", team.Secret);
+        // TEMP-Task3: string signature = _crypto.Sign("Test message", sender.Secret);
+        string encrypted = "Test message";
+        string iv = string.Empty;
+        string signature = string.Empty;
 
         Message message = new()
         {

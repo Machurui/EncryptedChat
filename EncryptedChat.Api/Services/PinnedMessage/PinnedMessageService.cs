@@ -35,7 +35,8 @@ public class PinnedMessageService(
             .AsNoTracking()
             .ToListAsync();
 
-        return pins.Select(p => MapToDTO(p, team.Secret)).ToList();
+        // TEMP-Task3: return pins.Select(p => MapToDTO(p, team.Secret)).ToList();
+        return pins.Select(p => MapToDTO(p, string.Empty)).ToList();
     }
 
     public async Task<PinnedMessageDTO?> PinMessageAsync(Guid teamId, Guid messageId, string userId)
@@ -75,7 +76,8 @@ public class PinnedMessageService(
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
-        return created == null ? null : MapToDTO(created, team.Secret);
+        // TEMP-Task3: return created == null ? null : MapToDTO(created, team.Secret);
+        return created == null ? null : MapToDTO(created, string.Empty);
     }
 
     public async Task<bool> UnpinMessageAsync(Guid teamId, Guid messageId, string userId)
@@ -107,9 +109,11 @@ public class PinnedMessageService(
 
         try
         {
-            plaintext = _crypto.Decrypt(message.EncryptedText, message.Iv, teamSecret);
-            string senderSecret = message.Sender?.Secret ?? string.Empty;
-            signatureVerified = _crypto.Verify(plaintext, message.Signature, senderSecret);
+            // TEMP-Task3: plaintext = _crypto.Decrypt(message.EncryptedText, message.Iv, teamSecret);
+            // TEMP-Task3: string senderSecret = message.Sender?.Secret ?? string.Empty;
+            // TEMP-Task3: signatureVerified = _crypto.Verify(plaintext, message.Signature, senderSecret);
+            plaintext = message.EncryptedText;
+            signatureVerified = false;
         }
         catch (CryptographicException)
         {
@@ -126,9 +130,10 @@ public class PinnedMessageService(
             string fileName;
             try
             {
-                byte[] encryptedFileName = Convert.FromBase64String(attachment.EncryptedFileName);
-                byte[] fileNameBytes = _crypto.DecryptBytes(encryptedFileName, attachment.FileNameIv, teamSecret);
-                fileName = Encoding.UTF8.GetString(fileNameBytes);
+                // TEMP-Task3: byte[] encryptedFileName = Convert.FromBase64String(attachment.EncryptedFileName);
+                // TEMP-Task3: byte[] fileNameBytes = _crypto.DecryptBytes(encryptedFileName, attachment.FileNameIv, teamSecret);
+                // TEMP-Task3: fileName = Encoding.UTF8.GetString(fileNameBytes);
+                fileName = attachment.EncryptedFileName;
             }
             catch
             {

@@ -106,7 +106,8 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .AsNoTracking()
             .Include(m => m.Team)
             .Where(m => m.UserId == userId && m.Team != null)
-            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Team.Secret, m.Role })
+            // TEMP-Task3: .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Team.Secret, m.Role })
+            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, Secret = string.Empty, m.Role })
             .ToListAsync();
 
         var teamIds = userTeams.Select(t => t.Id).ToList();
@@ -146,7 +147,8 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
 
                 try
                 {
-                    string plaintext = _crypto.Decrypt(lastMsg.EncryptedText, lastMsg.Iv, userTeam.Secret);
+                    // TEMP-Task3: string plaintext = _crypto.Decrypt(lastMsg.EncryptedText, lastMsg.Iv, userTeam.Secret);
+                    string plaintext = lastMsg.EncryptedText;
                     string preview = plaintext.Replace("\n", " ").Trim();
                     if (preview.Length > 50) preview = preview[..50] + "...";
                     team.LastMessagePreview = preview;

@@ -40,8 +40,12 @@ public class AttachmentService(
         if (!await IsMemberAsync(message.Team.Id, userId))
             return (null, "Accès non autorisé", true);
 
-        (byte[] encryptedContent, string fileIv) = _crypto.EncryptBytes(content, message.Team.Secret);
-        (byte[] encryptedFileName, string fileNameIv) = _crypto.EncryptBytes(Encoding.UTF8.GetBytes(fileName), message.Team.Secret);
+        // TEMP-Task3: (byte[] encryptedContent, string fileIv) = _crypto.EncryptBytes(content, message.Team.Secret);
+        // TEMP-Task3: (byte[] encryptedFileName, string fileNameIv) = _crypto.EncryptBytes(Encoding.UTF8.GetBytes(fileName), message.Team.Secret);
+        byte[] encryptedContent = content;
+        string fileIv = string.Empty;
+        byte[] encryptedFileName = Encoding.UTF8.GetBytes(fileName);
+        string fileNameIv = string.Empty;
 
         string storagePath = await _storage.SaveAsync(encryptedContent, message.Team.Id);
 
@@ -54,7 +58,8 @@ public class AttachmentService(
             Size = content.Length,
             StoragePath = storagePath,
             FileIv = fileIv,
-            Signature = _crypto.SignBytes(content, message.Sender.Secret),
+            // TEMP-Task3: Signature = _crypto.SignBytes(content, message.Sender.Secret),
+            Signature = string.Empty,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -115,10 +120,12 @@ public class AttachmentService(
         if (attachment?.Message?.Team == null || !await IsMemberAsync(attachment.Message.Team.Id, userId))
             return null;
 
-        string teamSecret = attachment.Message.Team.Secret;
-        byte[] content = _crypto.DecryptBytes(await _storage.LoadAsync(attachment.StoragePath), attachment.FileIv, teamSecret);
-        string fileName = Encoding.UTF8.GetString(
-            _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
+        // TEMP-Task3: string teamSecret = attachment.Message.Team.Secret;
+        // TEMP-Task3: byte[] content = _crypto.DecryptBytes(await _storage.LoadAsync(attachment.StoragePath), attachment.FileIv, teamSecret);
+        // TEMP-Task3: string fileName = Encoding.UTF8.GetString(
+        // TEMP-Task3:     _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
+        byte[] content = await _storage.LoadAsync(attachment.StoragePath);
+        string fileName = attachment.EncryptedFileName;
 
         return (content, fileName, attachment.MimeType);
     }
@@ -189,9 +196,10 @@ public class AttachmentService(
 
         try
         {
-            string teamSecret = attachment.Message?.Team?.Secret ?? string.Empty;
-            fileName = Encoding.UTF8.GetString(
-                _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
+            // TEMP-Task3: string teamSecret = attachment.Message?.Team?.Secret ?? string.Empty;
+            // TEMP-Task3: fileName = Encoding.UTF8.GetString(
+            // TEMP-Task3:     _crypto.DecryptBytes(Convert.FromBase64String(attachment.EncryptedFileName), attachment.FileNameIv, teamSecret));
+            fileName = attachment.EncryptedFileName;
         }
         catch (CryptographicException) { fileName = "[Decryption failed]"; }
         catch (FormatException) { fileName = "[Invalid format]"; }

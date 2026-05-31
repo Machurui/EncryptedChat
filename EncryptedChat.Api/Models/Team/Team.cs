@@ -24,9 +24,7 @@ public class Team
     [MinLength(1)]
     public string Name { get; set; } = string.Empty;
 
-    [Required]
-    [MaxLength(250)]
-    public string Secret { get; set; } = string.Empty;
+    public int KeyGeneration { get; set; } = 1;
 
     [Required]
     [MaxLength(100)]

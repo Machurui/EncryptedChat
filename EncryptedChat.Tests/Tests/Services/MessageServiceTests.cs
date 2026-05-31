@@ -39,7 +39,7 @@ public class MessageServiceTests : IDisposable
             NormalizedEmail = $"{id}@TEST.COM",
             UserName = $"{id}@test.com",
             NormalizedUserName = $"{id}@TEST.COM",
-            Secret = Guid.NewGuid().ToString("N")
+            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
@@ -53,7 +53,7 @@ public class MessageServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Name = name,
             Slug = name.ToLowerInvariant().Replace(" ", "-"),
-            Secret = Guid.NewGuid().ToString("N")
+            // TEMP-Task3: Secret = Guid.NewGuid().ToString("N")
         };
         _context.Teams.Add(team);
         await _context.SaveChangesAsync();
@@ -77,8 +77,11 @@ public class MessageServiceTests : IDisposable
 
     private async Task<Message> CreateMessage(User sender, Team team, string text)
     {
-        (string encrypted, string iv) = _crypto.Encrypt(text, team.Secret);
-        string signature = _crypto.Sign(text, sender.Secret);
+        // TEMP-Task3: (string encrypted, string iv) = _crypto.Encrypt(text, team.Secret);
+        // TEMP-Task3: string signature = _crypto.Sign(text, sender.Secret);
+        string encrypted = text;
+        string iv = string.Empty;
+        string signature = string.Empty;
 
         Message message = new()
         {
@@ -235,8 +238,11 @@ public class MessageServiceTests : IDisposable
         Team team = await CreateTeam();
         await AddMember(user, team);
 
-        (string encrypted, string iv) = _crypto.Encrypt("Original", team.Secret);
-        string wrongSignature = _crypto.Sign("Different text", user.Secret);
+        // TEMP-Task3: (string encrypted, string iv) = _crypto.Encrypt("Original", team.Secret);
+        // TEMP-Task3: string wrongSignature = _crypto.Sign("Different text", user.Secret);
+        string encrypted = "Original";
+        string iv = string.Empty;
+        string wrongSignature = string.Empty;
 
         Message message = new()
         {
@@ -598,7 +604,8 @@ public class MessageServiceTests : IDisposable
         await AddMember(user, team);
 
         (string encrypted, string iv) = _crypto.Encrypt("Secret message", "old-secret-that-no-longer-exists");
-        string signature = _crypto.Sign("Secret message", user.Secret);
+        // TEMP-Task3: string signature = _crypto.Sign("Secret message", user.Secret);
+        string signature = string.Empty;
 
         Message message = new()
         {

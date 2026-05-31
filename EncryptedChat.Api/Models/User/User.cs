@@ -15,9 +15,6 @@ public class User : IdentityUser
     [Required]
     public int Level { get; set; } = 0;
 
-    [Required]
-    public string Secret { get; set; } = string.Empty;
-
     [MaxLength(50)]
     public string NameColor { get; set; } = "#FFFFFF";
 
@@ -46,6 +43,15 @@ public class User : IdentityUser
 
     [MaxLength(64)]
     public string? RecoveryPhraseSalt { get; set; }
+
+    public string? SigningPublicKey { get; set; }
+
+    public string? EncryptionPublicKey { get; set; }
+
+    public string? EncryptedKeyBundle { get; set; }
+
+    [MaxLength(64)]
+    public string? KeyBundleSalt { get; set; }
 
     public DateTime? RecoveryPhraseLastViewed { get; set; }
 

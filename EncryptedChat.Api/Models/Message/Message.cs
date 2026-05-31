@@ -16,7 +16,7 @@ public class Message
     public string Iv { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(64)]
+    [MaxLength(128)]
     public string Signature { get; set; } = string.Empty;
 
     [Required]
@@ -29,4 +29,6 @@ public class Message
     public DateTime Date { get; set; } = DateTime.UtcNow;
 
     public ICollection<Attachment> Attachments { get; set; } = [];
+
+    public int KeyGeneration { get; set; } = 1;
 }

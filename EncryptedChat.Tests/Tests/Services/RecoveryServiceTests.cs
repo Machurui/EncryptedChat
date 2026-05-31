@@ -160,7 +160,7 @@ public sealed class RecoveryServiceTests : IDisposable
             Name = id,
             Handle = id.Replace("-", "_"),
             Level = 1,
-            Secret = "s"
+            // TEMP-Task3: Secret = "s"
         };
         await _userManager.CreateAsync(user);
     }
