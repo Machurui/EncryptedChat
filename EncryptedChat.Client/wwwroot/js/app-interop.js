@@ -159,3 +159,12 @@ window.setupMessagesScrollListener = (elementId, dotNetRef, loadOlderMethod, jum
     // Safety timeout (10s) — give up if container never appears
     setTimeout(() => observer.disconnect(), 10000);
 };
+
+// Live preview of the bubble color during a native <input type="color"> drag.
+// We bypass Blazor entirely and write the CSS variable straight onto the
+// messages-container element so the bubbles re-paint at native browser speed
+// without triggering a Blazor re-render of the (very large) Chat.razor.
+window.setBubbleColorPreview = (color) => {
+    const el = document.getElementById('messages-container');
+    if (el) el.style.setProperty('--own-bubble', color);
+};

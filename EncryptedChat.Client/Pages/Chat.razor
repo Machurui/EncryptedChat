@@ -507,7 +507,7 @@
                                             <div class="chat-bubble-picker-sub">Only you see it</div>
 
                                             <label class="chat-bubble-preview" style="--bc: @myBc;">
-                                                <input type="color" class="chat-bubble-native-input" value="@SafeBubbleHex(myBc)" @onchange="HandleMyBubbleColorChange" />
+                                                <input type="color" class="chat-bubble-native-input" value="@SafeBubbleHex(myBc)" @oninput="HandleMyBubbleColorInput" @onchange="HandleMyBubbleColorChange" />
                                                 <span class="chat-bubble-glow"></span>
                                                 <div class="chat-bubble-preview-row">
                                                     <div class="chat-bubble-preview-sample" style="@mySampleStyle">
@@ -5874,8 +5874,18 @@ private async Task SelectStatus(string status)
 
     private void ToggleBubbleColorPicker() => showBubbleColorPicker = !showBubbleColorPicker;
 
-    private CancellationTokenSource? _bubbleColorSaveCts;
+    // Live preview during the native <input type="color"> drag. Updates the
+    // CSS variable directly via JS so the bubbles re-paint at native browser
+    // speed without re-rendering Blazor's 5000-line Chat.razor on every tick.
+    private async Task HandleMyBubbleColorInput(ChangeEventArgs e)
+    {
+        string? color = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(color)) return;
+        try { await JS.InvokeVoidAsync("setBubbleColorPreview", color); }
+        catch { /* container not mounted */ }
+    }
 
+    // Final color (picker closed). Commit to the Blazor state + persist server-side.
     private async Task HandleMyBubbleColorChange(ChangeEventArgs e)
     {
         if (!selectedTeamId.HasValue) return;
@@ -5883,27 +5893,12 @@ private async Task SelectStatus(string status)
         if (string.IsNullOrWhiteSpace(color)) return;
 
         Guid teamId = selectedTeamId.Value;
-
-        // Optimistic local update so the bubble re-paints immediately. The
-        // server save runs in the background; if it fails we just keep the
-        // local color and let the next page-load reconcile.
         userBubbleColors[teamId] = color;
 
-        // Debounce the network save — some browsers (notably Safari) fire
-        // onchange multiple times while the picker is open, which would
-        // otherwise spam the server and queue up roundtrips that lag the UI.
-        _bubbleColorSaveCts?.Cancel();
-        _bubbleColorSaveCts = new CancellationTokenSource();
-        var ct = _bubbleColorSaveCts.Token;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(250, ct);
-                await BubbleColorClient.SetBubbleColorAsync(teamId, color);
-            }
-            catch (TaskCanceledException) { /* superseded by a newer pick */ }
-        });
+        // The JS preview already painted this color; the Blazor re-render
+        // here only re-emits the same inline style. Fire-and-forget the
+        // server save so the picker doesn't wait for the roundtrip.
+        _ = BubbleColorClient.SetBubbleColorAsync(teamId, color);
     }
 
     private async Task ResetMyBubbleColor()
