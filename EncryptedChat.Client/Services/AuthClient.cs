@@ -234,4 +234,20 @@ public class AuthClient
         }
         catch { return null; }
     }
+
+    // ---------- E2E identity-key endpoints (real bodies land in Task 10) ----------
+
+    public record EncryptionKeysResponse(
+        string? SigningPublicKey,
+        string? EncryptionPublicKey,
+        string? EncryptedKeyBundle,
+        string? KeyBundleSalt);
+
+    public Task<EncryptionKeysResponse?> GetMyEncryptionKeysAsync()
+        => throw new NotImplementedException("Wired in Task 10");
+
+    public Task<bool> SetEncryptionKeysAsync(
+        string signingPublicKey, string encryptionPublicKey,
+        string encryptedKeyBundle, string keyBundleSalt)
+        => throw new NotImplementedException("Wired in Task 10");
 }

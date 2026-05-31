@@ -45,6 +45,12 @@ builder.Services.AddScoped<GifClient>();
 builder.Services.AddScoped<RecentGifsService>();
 builder.Services.AddScoped<RecentNameColorsService>();
 
+// E2E crypto foundation
+builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.CryptoService>();
+builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.KeyVaultService>();
+builder.Services.AddSingleton<EncryptedChat.Client.Services.Crypto.TeamKeyCacheService>();
+builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.BootstrapKeyService>();
+
 // Flowbite Import
 builder.Services.AddScoped<IFlowbiteService, FlowbiteService>();
 
