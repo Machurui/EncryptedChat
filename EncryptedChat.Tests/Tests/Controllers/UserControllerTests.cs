@@ -40,7 +40,8 @@ public class UserControllerTests
             .Setup(s => s.IsOnline(It.IsAny<string>()))
             .Returns(false);
 
-        UserController controller = new(mockService.Object, mockFriendService.Object, mockHubContext.Object, mockPresenceService.Object, mockEnv.Object);
+        Mock<IUserKeysService> mockUserKeys = new();
+        UserController controller = new(mockService.Object, mockFriendService.Object, mockHubContext.Object, mockPresenceService.Object, mockEnv.Object, mockUserKeys.Object);
 
         List<Claim> claims = [];
         if (userId != null)

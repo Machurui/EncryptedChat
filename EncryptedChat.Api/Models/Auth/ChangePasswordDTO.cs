@@ -37,3 +37,17 @@ public record RecoverRequestDTO(
     [Required, MinLength(14), MaxLength(128)] string NewPassword);
 
 public record RecoverResultDTO(string Message, IReadOnlyList<string> NewRecoveryWords);
+
+public record EncryptionKeysDTO(
+    string? SigningPublicKey,
+    string? EncryptionPublicKey,
+    string? EncryptedKeyBundle,
+    string? KeyBundleSalt);
+
+public record SetEncryptionKeysDTO(
+    [Required] string SigningPublicKey,
+    [Required] string EncryptionPublicKey,
+    [Required] string EncryptedKeyBundle,
+    [Required, MaxLength(64)] string KeyBundleSalt);
+
+public record PublicKeysDTO(string SigningPublicKey, string EncryptionPublicKey);

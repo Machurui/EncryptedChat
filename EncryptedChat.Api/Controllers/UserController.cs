@@ -16,13 +16,15 @@ public class UserController(
     IFriendService friendService,
     IHubContext<ChatHub> hubContext,
     IPresenceService presenceService,
-    IWebHostEnvironment env) : ControllerBase
+    IWebHostEnvironment env,
+    IUserKeysService userKeys) : ControllerBase
 {
     private readonly IUserService _service = userService;
     private readonly IFriendService _friendService = friendService;
     private readonly IHubContext<ChatHub> _hubContext = hubContext;
     private readonly IPresenceService _presenceService = presenceService;
     private readonly IWebHostEnvironment _env = env;
+    private readonly IUserKeysService _userKeys = userKeys;
 
     private string? GetCurrentUserId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -273,5 +275,32 @@ public class UserController(
             UserOperationStatus.ValidationFailed => BadRequest(new { Message = "Cannot delete this user" }),
             _ => BadRequest()
         };
+    }
+
+    [HttpGet("me/encryption-keys")]
+    public async Task<IActionResult> GetMyEncryptionKeys()
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+        EncryptionKeysDTO? keys = await _userKeys.GetMyKeysAsync(userId);
+        return keys == null ? NotFound() : Ok(keys);
+    }
+
+    [HttpPut("me/encryption-keys")]
+    public async Task<IActionResult> SetMyEncryptionKeys([FromBody] SetEncryptionKeysDTO dto)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+        bool ok = await _userKeys.SetMyKeysAsync(userId, dto);
+        return ok ? NoContent() : BadRequest(new { Message = "Failed to save encryption keys" });
+    }
+
+    [HttpGet("{userId}/public-keys")]
+    public async Task<IActionResult> GetPublicKeys(string userId)
+    {
+        PublicKeysDTO? keys = await _userKeys.GetPublicKeysAsync(userId);
+        return keys == null ? NotFound() : Ok(keys);
     }
 }
