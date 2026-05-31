@@ -85,8 +85,29 @@ public class AuthService(
         // Issue an access token immediately so the client can call
         // PUT /api/User/me/encryption-keys to upload the freshly-generated
         // identity key bundle without forcing the user to log in twice.
+        // Also create the matching Session + RefreshToken — per-request session
+        // validation (Program.cs OnTokenValidated → IsSessionValidAsync) would
+        // otherwise reject this fresh JWT for lack of a Session row.
         IList<string> roles = await _userManager.GetRolesAsync(user);
         JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
+
+        RefreshToken refreshTokenEntity = new()
+        {
+            Id = Guid.NewGuid(),
+            Token = HashRefreshToken(tokenPair.RefreshToken),
+            UserId = user.Id,
+            ExpiresAt = tokenPair.RefreshTokenExpiresUtc,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.RefreshTokens.Add(refreshTokenEntity);
+        await _sessionService.CreateSessionAsync(
+            user.Id,
+            tokenPair.AccessToken,
+            deviceInfo: "Signup",
+            deviceKind: "web",
+            ipAddress: null,
+            refreshTokenId: refreshTokenEntity.Id);
+        await _context.SaveChangesAsync();
 
         return (result, phrase?.Words, tokenPair.AccessToken);
     }
@@ -373,8 +394,28 @@ public class AuthService(
         // Issue a new access token so the client can immediately PUT the
         // re-wrapped key bundle (paired with the new recovery phrase) to
         // /api/User/me/encryption-keys without forcing a separate login.
+        // Same session caveat as Register: create a Session + RefreshToken so
+        // the per-request session validator accepts the fresh JWT.
         IList<string> roles = await _userManager.GetRolesAsync(user);
         JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
+
+        RefreshToken newRefreshToken = new()
+        {
+            Id = Guid.NewGuid(),
+            Token = HashRefreshToken(tokenPair.RefreshToken),
+            UserId = user.Id,
+            ExpiresAt = tokenPair.RefreshTokenExpiresUtc,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.RefreshTokens.Add(newRefreshToken);
+        await _sessionService.CreateSessionAsync(
+            user.Id,
+            tokenPair.AccessToken,
+            deviceInfo: "Recovery",
+            deviceKind: "web",
+            ipAddress: null,
+            refreshTokenId: newRefreshToken.Id);
+        await _context.SaveChangesAsync();
 
         return (true, "Account recovered. Save your new recovery phrase.", newPhrase?.Words, tokenPair.AccessToken);
     }
