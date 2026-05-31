@@ -34,9 +34,9 @@ public class AuthControllerTests
 
         mockAuthService
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync((IdentityResult.Success, (IReadOnlyList<string>?)new[] { "abandon" }));
+            .ReturnsAsync((IdentityResult.Success, (IReadOnlyList<string>?)new[] { "abandon" }, (string?)"test-jwt-token"));
 
-        AuthController controller = new(mockAuthService.Object);
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
 
         IActionResult result = await controller.Register(registerDto);
 
@@ -56,9 +56,9 @@ public class AuthControllerTests
 
         mockAuthService
             .Setup(s => s.RegisterAsync(It.IsAny<RegisterDTO>()))
-            .ReturnsAsync((IdentityResult.Failed(new IdentityError { Description = "Invalid data" }), (IReadOnlyList<string>?)null));
+            .ReturnsAsync((IdentityResult.Failed(new IdentityError { Description = "Invalid data" }), (IReadOnlyList<string>?)null, (string?)null));
 
-        AuthController controller = new(mockAuthService.Object);
+        AuthController controller = CreateControllerWithHttpContext(mockAuthService);
 
         IActionResult result = await controller.Register(registerDto);
 

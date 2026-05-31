@@ -29,14 +29,14 @@ public class RecoveryPhraseRequestDTO
     public string Password { get; set; } = string.Empty;
 }
 
-public record RegisterResultDTO(string Message, IReadOnlyList<string> RecoveryWords);
+public record RegisterResultDTO(string Message, IReadOnlyList<string> RecoveryWords, string AccessToken);
 
 public record RecoverRequestDTO(
     [Required, EmailAddress, MaxLength(254)] string Email,
     [Required, MinLength(12), MaxLength(12)] List<string> Words,
     [Required, MinLength(14), MaxLength(128)] string NewPassword);
 
-public record RecoverResultDTO(string Message, IReadOnlyList<string> NewRecoveryWords);
+public record RecoverResultDTO(string Message, IReadOnlyList<string> NewRecoveryWords, string AccessToken);
 
 public record EncryptionKeysDTO(
     string? SigningPublicKey,

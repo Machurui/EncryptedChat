@@ -174,7 +174,7 @@ public sealed class AuthServiceTests : IDisposable
     {
         await _roleManager.CreateAsync(new IdentityRole("User"));
 
-        var (result, recoveryWords) = await _service.RegisterAsync(new RegisterDTO
+        var (result, recoveryWords, _) = await _service.RegisterAsync(new RegisterDTO
         {
             Email = "newuser@test.com",
             Password = "P@ssw0rd123",
@@ -205,7 +205,7 @@ public sealed class AuthServiceTests : IDisposable
         };
         await _userManager.CreateAsync(existing);
 
-        var (result, recoveryWords) = await _service.RegisterAsync(new RegisterDTO
+        var (result, recoveryWords, _) = await _service.RegisterAsync(new RegisterDTO
         {
             Email = "other@test.com",
             Password = "P@ssw0rd123",
@@ -233,7 +233,7 @@ public sealed class AuthServiceTests : IDisposable
         };
         await _userManager.CreateAsync(existing);
 
-        var (result, recoveryWords) = await _service.RegisterAsync(new RegisterDTO
+        var (result, recoveryWords, _) = await _service.RegisterAsync(new RegisterDTO
         {
             Email = "dup@test.com",
             Password = "P@ssw0rd123",
@@ -257,7 +257,7 @@ public sealed class AuthServiceTests : IDisposable
 
         var service = BuildAuthService(realRecovery);
 
-        var (success, _, newWords) = await service.RecoverAsync(
+        var (success, _, newWords, _) = await service.RecoverAsync(
             "alice@test.com",
             phrase!.Words.ToList(),
             "NewP@ssw0rd!");
@@ -279,7 +279,7 @@ public sealed class AuthServiceTests : IDisposable
         var realRecovery = new RecoveryService(_context, _userManager);
         var service = BuildAuthService(realRecovery);
 
-        var (success, message, newWords) = await service.RecoverAsync(
+        var (success, message, newWords, _) = await service.RecoverAsync(
             "nobody@test.com",
             Bip39Words.All.Take(12).ToList(),
             "NewP@ssw0rd!");
@@ -302,7 +302,7 @@ public sealed class AuthServiceTests : IDisposable
         var service = BuildAuthService(realRecovery);
 
         var wrong = Enumerable.Range(0, 12).Select(_ => "abandon").ToList();
-        var (success, message, _) = await service.RecoverAsync(
+        var (success, message, _, _) = await service.RecoverAsync(
             "bob@test.com", wrong, "NewP@ssw0rd!");
 
         success.Should().BeFalse();
@@ -321,7 +321,7 @@ public sealed class AuthServiceTests : IDisposable
 
         var service = BuildAuthService(realRecovery);
 
-        var (success, message, _) = await service.RecoverAsync(
+        var (success, message, _, _) = await service.RecoverAsync(
             "carol@test.com",
             phrase!.Words.ToList(),
             "weak"); // fails Identity's default policy
@@ -371,7 +371,7 @@ public sealed class AuthServiceTests : IDisposable
 
         var service = BuildAuthService(realRecovery);
 
-        var (success, message, _) = await service.RecoverAsync(
+        var (success, message, _, _) = await service.RecoverAsync(
             "eve@test.com", phrase!.Words.ToList(), "SameP@ss1!");
 
         success.Should().BeFalse();

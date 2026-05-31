@@ -18,12 +18,20 @@ public class AuthController(IAuthService authService) : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDTO model)
     {
-        var (result, recoveryWords) = await _auth.RegisterAsync(model);
+        var (result, recoveryWords, accessToken) = await _auth.RegisterAsync(model);
 
         if (result.Succeeded)
+        {
+            // Set the http-only access cookie too, so subsequent calls from
+            // the same browser are auto-authed (matches the Login flow).
+            if (!string.IsNullOrEmpty(accessToken))
+                SetAccessTokenCookie(accessToken, DateTime.UtcNow.AddMinutes(15));
+
             return Ok(new RegisterResultDTO(
                 "User created successfully",
-                recoveryWords ?? Array.Empty<string>()));
+                recoveryWords ?? Array.Empty<string>(),
+                accessToken ?? string.Empty));
+        }
 
         List<string> errors = result.Errors.Select(e => e.Description).ToList();
         return BadRequest(new { Message = errors });
@@ -185,12 +193,17 @@ public class AuthController(IAuthService authService) : ControllerBase
     [EnableRateLimiting("AccountRecover")]
     public async Task<IActionResult> Recover([FromBody] RecoverRequestDTO dto)
     {
-        var (success, message, newWords) = await _auth.RecoverAsync(dto.Email, dto.Words, dto.NewPassword);
+        var (success, message, newWords, accessToken) = await _auth.RecoverAsync(dto.Email, dto.Words, dto.NewPassword);
 
         if (!success)
             return BadRequest(new { Message = message });
 
-        return Ok(new RecoverResultDTO(message, newWords ?? Array.Empty<string>()));
+        // Set the http-only access cookie so subsequent calls from the same
+        // browser are auto-authed for the inline key-rewrap step.
+        if (!string.IsNullOrEmpty(accessToken))
+            SetAccessTokenCookie(accessToken, DateTime.UtcNow.AddMinutes(15));
+
+        return Ok(new RecoverResultDTO(message, newWords ?? Array.Empty<string>(), accessToken ?? string.Empty));
     }
 
     private void SetAccessTokenCookie(string token, DateTime expiresUtc)

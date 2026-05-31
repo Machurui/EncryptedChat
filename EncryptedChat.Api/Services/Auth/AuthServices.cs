@@ -29,7 +29,7 @@ public class AuthService(
     private readonly IRecoveryService _recoveryService = recoveryService;
     private readonly IPasswordHistoryService _passwordHistory = passwordHistory;
 
-    public async Task<(IdentityResult Result, IReadOnlyList<string>? RecoveryWords)> RegisterAsync(RegisterDTO model)
+    public async Task<(IdentityResult Result, IReadOnlyList<string>? RecoveryWords, string? AccessToken)> RegisterAsync(RegisterDTO model)
     {
         User? existingByEmail = await _userManager.FindByEmailAsync(model.Email);
         if (existingByEmail != null)
@@ -37,7 +37,7 @@ public class AuthService(
             {
                 Code = "DuplicateEmail",
                 Description = "Email already in use"
-            }), null);
+            }), null, null);
 
         string handle = (model.Handle ?? string.Empty).Trim().ToLowerInvariant();
 
@@ -47,7 +47,7 @@ public class AuthService(
             {
                 Code = "DuplicateHandle",
                 Description = "Handle already in use"
-            }), null);
+            }), null, null);
 
         User user = new()
         {
@@ -60,7 +60,7 @@ public class AuthService(
 
         IdentityResult result = await _userManager.CreateAsync(user, model.Password);
         if (!result.Succeeded)
-            return (result, null);
+            return (result, null, null);
 
         bool roleExists = await _roleManager.RoleExistsAsync(DefaultUserRole);
         if (!roleExists)
@@ -70,18 +70,25 @@ public class AuthService(
             {
                 Code = "RoleMissing",
                 Description = $"Required role '{DefaultUserRole}' is not configured."
-            }), null);
+            }), null, null);
         }
 
         IdentityResult roleResult = await _userManager.AddToRoleAsync(user, DefaultUserRole);
         if (!roleResult.Succeeded)
         {
             await _userManager.DeleteAsync(user);
-            return (roleResult, null);
+            return (roleResult, null, null);
         }
 
         RecoveryPhraseDTO? phrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
-        return (result, phrase?.Words);
+
+        // Issue an access token immediately so the client can call
+        // PUT /api/User/me/encryption-keys to upload the freshly-generated
+        // identity key bundle without forcing the user to log in twice.
+        IList<string> roles = await _userManager.GetRolesAsync(user);
+        JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
+
+        return (result, phrase?.Words, tokenPair.AccessToken);
     }
 
     public async Task<LoginResult> LoginAsync(LoginDTO model, string? deviceInfo = null, string? deviceKind = null, string? ipAddress = null)
@@ -297,30 +304,30 @@ public class AuthService(
         return user?.PasswordChangedAt;
     }
 
-    public async Task<(bool Success, string Message, IReadOnlyList<string>? NewWords)> RecoverAsync(
+    public async Task<(bool Success, string Message, IReadOnlyList<string>? NewWords, string? AccessToken)> RecoverAsync(
         string email, List<string> words, string newPassword)
     {
         const string GenericFailure = "Invalid email or recovery phrase";
 
         if (string.IsNullOrWhiteSpace(email) || words == null || string.IsNullOrWhiteSpace(newPassword))
-            return (false, GenericFailure, null);
+            return (false, GenericFailure, null, null);
 
         User? user = await _userManager.FindByEmailAsync(email);
         if (user == null)
         {
             _recoveryService.PerformDummyVerify();  // equalize timing to mask account enumeration
-            return (false, GenericFailure, null);
+            return (false, GenericFailure, null, null);
         }
 
         bool valid = await _recoveryService.VerifyRecoveryPhraseAsync(user.Id, words);
         if (!valid)
-            return (false, GenericFailure, null);
+            return (false, GenericFailure, null, null);
 
         // Block reuse of the current password or either of the two most recent
         // previous ones — before touching anything else, so a rejected reuse
         // leaves the account fully intact.
         if (await _passwordHistory.IsReusedAsync(user, newPassword))
-            return (false, ReuseRejection, null);
+            return (false, ReuseRejection, null, null);
 
         // Capture the current hash so we can append it to history once the
         // reset succeeds (becomes the "previous" entry for the next change).
@@ -339,7 +346,7 @@ public class AuthService(
             // generic "email or phrase" failure, which intentionally hides which
             // half mismatched to block account enumeration.
             string detail = string.Join(" ", resetResult.Errors.Select(e => e.Description));
-            return (false, string.IsNullOrWhiteSpace(detail) ? "Invalid new password" : detail, null);
+            return (false, string.IsNullOrWhiteSpace(detail) ? "Invalid new password" : detail, null, null);
         }
 
         if (!string.IsNullOrEmpty(previousHash))
@@ -363,7 +370,13 @@ public class AuthService(
             rt.RevokedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        return (true, "Account recovered. Save your new recovery phrase.", newPhrase?.Words);
+        // Issue a new access token so the client can immediately PUT the
+        // re-wrapped key bundle (paired with the new recovery phrase) to
+        // /api/User/me/encryption-keys without forcing a separate login.
+        IList<string> roles = await _userManager.GetRolesAsync(user);
+        JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
+
+        return (true, "Account recovered. Save your new recovery phrase.", newPhrase?.Words, tokenPair.AccessToken);
     }
 
     private static string HashRefreshToken(string refreshToken)
