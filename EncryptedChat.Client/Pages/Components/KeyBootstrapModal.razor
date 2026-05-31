@@ -5,7 +5,8 @@
 @if (IsOpen)
 {
     <div class="modal-overlay" @onclick="OnClose"></div>
-    <GlassPanel Class="modal-card" Style="max-width: 440px;" @onclick:stopPropagation="true">
+    <div @onclick:stopPropagation="true">
+    <GlassPanel Class="modal-card" Style="max-width: 440px;">
         <div style="padding: 22px;">
             <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: white;">
                 Unlock your messages
@@ -34,6 +35,7 @@
             </div>
         </div>
     </GlassPanel>
+    </div>
 }
 
 @code {
