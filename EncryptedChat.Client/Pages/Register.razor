@@ -241,7 +241,20 @@
                 }
 
                 string phrase = string.Join(' ', result.Value.RecoveryWords);
-                bool keyOk = await BootstrapKeys.SignupBootstrapAsync(userId, phrase);
+                bool keyOk = false;
+                try
+                {
+                    keyOk = await BootstrapKeys.SignupBootstrapAsync(userId, phrase);
+                }
+                catch (Exception bex)
+                {
+                    // Most common in-browser failure mode: IndexedDB blocked
+                    // (private/incognito with strict storage rules) or WebCrypto
+                    // unavailable. Surface a clear hint instead of throwing
+                    // silently and resetting the form.
+                    errorMessage = $"Encryption setup failed: {bex.Message}. Make sure storage isn't blocked (private mode can disable IndexedDB). Try again in a normal window or another browser.";
+                    return;
+                }
                 if (!keyOk)
                 {
                     errorMessage = "Signup succeeded but encryption-key upload failed. Log in to retry.";
@@ -259,6 +272,13 @@
             }
 
             errorMessage = result.ErrorMessage ?? "Registration failed. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            // Network failure, DTO parse failure, or any other unhandled
+            // exception — surface it instead of letting Blazor swallow it
+            // and silently re-render the form with reset inputs.
+            errorMessage = $"Unexpected error: {ex.Message}";
         }
         finally
         {
