@@ -1,10 +1,7 @@
 @page "/login"
 @layout EmptyLayout
 @inject EncryptedChat.Client.Services.AuthClient Auth
-@inject EncryptedChat.Client.Services.UserClient UserClient
-@inject EncryptedChat.Client.Services.Crypto.KeyVaultService Vault
 @inject NavigationManager Nav
-@using EncryptedChat.Client.Pages.Components
 
 @using System.ComponentModel.DataAnnotations
 @using EncryptedChat.Client.Pages.Components
@@ -117,12 +114,6 @@
     </GlassPanel>
 
     <RestoreModal IsOpen="@showRestore" OnClose="() => showRestore = false" />
-
-    <KeyBootstrapModal
-        IsOpen="@showKeyBootstrap"
-        UserId="@pendingUserId"
-        OnSuccess="OnKeyBootstrapSuccess"
-        OnClose="() => showKeyBootstrap = false" />
 </div>
 
 <style>
@@ -145,9 +136,6 @@
     private bool isLoading;
     private bool showRestore;
 
-    private bool showKeyBootstrap;
-    private string pendingUserId = "";
-
     private async Task HandleLogin()
     {
         isLoading = true;
@@ -163,40 +151,12 @@
                 return;
             }
 
-            // Auth succeeded. Try to do the E2E bootstrap check, but never let
-            // a failure in that path block the user from reaching the chat —
-            // they're authenticated, they should at least see the UI. The
-            // chat page (or the KeyBootstrapModal triggered there on demand)
-            // can re-handle missing keys.
-            try
-            {
-                var profile = await UserClient.GetProfileAsync();
-                if (!profile.Success || profile.Value == null)
-                {
-                    Nav.NavigateTo("/chat", forceLoad: true);
-                    return;
-                }
-
-                string userId = profile.Value.Id;
-                bool bootstrapped = await Vault.IsBootstrappedAsync(userId);
-                if (bootstrapped)
-                {
-                    Nav.NavigateTo("/chat", forceLoad: true);
-                    return;
-                }
-
-                pendingUserId = userId;
-                showKeyBootstrap = true;
-            }
-            catch (Exception bex)
-            {
-                // IndexedDB blocked, JSInterop helper not loaded, network
-                // hiccup on profile fetch — none of these should leave the
-                // user stuck on the login screen with no feedback. Navigate
-                // to /chat and let the chat page surface the issue.
-                Console.WriteLine($"[Login] post-auth bootstrap check failed: {bex.Message}");
-                Nav.NavigateTo("/chat", forceLoad: true);
-            }
+            // Auth succeeded — go to /chat unconditionally. The key-bootstrap
+            // check (IndexedDB lookup + KeyBootstrapModal) used to run here
+            // but any failure in that path silently left the user stuck on
+            // the login screen. Moved to /chat's init so login itself never
+            // gates on the crypto layer.
+            Nav.NavigateTo("/chat", forceLoad: true);
         }
         catch (Exception ex)
         {
@@ -208,11 +168,6 @@
         }
     }
 
-    private void OnKeyBootstrapSuccess()
-    {
-        showKeyBootstrap = false;
-        Nav.NavigateTo("/chat", forceLoad: true);
-    }
 
     public class LoginModel
     {

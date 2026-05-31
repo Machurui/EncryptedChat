@@ -23,6 +23,7 @@
 @inject RecentGifsService RecentGifs
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject EncryptedChat.Client.Services.Crypto.KeyVaultService KeyVault
 
 @implements IAsyncDisposable
 
@@ -1215,6 +1216,12 @@
     OnClose="() => showProfileModal = false"
     OnSave="HandleProfileSave"
     OnLogout="Logout" />
+
+<KeyBootstrapModal
+    IsOpen="@showKeyBootstrap"
+    UserId="@(_userId ?? "")"
+    OnSuccess="() => showKeyBootstrap = false"
+    OnClose="() => showKeyBootstrap = false" />
 
 @* ── Status Menu (same level as modals for consistent styling) ── *@
 @if (showStatusMenu)
@@ -3488,6 +3495,7 @@
     private const string ApiBaseUrl = "https://localhost:7294";
 
     private string? _userId;
+    private bool showKeyBootstrap;
     private string? currentUserName;
     private string? currentUserHandle;
     private string? currentUserEmail;
@@ -3789,6 +3797,23 @@
         _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
         currentUserName = user.FindFirst(c => c.Type == ClaimTypes.Name)?.Value ?? "User";
         currentUserEmail = user.FindFirst(c => c.Type == ClaimTypes.Email)?.Value;
+
+        // E2E: if the identity keys aren't on this device yet (fresh browser,
+        // new device, post-migration legacy user), pop the bootstrap modal.
+        // Wrapped in try so a JS/storage failure doesn't block the whole
+        // chat init — the user can still see the UI; decryption will just
+        // fail per-message until they bootstrap.
+        try
+        {
+            if (!string.IsNullOrEmpty(_userId) && !await KeyVault.IsBootstrappedAsync(_userId))
+            {
+                showKeyBootstrap = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Chat] key-bootstrap check failed: {ex.Message}");
+        }
 
         await LoadUserStatus();
         await LoadTeams();
