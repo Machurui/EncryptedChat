@@ -242,4 +242,14 @@ public class UserClient
             return null;
         }
     }
+
+    public record PublicKeysResponse(string SigningPublicKey, string EncryptionPublicKey);
+
+    public async Task<PublicKeysResponse?> GetPublicKeysAsync(string userId)
+    {
+        var res = await _http.GetAsync($"api/User/{Uri.EscapeDataString(userId)}/public-keys");
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<PublicKeysResponse>();
+    }
 }

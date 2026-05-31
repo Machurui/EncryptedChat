@@ -41,8 +41,8 @@ public class AuthClient
     }
 
     // Result payloads for recovery-phrase flows
-    public record RegisterResult(string Message, IReadOnlyList<string> RecoveryWords);
-    public record RecoverResult(string Message, IReadOnlyList<string> NewRecoveryWords);
+    public record RegisterResult(string Message, IReadOnlyList<string> RecoveryWords, string AccessToken);
+    public record RecoverResult(string Message, IReadOnlyList<string> NewRecoveryWords, string AccessToken);
 
     // ---------- Auth ----------
     public async Task<Result> LoginAsync(string email, string password)
@@ -113,7 +113,11 @@ public class AuthClient
                 }
             }
 
-            return Result<RegisterResult>.Ok(new RegisterResult(message, words));
+            string accessToken = root.TryGetProperty("accessToken", out var t) && t.ValueKind == JsonValueKind.String
+                ? t.GetString() ?? ""
+                : "";
+
+            return Result<RegisterResult>.Ok(new RegisterResult(message, words, accessToken));
         }
         catch
         {
@@ -193,7 +197,11 @@ public class AuthClient
                         }
                     }
 
-                    return Result<RecoverResult>.Ok(new RecoverResult(message, newWords));
+                    string accessToken = root.TryGetProperty("accessToken", out var t) && t.ValueKind == JsonValueKind.String
+                        ? t.GetString() ?? ""
+                        : "";
+
+                    return Result<RecoverResult>.Ok(new RecoverResult(message, newWords, accessToken));
                 }
                 catch
                 {
@@ -243,11 +251,25 @@ public class AuthClient
         string? EncryptedKeyBundle,
         string? KeyBundleSalt);
 
-    public Task<EncryptionKeysResponse?> GetMyEncryptionKeysAsync()
-        => throw new NotImplementedException("Wired in Task 10");
+    public async Task<EncryptionKeysResponse?> GetMyEncryptionKeysAsync()
+    {
+        var res = await _http.GetAsync("api/User/me/encryption-keys");
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<EncryptionKeysResponse>();
+    }
 
-    public Task<bool> SetEncryptionKeysAsync(
+    public async Task<bool> SetEncryptionKeysAsync(
         string signingPublicKey, string encryptionPublicKey,
         string encryptedKeyBundle, string keyBundleSalt)
-        => throw new NotImplementedException("Wired in Task 10");
+    {
+        var res = await _http.PutAsJsonAsync("api/User/me/encryption-keys", new
+        {
+            SigningPublicKey = signingPublicKey,
+            EncryptionPublicKey = encryptionPublicKey,
+            EncryptedKeyBundle = encryptedKeyBundle,
+            KeyBundleSalt = keyBundleSalt
+        });
+        return res.IsSuccessStatusCode;
+    }
 }
