@@ -163,29 +163,44 @@
                 return;
             }
 
-            // Check if E2E keys are bootstrapped on this device. If not, pop the
-            // modal to prompt for the recovery phrase before letting the user
-            // hit /chat (where everything is encrypted).
-            var profile = await UserClient.GetProfileAsync();
-            if (!profile.Success || profile.Value == null)
+            // Auth succeeded. Try to do the E2E bootstrap check, but never let
+            // a failure in that path block the user from reaching the chat —
+            // they're authenticated, they should at least see the UI. The
+            // chat page (or the KeyBootstrapModal triggered there on demand)
+            // can re-handle missing keys.
+            try
             {
-                // Auth succeeded but profile fetch failed — let the user reach
-                // /chat and re-handle there; don't block login.
-                Nav.NavigateTo("/chat", forceLoad: true);
-                return;
-            }
+                var profile = await UserClient.GetProfileAsync();
+                if (!profile.Success || profile.Value == null)
+                {
+                    Nav.NavigateTo("/chat", forceLoad: true);
+                    return;
+                }
 
-            string userId = profile.Value.Id;
-            bool bootstrapped = await Vault.IsBootstrappedAsync(userId);
-            if (bootstrapped)
+                string userId = profile.Value.Id;
+                bool bootstrapped = await Vault.IsBootstrappedAsync(userId);
+                if (bootstrapped)
+                {
+                    Nav.NavigateTo("/chat", forceLoad: true);
+                    return;
+                }
+
+                pendingUserId = userId;
+                showKeyBootstrap = true;
+            }
+            catch (Exception bex)
             {
+                // IndexedDB blocked, JSInterop helper not loaded, network
+                // hiccup on profile fetch — none of these should leave the
+                // user stuck on the login screen with no feedback. Navigate
+                // to /chat and let the chat page surface the issue.
+                Console.WriteLine($"[Login] post-auth bootstrap check failed: {bex.Message}");
                 Nav.NavigateTo("/chat", forceLoad: true);
-                return;
             }
-
-            // Fresh device (or post-migration legacy) — show the bootstrap modal.
-            pendingUserId = userId;
-            showKeyBootstrap = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unexpected error: {ex.Message}";
         }
         finally
         {
