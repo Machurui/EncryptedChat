@@ -12,10 +12,14 @@ namespace EncryptedChat.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public class TeamController(ITeamService teamService, IHubContext<ChatHub> hubContext) : ControllerBase
+    public class TeamController(
+        ITeamService teamService,
+        IHubContext<ChatHub> hubContext,
+        ITeamKeyShareService teamKeyShares) : ControllerBase
     {
         private readonly ITeamService _teamService = teamService;
         private readonly IHubContext<ChatHub> _hubContext = hubContext;
+        private readonly ITeamKeyShareService _teamKeyShares = teamKeyShares;
 
         private string? GetCurrentUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -254,6 +258,55 @@ namespace EncryptedChat.Controllers
             // detects the first message in a DM and sends DirectMessageCreated +
             // the initial ReceiveMessage to the friend at that point.
             return Ok(dm);
+        }
+
+        [HttpGet("{teamId}/key-shares")]
+        public async Task<IActionResult> GetMyKeyShares(Guid teamId)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            List<TeamKeyShareDTO> shares = await _teamKeyShares.GetMineForTeamAsync(userId, teamId);
+            return Ok(shares);
+        }
+
+        [HttpPost("{teamId}/members/{memberId}/key-share")]
+        public async Task<IActionResult> AddMemberKeyShare(
+            Guid teamId, string memberId, [FromBody] AddMemberKeyShareDTO dto)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            KeyShareInsertResult result = await _teamKeyShares.InsertKeyShareForMemberAsync(
+                userId, teamId, memberId, dto.WrappedKey);
+            return result switch
+            {
+                KeyShareInsertResult.Ok => NoContent(),
+                KeyShareInsertResult.Forbidden => Forbid(),
+                KeyShareInsertResult.AlreadyExists => Conflict(new { Message = "Key share already provisioned" }),
+                KeyShareInsertResult.NotFound => NotFound(),
+                _ => BadRequest()
+            };
+        }
+
+        [HttpPost("{teamId}/members/{memberId}/remove")]
+        public async Task<IActionResult> RemoveMember(
+            Guid teamId, string memberId, [FromBody] RemoveMemberDTO dto)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            RemoveAndRotateResult result = await _teamKeyShares.RemoveMemberAndRotateAsync(
+                userId, teamId, memberId, dto.NewKeyShares);
+            return result switch
+            {
+                RemoveAndRotateResult.Ok => NoContent(),
+                RemoveAndRotateResult.Forbidden => Forbid(),
+                RemoveAndRotateResult.NotFound => NotFound(),
+                RemoveAndRotateResult.CannotRemoveLastAdmin => BadRequest(new { Message = "Cannot remove the last admin" }),
+                RemoveAndRotateResult.KeyShareCoverageMismatch => BadRequest(new { Message = "NewKeyShares must cover exactly the remaining members" }),
+                _ => BadRequest()
+            };
         }
     }
 

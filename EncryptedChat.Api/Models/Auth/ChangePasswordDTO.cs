@@ -51,3 +51,19 @@ public record SetEncryptionKeysDTO(
     [Required, MaxLength(64)] string KeyBundleSalt);
 
 public record PublicKeysDTO(string SigningPublicKey, string EncryptionPublicKey);
+
+public record TeamKeyShareDTO(
+    Guid TeamId,
+    int Generation,
+    string WrappedKey,
+    DateTime CreatedAt);
+
+public record AddMemberKeyShareDTO(
+    [Required, MaxLength(256)] string WrappedKey);
+
+public record KeyShareEntryDTO(
+    [Required] string MemberId,
+    [Required, MaxLength(256)] string WrappedKey);
+
+public record RemoveMemberDTO(
+    [Required] List<KeyShareEntryDTO> NewKeyShares);

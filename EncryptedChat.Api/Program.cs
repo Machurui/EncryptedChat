@@ -229,6 +229,7 @@ builder.Services.AddCors(o => o.AddPolicy("Client", p => p
 // App services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserKeysService, UserKeysService>();
+builder.Services.AddScoped<ITeamKeyShareService, TeamKeyShareService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IPinnedMessageService, PinnedMessageService>();
