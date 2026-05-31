@@ -11,15 +11,13 @@ public class BootstrapKeyService(
 
     public enum BootstrapOutcome
     {
-        AlreadyBootstrapped,          // keys already in IndexedDB; no-op
-        UnwrappedFromServer,          // server had a bundle; phrase decrypted it
-        FreshGeneratedAndUploaded,    // post-migration legacy user; generated + uploaded
-        WrongPhrase,                  // unwrap failed; user should retry
-        ServerError                   // PUT failed
+        AlreadyBootstrapped,
+        UnwrappedFromServer,
+        FreshGeneratedAndUploaded,
+        WrongPhrase,
+        ServerError
     }
 
-    // Called after login. If keys exist in IndexedDB, no-op. If server has a bundle,
-    // try to unwrap with the given phrase. If neither, generate fresh keys.
     public async Task<BootstrapOutcome> BootstrapAsync(string userId, string? phraseIfPrompted)
     {
         if (await _vault.IsBootstrappedAsync(userId))
@@ -36,11 +34,11 @@ public class BootstrapKeyService(
         {
             byte[] salt = Convert.FromBase64String(existing.KeyBundleSalt);
             byte[] bundle = Convert.FromBase64String(existing.EncryptedKeyBundle);
-            byte[] wrapKey = _crypto.DeriveWrapKey(phraseIfPrompted, salt);
+            byte[] wrapKey = await _crypto.DeriveWrapKeyAsync(phraseIfPrompted, salt);
 
             try
             {
-                var (signingPriv, encPriv) = _crypto.UnwrapIdentityPrivateKeys(bundle, wrapKey);
+                var (signingPriv, encPriv) = await _crypto.UnwrapIdentityPrivateKeysAsync(bundle, wrapKey);
                 await _vault.StoreMyKeysAsync(userId, signingPriv, encPriv);
                 return BootstrapOutcome.UnwrappedFromServer;
             }
@@ -51,10 +49,10 @@ public class BootstrapKeyService(
         }
 
         // Server has nothing (post-migration legacy user). Generate fresh.
-        CryptoService.IdentityKeyPair pair = _crypto.GenerateIdentityKeyPair();
-        byte[] newSalt = _crypto.GenerateSalt();
-        byte[] wrap = _crypto.DeriveWrapKey(phraseIfPrompted, newSalt);
-        byte[] wrappedBundle = _crypto.WrapIdentityPrivateKeys(pair.SigningPrivateKey, pair.EncryptionPrivateKey, wrap);
+        CryptoService.IdentityKeyPair pair = await _crypto.GenerateIdentityKeyPairAsync();
+        byte[] newSalt = await _crypto.GenerateSaltAsync();
+        byte[] wrap = await _crypto.DeriveWrapKeyAsync(phraseIfPrompted, newSalt);
+        byte[] wrappedBundle = await _crypto.WrapIdentityPrivateKeysAsync(pair.SigningPrivateKey, pair.EncryptionPrivateKey, wrap);
 
         bool ok = await _auth.SetEncryptionKeysAsync(
             signingPublicKey: Convert.ToBase64String(pair.SigningPublicKey),
@@ -68,16 +66,14 @@ public class BootstrapKeyService(
         return BootstrapOutcome.FreshGeneratedAndUploaded;
     }
 
-    // Re-wrap existing private keys with a fresh phrase-derived key.
-    // Used by recovery flow (new phrase from server) and regenerate flow.
     public async Task<bool> ReWrapAsync(string userId, string newPhrase)
     {
         var stored = await _vault.GetMyKeysAsync(userId);
         if (stored == null) return false;
 
-        byte[] newSalt = _crypto.GenerateSalt();
-        byte[] wrap = _crypto.DeriveWrapKey(newPhrase, newSalt);
-        byte[] wrappedBundle = _crypto.WrapIdentityPrivateKeys(stored.SigningPrivateKey, stored.EncryptionPrivateKey, wrap);
+        byte[] newSalt = await _crypto.GenerateSaltAsync();
+        byte[] wrap = await _crypto.DeriveWrapKeyAsync(newPhrase, newSalt);
+        byte[] wrappedBundle = await _crypto.WrapIdentityPrivateKeysAsync(stored.SigningPrivateKey, stored.EncryptionPrivateKey, wrap);
 
         var existing = await _auth.GetMyEncryptionKeysAsync();
         if (existing == null
@@ -94,14 +90,12 @@ public class BootstrapKeyService(
             keyBundleSalt: Convert.ToBase64String(newSalt));
     }
 
-    // Called at signup, after the server has returned the recovery words.
-    // The user is already authed (server issued accessToken). Generate keys, wrap, upload, store.
     public async Task<bool> SignupBootstrapAsync(string userId, string phrase)
     {
-        CryptoService.IdentityKeyPair pair = _crypto.GenerateIdentityKeyPair();
-        byte[] salt = _crypto.GenerateSalt();
-        byte[] wrap = _crypto.DeriveWrapKey(phrase, salt);
-        byte[] wrappedBundle = _crypto.WrapIdentityPrivateKeys(pair.SigningPrivateKey, pair.EncryptionPrivateKey, wrap);
+        CryptoService.IdentityKeyPair pair = await _crypto.GenerateIdentityKeyPairAsync();
+        byte[] salt = await _crypto.GenerateSaltAsync();
+        byte[] wrap = await _crypto.DeriveWrapKeyAsync(phrase, salt);
+        byte[] wrappedBundle = await _crypto.WrapIdentityPrivateKeysAsync(pair.SigningPrivateKey, pair.EncryptionPrivateKey, wrap);
 
         bool ok = await _auth.SetEncryptionKeysAsync(
             signingPublicKey: Convert.ToBase64String(pair.SigningPublicKey),

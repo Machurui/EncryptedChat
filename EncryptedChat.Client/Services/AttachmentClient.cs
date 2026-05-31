@@ -86,8 +86,8 @@ public class AttachmentClient(
         if (teamSecret == null)
             return Result<AttachmentDTOPublic>.Fail("Team key not loaded for this generation.");
 
-        CryptoService.AesGcmCiphertext encName = _crypto.EncryptAesGcm(Encoding.UTF8.GetBytes(fileName), teamSecret);
-        CryptoService.AesGcmCiphertext encFile = _crypto.EncryptAesGcm(fileContent, teamSecret);
+        CryptoService.AesGcmCiphertext encName = await _crypto.EncryptAesGcmAsync(Encoding.UTF8.GetBytes(fileName), teamSecret);
+        CryptoService.AesGcmCiphertext encFile = await _crypto.EncryptAesGcmAsync(fileContent, teamSecret);
 
         byte[] teamBytes = teamId.ToByteArray();
         byte[] senderBytes = Encoding.UTF8.GetBytes(senderId);
@@ -98,8 +98,8 @@ public class AttachmentClient(
             .Concat(encName.Iv)
             .Concat(teamBytes).Concat(senderBytes).Concat(genBytes)
             .ToArray();
-        byte[] sigInput = System.Security.Cryptography.SHA256.HashData(toHash);
-        byte[] sig = _crypto.Sign(sigInput, stored.SigningPrivateKey);
+        byte[] sigInput = await _crypto.Sha256Async(toHash);
+        byte[] sig = await _crypto.SignAsync(sigInput, stored.SigningPrivateKey);
 
         using MultipartFormDataContent form = new();
 
@@ -169,8 +169,8 @@ public class AttachmentClient(
             byte[] encName = Convert.FromBase64String(metadata.EncryptedFileName);
             byte[] nameIv = Convert.FromBase64String(metadata.FileNameIv);
 
-            byte[] plainFile = _crypto.DecryptAesGcm(fileIv, encFile, teamSecret);
-            byte[] plainName = _crypto.DecryptAesGcm(nameIv, encName, teamSecret);
+            byte[] plainFile = await _crypto.DecryptAesGcmAsync(fileIv, encFile, teamSecret);
+            byte[] plainName = await _crypto.DecryptAesGcmAsync(nameIv, encName, teamSecret);
 
             return (Encoding.UTF8.GetString(plainName), plainFile);
         }

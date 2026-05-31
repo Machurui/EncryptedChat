@@ -80,8 +80,8 @@ public class TeamClient
             return Result<TeamDTOPublic>.Fail("Cannot create team: your encryption keys are not set up. Open the app once to bootstrap.");
 
         byte[] creatorEncryptionPub = Convert.FromBase64String(pubKeys.EncryptionPublicKey);
-        byte[] teamSecret = _crypto.GenerateTeamSecret();
-        byte[] wrapped = _crypto.WrapKey(teamSecret, creatorEncryptionPub);
+        byte[] teamSecret = await _crypto.GenerateTeamSecretAsync();
+        byte[] wrapped = await _crypto.WrapKeyAsync(teamSecret, creatorEncryptionPub);
 
         var dto = new TeamDTO(admins, members, name, glyph, color, messageLifetime, Convert.ToBase64String(wrapped));
         var res = await _http.PostAsJsonAsync("api/team", dto);
@@ -123,7 +123,7 @@ public class TeamClient
             byte[] wrappedBlob = Convert.FromBase64String(s.WrappedKey);
             try
             {
-                byte[] teamSecret = _crypto.UnwrapKey(wrappedBlob, stored.EncryptionPrivateKey);
+                byte[] teamSecret = await _crypto.UnwrapKeyAsync(wrappedBlob, stored.EncryptionPrivateKey);
                 _keyCache.Put(s.TeamId, s.Generation, teamSecret);
             }
             catch
@@ -143,7 +143,7 @@ public class TeamClient
         if (newMemberPubKeys == null) return false;
         byte[] pub = Convert.FromBase64String(newMemberPubKeys.EncryptionPublicKey);
 
-        byte[] wrappedBlob = _crypto.WrapKey(teamSecret, pub);
+        byte[] wrappedBlob = await _crypto.WrapKeyAsync(teamSecret, pub);
         var res = await _http.PostAsJsonAsync(
             $"api/Team/{teamId}/members/{Uri.EscapeDataString(newMemberId)}/key-share",
             new { WrappedKey = Convert.ToBase64String(wrappedBlob) });
@@ -154,7 +154,7 @@ public class TeamClient
     // post the bundle so the server can atomically delete + rotate + reinsert.
     public async Task<bool> RemoveMemberWithRotationAsync(Guid teamId, int currentGeneration, string removedMemberId, IReadOnlyList<string> remainingMemberIds)
     {
-        byte[] newTeamSecret = _crypto.GenerateTeamSecret();
+        byte[] newTeamSecret = await _crypto.GenerateTeamSecretAsync();
 
         var newKeyShares = new List<object>();
         foreach (var memberId in remainingMemberIds)
@@ -162,7 +162,7 @@ public class TeamClient
             var pubKeys = await _userClient.GetPublicKeysAsync(memberId);
             if (pubKeys == null) return false;
             byte[] pub = Convert.FromBase64String(pubKeys.EncryptionPublicKey);
-            byte[] wrappedBlob = _crypto.WrapKey(newTeamSecret, pub);
+            byte[] wrappedBlob = await _crypto.WrapKeyAsync(newTeamSecret, pub);
             newKeyShares.Add(new { MemberId = memberId, WrappedKey = Convert.ToBase64String(wrappedBlob) });
         }
 

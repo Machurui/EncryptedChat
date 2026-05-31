@@ -1,19 +1,17 @@
-using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using Microsoft.JSInterop;
 
 namespace EncryptedChat.Client.Services.Crypto;
 
-public class CryptoService
+// Bridge to wwwroot/js/crypto-interop.js (WebCrypto API). All primitives are
+// async because SubtleCrypto returns Promises and Blazor WASM has no native
+// crypto backend for ECDsa/ECDH/AES-GCM. Binary data crosses JSInterop as
+// base64 strings to avoid Uint8Array marshalling quirks.
+public class CryptoService(IJSRuntime js)
 {
-    private const int Pbkdf2Iterations = 600_000;
-    private const int SaltSizeBytes = 16;
-    private const int AesKeySize = 32;          // 256-bit
-    private const int AesIvSize = 12;           // 96-bit, standard for GCM
-    private const int AesTagSize = 16;          // 128-bit, standard for GCM
+    private readonly IJSRuntime _js = js;
 
-    // ---------- Identity key generation ----------
+    // ---------- Identity keypair generation ----------
 
     public record IdentityKeyPair(
         byte[] SigningPrivateKey,    // PKCS#8
@@ -21,176 +19,148 @@ public class CryptoService
         byte[] EncryptionPrivateKey, // PKCS#8
         byte[] EncryptionPublicKey); // SPKI
 
-    public IdentityKeyPair GenerateIdentityKeyPair()
-    {
-        using var signing = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var encryption = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+    private record IdentityKeyPairResponse(
+        string SigningPrivateKey, string SigningPublicKey,
+        string EncryptionPrivateKey, string EncryptionPublicKey);
 
+    public async Task<IdentityKeyPair> GenerateIdentityKeyPairAsync()
+    {
+        var resp = await _js.InvokeAsync<IdentityKeyPairResponse>(
+            "encryptedChatCrypto.generateIdentityKeyPair");
         return new IdentityKeyPair(
-            SigningPrivateKey: signing.ExportPkcs8PrivateKey(),
-            SigningPublicKey: signing.ExportSubjectPublicKeyInfo(),
-            EncryptionPrivateKey: encryption.ExportPkcs8PrivateKey(),
-            EncryptionPublicKey: encryption.ExportSubjectPublicKeyInfo());
+            SigningPrivateKey: Convert.FromBase64String(resp.SigningPrivateKey),
+            SigningPublicKey: Convert.FromBase64String(resp.SigningPublicKey),
+            EncryptionPrivateKey: Convert.FromBase64String(resp.EncryptionPrivateKey),
+            EncryptionPublicKey: Convert.FromBase64String(resp.EncryptionPublicKey));
     }
 
-    // ---------- Team secret ----------
+    // ---------- Team secret / salt / randomness ----------
 
-    public byte[] GenerateTeamSecret() => RandomNumberGenerator.GetBytes(AesKeySize);
+    public async Task<byte[]> GenerateTeamSecretAsync()
+    {
+        string b64 = await _js.InvokeAsync<string>("encryptedChatCrypto.generateTeamSecret");
+        return Convert.FromBase64String(b64);
+    }
 
-    // ---------- AES-GCM ----------
+    public async Task<byte[]> GenerateSaltAsync()
+    {
+        string b64 = await _js.InvokeAsync<string>("encryptedChatCrypto.generateSalt");
+        return Convert.FromBase64String(b64);
+    }
+
+    // ---------- AES-256-GCM ----------
 
     public record AesGcmCiphertext(byte[] Iv, byte[] CiphertextWithTag);
 
-    public AesGcmCiphertext EncryptAesGcm(byte[] plaintext, byte[] key)
+    private record AesGcmJsResult(string Iv, string CiphertextWithTag);
+
+    public async Task<AesGcmCiphertext> EncryptAesGcmAsync(byte[] plaintext, byte[] key)
     {
-        byte[] iv = RandomNumberGenerator.GetBytes(AesIvSize);
-        byte[] ciphertext = new byte[plaintext.Length];
-        byte[] tag = new byte[AesTagSize];
-
-        using var aes = new AesGcm(key, AesTagSize);
-        aes.Encrypt(iv, plaintext, ciphertext, tag);
-
-        byte[] ciphertextWithTag = new byte[ciphertext.Length + AesTagSize];
-        Buffer.BlockCopy(ciphertext, 0, ciphertextWithTag, 0, ciphertext.Length);
-        Buffer.BlockCopy(tag, 0, ciphertextWithTag, ciphertext.Length, AesTagSize);
-
-        return new AesGcmCiphertext(iv, ciphertextWithTag);
+        var r = await _js.InvokeAsync<AesGcmJsResult>(
+            "encryptedChatCrypto.encryptAesGcm",
+            Convert.ToBase64String(plaintext),
+            Convert.ToBase64String(key));
+        return new AesGcmCiphertext(
+            Convert.FromBase64String(r.Iv),
+            Convert.FromBase64String(r.CiphertextWithTag));
     }
 
-    public byte[] DecryptAesGcm(byte[] iv, byte[] ciphertextWithTag, byte[] key)
+    public async Task<byte[]> DecryptAesGcmAsync(byte[] iv, byte[] ciphertextWithTag, byte[] key)
     {
-        int ciphertextLen = ciphertextWithTag.Length - AesTagSize;
-        byte[] ciphertext = new byte[ciphertextLen];
-        byte[] tag = new byte[AesTagSize];
-        Buffer.BlockCopy(ciphertextWithTag, 0, ciphertext, 0, ciphertextLen);
-        Buffer.BlockCopy(ciphertextWithTag, ciphertextLen, tag, 0, AesTagSize);
-
-        byte[] plaintext = new byte[ciphertextLen];
-        using var aes = new AesGcm(key, AesTagSize);
-        aes.Decrypt(iv, ciphertext, tag, plaintext);
-        return plaintext;
+        string b64 = await _js.InvokeAsync<string>(
+            "encryptedChatCrypto.decryptAesGcm",
+            Convert.ToBase64String(iv),
+            Convert.ToBase64String(ciphertextWithTag),
+            Convert.ToBase64String(key));
+        return Convert.FromBase64String(b64);
     }
 
-    // ---------- ECDSA sign/verify ----------
+    // ---------- ECDSA sign / verify ----------
 
-    public byte[] Sign(byte[] data, byte[] signingPrivateKeyPkcs8)
+    public async Task<byte[]> SignAsync(byte[] data, byte[] signingPrivateKeyPkcs8)
     {
-        using var ecdsa = ECDsa.Create();
-        ecdsa.ImportPkcs8PrivateKey(signingPrivateKeyPkcs8, out _);
-        return ecdsa.SignData(data, HashAlgorithmName.SHA256);
+        string b64 = await _js.InvokeAsync<string>(
+            "encryptedChatCrypto.sign",
+            Convert.ToBase64String(data),
+            Convert.ToBase64String(signingPrivateKeyPkcs8));
+        return Convert.FromBase64String(b64);
     }
 
-    public bool Verify(byte[] data, byte[] signature, byte[] signingPublicKeySpki)
+    public async Task<bool> VerifyAsync(byte[] data, byte[] signature, byte[] signingPublicKeySpki)
     {
-        using var ecdsa = ECDsa.Create();
-        ecdsa.ImportSubjectPublicKeyInfo(signingPublicKeySpki, out _);
-        return ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256);
+        return await _js.InvokeAsync<bool>(
+            "encryptedChatCrypto.verify",
+            Convert.ToBase64String(data),
+            Convert.ToBase64String(signature),
+            Convert.ToBase64String(signingPublicKeySpki));
     }
 
-    // ---------- ECIES-P256 wrap/unwrap (for Team.Secret per recipient) ----------
-
-    public byte[] WrapKey(byte[] keyToWrap, byte[] recipientEncryptionPublicKeySpki)
+    public async Task<byte[]> Sha256Async(byte[] data)
     {
-        using var recipient = ECDiffieHellman.Create();
-        recipient.ImportSubjectPublicKeyInfo(recipientEncryptionPublicKeySpki, out _);
-
-        using var ephemeral = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
-        byte[] ephemeralPubSpki = ephemeral.ExportSubjectPublicKeyInfo();
-
-        // ECDH shared secret, then HKDF to derive the wrap-key.
-        byte[] sharedSecret = ephemeral.DeriveKeyMaterial(recipient.PublicKey);
-        byte[] wrapKey = HKDF.DeriveKey(
-            HashAlgorithmName.SHA256,
-            ikm: sharedSecret,
-            outputLength: AesKeySize,
-            salt: null,
-            info: Encoding.UTF8.GetBytes("EncryptedChat:TeamKeyWrap:v1"));
-
-        AesGcmCiphertext wrapped = EncryptAesGcm(keyToWrap, wrapKey);
-
-        // Output layout: 2-byte BE length || ephemeralPubSpki || iv || ciphertext+tag
-        byte[] result = new byte[2 + ephemeralPubSpki.Length + wrapped.Iv.Length + wrapped.CiphertextWithTag.Length];
-        result[0] = (byte)((ephemeralPubSpki.Length >> 8) & 0xFF);
-        result[1] = (byte)(ephemeralPubSpki.Length & 0xFF);
-        Buffer.BlockCopy(ephemeralPubSpki, 0, result, 2, ephemeralPubSpki.Length);
-        Buffer.BlockCopy(wrapped.Iv, 0, result, 2 + ephemeralPubSpki.Length, wrapped.Iv.Length);
-        Buffer.BlockCopy(wrapped.CiphertextWithTag, 0, result, 2 + ephemeralPubSpki.Length + wrapped.Iv.Length, wrapped.CiphertextWithTag.Length);
-
-        return result;
+        string b64 = await _js.InvokeAsync<string>(
+            "encryptedChatCrypto.sha256", Convert.ToBase64String(data));
+        return Convert.FromBase64String(b64);
     }
 
-    public byte[] UnwrapKey(byte[] wrapped, byte[] recipientEncryptionPrivateKeyPkcs8)
+    // ---------- ECIES-P256 wrap / unwrap ----------
+
+    public async Task<byte[]> WrapKeyAsync(byte[] keyToWrap, byte[] recipientEncryptionPublicKeySpki)
     {
-        int ephemeralLen = (wrapped[0] << 8) | wrapped[1];
-        byte[] ephemeralSpki = new byte[ephemeralLen];
-        Buffer.BlockCopy(wrapped, 2, ephemeralSpki, 0, ephemeralLen);
-
-        int ivOffset = 2 + ephemeralLen;
-        byte[] iv = new byte[AesIvSize];
-        Buffer.BlockCopy(wrapped, ivOffset, iv, 0, AesIvSize);
-
-        int ciphertextOffset = ivOffset + AesIvSize;
-        int ciphertextLen = wrapped.Length - ciphertextOffset;
-        byte[] ciphertextWithTag = new byte[ciphertextLen];
-        Buffer.BlockCopy(wrapped, ciphertextOffset, ciphertextWithTag, 0, ciphertextLen);
-
-        using var recipient = ECDiffieHellman.Create();
-        recipient.ImportPkcs8PrivateKey(recipientEncryptionPrivateKeyPkcs8, out _);
-        using var ephemeral = ECDiffieHellman.Create();
-        ephemeral.ImportSubjectPublicKeyInfo(ephemeralSpki, out _);
-
-        byte[] sharedSecret = recipient.DeriveKeyMaterial(ephemeral.PublicKey);
-        byte[] wrapKey = HKDF.DeriveKey(
-            HashAlgorithmName.SHA256,
-            ikm: sharedSecret,
-            outputLength: AesKeySize,
-            salt: null,
-            info: Encoding.UTF8.GetBytes("EncryptedChat:TeamKeyWrap:v1"));
-
-        return DecryptAesGcm(iv, ciphertextWithTag, wrapKey);
+        string b64 = await _js.InvokeAsync<string>(
+            "encryptedChatCrypto.wrapKey",
+            Convert.ToBase64String(keyToWrap),
+            Convert.ToBase64String(recipientEncryptionPublicKeySpki));
+        return Convert.FromBase64String(b64);
     }
 
-    // ---------- Phrase-derived wrap-key for identity bundle ----------
-
-    public byte[] DeriveWrapKey(string phrase, byte[] salt)
+    public async Task<byte[]> UnwrapKeyAsync(byte[] wrapped, byte[] recipientEncryptionPrivateKeyPkcs8)
     {
-        return KeyDerivation.Pbkdf2(
-            password: phrase,
-            salt: salt,
-            prf: KeyDerivationPrf.HMACSHA256,
-            iterationCount: Pbkdf2Iterations,
-            numBytesRequested: AesKeySize);
+        string b64 = await _js.InvokeAsync<string>(
+            "encryptedChatCrypto.unwrapKey",
+            Convert.ToBase64String(wrapped),
+            Convert.ToBase64String(recipientEncryptionPrivateKeyPkcs8));
+        return Convert.FromBase64String(b64);
     }
 
-    public byte[] GenerateSalt() => RandomNumberGenerator.GetBytes(SaltSizeBytes);
+    // ---------- Phrase-derived wrap-key ----------
 
-    // ---------- Wrap/unwrap the identity private keys for server-side backup ----------
+    public async Task<byte[]> DeriveWrapKeyAsync(string phrase, byte[] salt)
+    {
+        string b64 = await _js.InvokeAsync<string>(
+            "encryptedChatCrypto.deriveWrapKey",
+            phrase,
+            Convert.ToBase64String(salt));
+        return Convert.FromBase64String(b64);
+    }
 
-    public byte[] WrapIdentityPrivateKeys(byte[] signingPrivPkcs8, byte[] encPrivPkcs8, byte[] wrapKey)
+    // ---------- Identity-bundle wrap / unwrap ----------
+
+    public async Task<byte[]> WrapIdentityPrivateKeysAsync(byte[] signingPrivPkcs8, byte[] encPrivPkcs8, byte[] wrapKey)
     {
         var bundle = new
         {
             sign = Convert.ToBase64String(signingPrivPkcs8),
             enc = Convert.ToBase64String(encPrivPkcs8)
         };
-        byte[] json = JsonSerializer.SerializeToUtf8Bytes(bundle);
-        AesGcmCiphertext wrapped = EncryptAesGcm(json, wrapKey);
+        byte[] json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(bundle);
+        AesGcmCiphertext wrapped = await EncryptAesGcmAsync(json, wrapKey);
 
-        byte[] result = new byte[AesIvSize + wrapped.CiphertextWithTag.Length];
-        Buffer.BlockCopy(wrapped.Iv, 0, result, 0, AesIvSize);
-        Buffer.BlockCopy(wrapped.CiphertextWithTag, 0, result, AesIvSize, wrapped.CiphertextWithTag.Length);
+        byte[] result = new byte[wrapped.Iv.Length + wrapped.CiphertextWithTag.Length];
+        Buffer.BlockCopy(wrapped.Iv, 0, result, 0, wrapped.Iv.Length);
+        Buffer.BlockCopy(wrapped.CiphertextWithTag, 0, result, wrapped.Iv.Length, wrapped.CiphertextWithTag.Length);
         return result;
     }
 
-    public (byte[] SigningPrivateKey, byte[] EncryptionPrivateKey) UnwrapIdentityPrivateKeys(byte[] wrappedBundle, byte[] wrapKey)
+    public async Task<(byte[] SigningPrivateKey, byte[] EncryptionPrivateKey)> UnwrapIdentityPrivateKeysAsync(byte[] wrappedBundle, byte[] wrapKey)
     {
-        byte[] iv = new byte[AesIvSize];
-        Buffer.BlockCopy(wrappedBundle, 0, iv, 0, AesIvSize);
-        byte[] ciphertext = new byte[wrappedBundle.Length - AesIvSize];
-        Buffer.BlockCopy(wrappedBundle, AesIvSize, ciphertext, 0, ciphertext.Length);
+        const int ivLen = 12;
+        byte[] iv = new byte[ivLen];
+        Buffer.BlockCopy(wrappedBundle, 0, iv, 0, ivLen);
+        byte[] ciphertext = new byte[wrappedBundle.Length - ivLen];
+        Buffer.BlockCopy(wrappedBundle, ivLen, ciphertext, 0, ciphertext.Length);
 
-        byte[] json = DecryptAesGcm(iv, ciphertext, wrapKey);
-        using var doc = JsonDocument.Parse(json);
+        byte[] json = await DecryptAesGcmAsync(iv, ciphertext, wrapKey);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
         var root = doc.RootElement;
         return (
             Convert.FromBase64String(root.GetProperty("sign").GetString()!),
@@ -201,7 +171,7 @@ public class CryptoService
 
     public record MessageEnvelope(string EncryptedText, string Iv, string Signature, int KeyGeneration);
 
-    public MessageEnvelope EncryptAndSignMessage(
+    public async Task<MessageEnvelope> EncryptAndSignMessageAsync(
         string plaintext,
         byte[] teamSecret,
         int keyGeneration,
@@ -209,15 +179,11 @@ public class CryptoService
         Guid teamId,
         string senderId)
     {
-        AesGcmCiphertext encrypted = EncryptAesGcm(Encoding.UTF8.GetBytes(plaintext), teamSecret);
+        AesGcmCiphertext encrypted = await EncryptAesGcmAsync(Encoding.UTF8.GetBytes(plaintext), teamSecret);
 
-        byte[] sigInput = BuildSignatureInput(
-            encrypted.CiphertextWithTag,
-            encrypted.Iv,
-            teamId,
-            senderId,
-            keyGeneration);
-        byte[] sig = Sign(sigInput, signingPrivateKey);
+        byte[] sigInput = await BuildSignatureInputAsync(
+            encrypted.CiphertextWithTag, encrypted.Iv, teamId, senderId, keyGeneration);
+        byte[] sig = await SignAsync(sigInput, signingPrivateKey);
 
         return new MessageEnvelope(
             EncryptedText: Convert.ToBase64String(encrypted.CiphertextWithTag),
@@ -226,7 +192,7 @@ public class CryptoService
             KeyGeneration: keyGeneration);
     }
 
-    public string DecryptAndVerifyMessage(
+    public async Task<string> DecryptAndVerifyMessageAsync(
         MessageEnvelope envelope,
         byte[] teamSecret,
         byte[] senderSigningPublicKey,
@@ -237,14 +203,14 @@ public class CryptoService
         byte[] iv = Convert.FromBase64String(envelope.Iv);
         byte[] sig = Convert.FromBase64String(envelope.Signature);
 
-        byte[] sigInput = BuildSignatureInput(ciphertext, iv, teamId, senderId, envelope.KeyGeneration);
-        if (!Verify(sigInput, sig, senderSigningPublicKey))
+        byte[] sigInput = await BuildSignatureInputAsync(ciphertext, iv, teamId, senderId, envelope.KeyGeneration);
+        if (!await VerifyAsync(sigInput, sig, senderSigningPublicKey))
             throw new InvalidOperationException("Message signature verification failed");
 
-        return Encoding.UTF8.GetString(DecryptAesGcm(iv, ciphertext, teamSecret));
+        return Encoding.UTF8.GetString(await DecryptAesGcmAsync(iv, ciphertext, teamSecret));
     }
 
-    private static byte[] BuildSignatureInput(byte[] ciphertext, byte[] iv, Guid teamId, string senderId, int keyGen)
+    private async Task<byte[]> BuildSignatureInputAsync(byte[] ciphertext, byte[] iv, Guid teamId, string senderId, int keyGen)
     {
         byte[] teamBytes = teamId.ToByteArray();
         byte[] senderBytes = Encoding.UTF8.GetBytes(senderId);
@@ -258,6 +224,6 @@ public class CryptoService
         Buffer.BlockCopy(senderBytes, 0, toHash, offset, senderBytes.Length); offset += senderBytes.Length;
         Buffer.BlockCopy(genBytes, 0, toHash, offset, genBytes.Length);
 
-        return SHA256.HashData(toHash);
+        return await Sha256Async(toHash);
     }
 }

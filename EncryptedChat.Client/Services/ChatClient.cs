@@ -109,7 +109,7 @@ public class ChatClient
         if (teamSecret == null)
             return Result<MessageDTOPublic>.Fail("Team key not loaded for this generation. Open the team to load.");
 
-        CryptoService.MessageEnvelope envelope = _crypto.EncryptAndSignMessage(
+        CryptoService.MessageEnvelope envelope = await _crypto.EncryptAndSignMessageAsync(
             plaintext, teamSecret, teamGeneration,
             stored.SigningPrivateKey, teamId, senderId);
 
@@ -183,7 +183,7 @@ public class ChatClient
 
         try
         {
-            string plaintext = _crypto.DecryptAndVerifyMessage(
+            string plaintext = await _crypto.DecryptAndVerifyMessageAsync(
                 new CryptoService.MessageEnvelope(
                     message.EncryptedText, message.Iv, message.Signature, message.KeyGeneration),
                 teamSecret,
