@@ -1,0 +1,97 @@
+@namespace EncryptedChat.Client.Pages.Components
+@using EncryptedChat.Client.Services.Crypto
+@inject BootstrapKeyService BootstrapKeys
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="OnClose"></div>
+    <GlassPanel Class="modal-card" Style="max-width: 440px;" @onclick:stopPropagation="true">
+        <div style="padding: 22px;">
+            <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: white;">
+                Unlock your messages
+            </h3>
+            <p style="margin: 0 0 14px; font-size: 12px; color: rgba(255,255,255,0.60); line-height: 1.5;">
+                Enter your recovery phrase to decrypt your messages on this device.
+                This is a one-time step per device.
+            </p>
+
+            <textarea class="restore-textarea"
+                      @bind="phraseText"
+                      placeholder="anchor beacon cipher dawn ember frost glade helix iron jade knot lumen"
+                      spellcheck="false" autocomplete="off" autocapitalize="none" rows="3"></textarea>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div style="margin-top: 12px; padding: 8px 10px; background: rgba(220,60,60,0.15); border: 0.5px solid rgba(220,60,60,0.30); border-radius: 8px; font-size: 12px; color: oklch(0.78 0.14 25);">
+                    @error
+                </div>
+            }
+
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+                <GlassButton Primary="true" OnClick="Submit" Disabled="@isSubmitting" Style="flex: 1;">
+                    @(isSubmitting ? "Unlocking..." : "Unlock")
+                </GlassButton>
+            </div>
+        </div>
+    </GlassPanel>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string UserId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSuccess { get; set; }
+
+    private string phraseText = "";
+    private string? error;
+    private bool isSubmitting;
+
+    private async Task Submit()
+    {
+        error = null;
+
+        var words = (phraseText ?? "")
+            .Trim()
+            .Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length != 12)
+        {
+            error = "Recovery phrase must be 12 words.";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(UserId))
+        {
+            error = "User identity missing. Please log in again.";
+            return;
+        }
+
+        isSubmitting = true;
+        try
+        {
+            string phrase = string.Join(' ', words.Select(w => w.ToLowerInvariant()));
+            var outcome = await BootstrapKeys.BootstrapAsync(UserId, phrase);
+            switch (outcome)
+            {
+                case BootstrapKeyService.BootstrapOutcome.UnwrappedFromServer:
+                case BootstrapKeyService.BootstrapOutcome.FreshGeneratedAndUploaded:
+                case BootstrapKeyService.BootstrapOutcome.AlreadyBootstrapped:
+                    await OnSuccess.InvokeAsync();
+                    break;
+                case BootstrapKeyService.BootstrapOutcome.WrongPhrase:
+                    error = "Wrong recovery phrase. Double-check the 12 words.";
+                    break;
+                case BootstrapKeyService.BootstrapOutcome.ServerError:
+                    error = "Server error. Please try again.";
+                    break;
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

@@ -1,7 +1,10 @@
 @page "/login"
 @layout EmptyLayout
 @inject EncryptedChat.Client.Services.AuthClient Auth
+@inject EncryptedChat.Client.Services.UserClient UserClient
+@inject EncryptedChat.Client.Services.Crypto.KeyVaultService Vault
 @inject NavigationManager Nav
+@using EncryptedChat.Client.Pages.Components
 
 @using System.ComponentModel.DataAnnotations
 @using EncryptedChat.Client.Pages.Components
@@ -114,6 +117,12 @@
     </GlassPanel>
 
     <RestoreModal IsOpen="@showRestore" OnClose="() => showRestore = false" />
+
+    <KeyBootstrapModal
+        IsOpen="@showKeyBootstrap"
+        UserId="@pendingUserId"
+        OnSuccess="OnKeyBootstrapSuccess"
+        OnClose="() => showKeyBootstrap = false" />
 </div>
 
 <style>
@@ -136,6 +145,9 @@
     private bool isLoading;
     private bool showRestore;
 
+    private bool showKeyBootstrap;
+    private string pendingUserId = "";
+
     private async Task HandleLogin()
     {
         isLoading = true;
@@ -145,15 +157,46 @@
         {
             var result = await Auth.LoginAsync(loginModel.Email, loginModel.Password);
 
-            if (result.Success)
-                Nav.NavigateTo("/chat", forceLoad: true);
-            else
+            if (!result.Success)
+            {
                 errorMessage = result.ErrorMessage ?? "Login failed. Please try again.";
+                return;
+            }
+
+            // Check if E2E keys are bootstrapped on this device. If not, pop the
+            // modal to prompt for the recovery phrase before letting the user
+            // hit /chat (where everything is encrypted).
+            var profile = await UserClient.GetProfileAsync();
+            if (!profile.Success || profile.Value == null)
+            {
+                // Auth succeeded but profile fetch failed — let the user reach
+                // /chat and re-handle there; don't block login.
+                Nav.NavigateTo("/chat", forceLoad: true);
+                return;
+            }
+
+            string userId = profile.Value.Id;
+            bool bootstrapped = await Vault.IsBootstrappedAsync(userId);
+            if (bootstrapped)
+            {
+                Nav.NavigateTo("/chat", forceLoad: true);
+                return;
+            }
+
+            // Fresh device (or post-migration legacy) — show the bootstrap modal.
+            pendingUserId = userId;
+            showKeyBootstrap = true;
         }
         finally
         {
             isLoading = false;
         }
+    }
+
+    private void OnKeyBootstrapSuccess()
+    {
+        showKeyBootstrap = false;
+        Nav.NavigateTo("/chat", forceLoad: true);
     }
 
     public class LoginModel
