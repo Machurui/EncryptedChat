@@ -168,3 +168,10 @@ window.setBubbleColorPreview = (color) => {
     const el = document.getElementById('messages-container');
     if (el) el.style.setProperty('--own-bubble', color);
 };
+
+// Used by Chat.razor's OnInitializedAsync to decide whether to auto-select
+// the first team. On mobile (≤ 767px) we want the user to land on the
+// sidebar (team/DM list) and pick a conversation themselves — same UX as
+// WhatsApp / Telegram / Discord. Above that, the 3-column layout fits and
+// auto-opening the first team is a faster start.
+window.getViewportWidth = () => window.innerWidth || document.documentElement.clientWidth || 0;

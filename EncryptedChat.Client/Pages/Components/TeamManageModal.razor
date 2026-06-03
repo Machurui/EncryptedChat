@@ -4,17 +4,15 @@
 @if (IsOpen && Team != null)
 {
     <div class="modal-overlay" @onclick="Close">
-        <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Class="modal-responsive team-manage-modal" Style="width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div class="team-manage-wrapper" @onclick:stopPropagation="true">
+            <GlassPanel Radius="24" Class="modal-responsive team-manage-modal">
                 <!-- Header -->
-                <div class="team-modal-header modal-header">
-                    <div class="team-modal-header-left">
-                        <div class="team-glyph" style="width: 42px; height: 42px; font-size: 16px; background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));">
-                            @GetTeamInitials(Team.Name)
-                        </div>
+                <div class="tm-header">
+                    <div class="tm-header-left">
+                        <div class="tm-glyph">@GetTeamInitials(Team.Name)</div>
                         <div>
-                            <div class="team-modal-label">Team settings</div>
-                            <div class="team-modal-title">@Team.Name</div>
+                            <div class="tm-eyebrow">Team settings</div>
+                            <div class="tm-title">@Team.Name</div>
                         </div>
                     </div>
                     <IconButton Title="Close" OnClick="Close">
@@ -25,331 +23,774 @@
                 </div>
 
                 <!-- Tabs -->
-                <div class="team-modal-tabs">
-                    <button class="team-tab @(activeTab == "members" ? "active" : "")" @onclick='() => activeTab = "members"'>
+                <div class="tm-tabs">
+                    <button class="tm-tab @(activeTab == "general" ? "active" : "")" @onclick='() => activeTab = "general"'>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                        </svg>
+                        General
+                    </button>
+                    <button class="tm-tab @(activeTab == "members" ? "active" : "")" @onclick='() => activeTab = "members"'>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
                             <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
                         </svg>
                         Members
                     </button>
-                    <button class="team-tab @(activeTab == "keys" ? "active" : "")" @onclick='() => activeTab = "keys"'>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>
-                        </svg>
-                        Encryption keys
-                    </button>
-                    <button class="team-tab @(activeTab == "general" ? "active" : "")" @onclick='() => activeTab = "general"'>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-                        </svg>
-                        General
-                    </button>
                 </div>
 
-                <!-- Content -->
-                <div class="team-modal-content modal-body">
-                    @if (activeTab == "members")
+                <!-- Body + footer wrap so the footer pins to the bottom while the body scrolls -->
+                <div class="tm-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
                     {
-                        @if (!string.IsNullOrEmpty(errorMessage))
-                        {
-                            <div class="error-banner">@errorMessage</div>
-                        }
+                        <div class="tm-error">@errorMessage</div>
+                    }
 
-                        <div class="team-section">
-                            <div class="team-section-label">Current members</div>
-                            <div class="members-list">
-                                @if (Members != null)
+                    @if (activeTab == "general")
+                    {
+                        <div class="tm-field">
+                            <label class="tm-field-label">Team name</label>
+                            <div class="tm-row">
+                                <div class="glass-input" style="flex: 1;">
+                                    <input type="text" @bind="editTeamName" disabled="@(!IsAdmin || isSaving)" maxlength="100" />
+                                </div>
+                                @if (IsAdmin)
                                 {
-                                    @foreach (var member in Members.OrderByDescending(m => m.Role == "Admin"))
-                                    {
-                                        <div class="member-row">
-                                            <Avatar Name="@member.User?.Name" Size="36" />
-                                            <div class="member-info">
-                                                <div class="member-name">@member.User?.Name</div>
-                                                <div class="member-role @(member.Role == "Admin" ? "admin" : "")">@member.Role</div>
-                                            </div>
-                                            @if (IsAdmin && member.User?.Id != CurrentUserId && member.Role != "Admin")
-                                            {
-                                                <div class="member-actions">
-                                                    <GlassButton Size="sm" OnClick="() => PromoteMember(member.User!.Id)">Promote</GlassButton>
-                                                    <GlassButton Size="sm" OnClick="() => RemoveMember(member.User!.Id)" Style="color: oklch(0.78 0.14 25);">Remove</GlassButton>
-                                                </div>
-                                            }
-                                        </div>
-                                    }
+                                    <GlassButton Primary="true" Disabled="@isSaving" OnClick="DoRename">
+                                        @(isSaving ? "Saving…" : "Save")
+                                    </GlassButton>
                                 }
                             </div>
                         </div>
-                    }
-                    else if (activeTab == "keys")
-                    {
-                        <div class="team-section">
-                            <div class="encryption-banner">
-                                <svg class="encryption-banner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="20 6 9 17 4 12"/>
-                                </svg>
-                                <div>
-                                    <div class="encryption-banner-title">All keys verified</div>
-                                    <div class="encryption-banner-text">All members' encryption keys have been automatically verified.</div>
+
+                        @* Bubble color — same data source as the chat header
+                            picker (userBubbleColors dict). Each drag auto-persists
+                            via the parent's HandleBubbleColorFromModal handler. *@
+                        <div class="tm-field">
+                            <label class="tm-field-label">My bubble color</label>
+                            <div class="tm-bubble-sub">Only you see it — your outgoing bubbles in this team.</div>
+
+                            <label class="tm-bubble-preview" style="--bc: @CurrentBubbleColor;">
+                                <input type="color" class="tm-bubble-native"
+                                       value="@SafeHex(CurrentBubbleColor)"
+                                       @oninput="OnPickerInput" @onchange="OnPickerInput" />
+                                <span class="tm-bubble-glow"></span>
+                                <div class="tm-bubble-row">
+                                    <div class="tm-bubble-sample"
+                                         style="background: linear-gradient(135deg, @CurrentBubbleColor, color-mix(in oklch, @CurrentBubbleColor 55%, black)); box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px color-mix(in oklch, @CurrentBubbleColor 30%, transparent);">
+                                        Looks great in @Team.Name ✨
+                                    </div>
                                 </div>
+                            </label>
+
+                            <div class="tm-bubble-controls">
+                                <div class="tm-bubble-slider-track">
+                                    <input type="range" min="0" max="360" step="1"
+                                           value="@GetHue(CurrentBubbleColor)"
+                                           @oninput="OnSliderInput"
+                                           class="tm-bubble-slider" />
+                                </div>
+                                <input type="text" class="tm-bubble-text"
+                                       value="@CurrentBubbleColor"
+                                       @onchange="OnHexInput"
+                                       placeholder="#10B981" spellcheck="false" />
                             </div>
 
-                            <div class="team-section-label">Safety numbers</div>
-                            <div class="safety-numbers">
-                                <div class="safety-number-grid">
-                                    @for (int i = 0; i < 12; i++)
+                            <button class="tm-bubble-reset" @onclick="DoBubbleReset">Reset to default</button>
+                        </div>
+
+                        @if (IsOwner)
+                        {
+                            <div class="tm-danger">
+                                <div>
+                                    <div class="tm-danger-title">Delete team</div>
+                                    <div class="tm-danger-sub">Permanently destroys the team key. Cannot be undone.</div>
+                                </div>
+                                <button class="tm-danger-btn" @onclick="() => showDeleteConfirm = true">Delete…</button>
+                            </div>
+                        }
+                    }
+                    else if (activeTab == "members")
+                    {
+                        @if (IsAdmin)
+                        {
+                            <div class="tm-field">
+                                <label class="tm-field-label">Invite by handle</label>
+                                <div class="glass-input">
+                                    <svg class="glass-input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
+                                    </svg>
+                                    <input type="text" @bind="inviteQuery" @bind:event="oninput" placeholder="Search friends to invite" disabled="@isInviting" />
+                                </div>
+                            </div>
+                        }
+
+                        <div class="tm-section-label">Current members · @(Members?.Count ?? 0)</div>
+                        @if (Members != null)
+                        {
+                            @foreach (var member in Members.OrderBy(m => m.Role == "Owner" ? 0 : m.Role == "Admin" ? 1 : 2))
+                            {
+                                var isMe = member.User?.Id == CurrentUserId;
+                                var memberId = member.User?.Id ?? "";
+                                var isOwnerRow = member.Role == "Owner";
+                                var isAdminRow = member.Role == "Admin";
+                                // Permission matrix (UI-side mirror of server):
+                                // - Owner viewer: can change Admin/Member roles, remove anyone (except self / owner row), transfer ownership to any Admin
+                                // - Admin viewer: can remove Members only — no role changes, no touching other Admins or the Owner
+                                // - Member viewer: read-only list
+                                bool canChangeRole = IsOwner && !isMe && !isOwnerRow;
+                                bool canRemove = !isOwnerRow && !isMe
+                                                 && (IsOwner || (IsAdmin && member.Role == "Member"));
+                                bool canTransferTo = IsOwner && !isMe && isAdminRow;
+
+                                <div class="tm-member-row">
+                                    <Avatar Name="@member.User?.Name" ImageUrl="@ResolveImageUrl(member.User?.ProfileImageUrl)" Color="@(member.User?.NameColor ?? "var(--accent)")" Size="32" />
+                                    <div class="tm-member-info">
+                                        <div class="tm-member-name">
+                                            @(member.User?.Name ?? "Unknown")
+                                            @if (isMe) { <span class="tm-member-you">(you)</span> }
+                                        </div>
+                                        <div class="tm-member-handle">@(member.User?.Handle ?? "no handle") · @member.Role</div>
+                                    </div>
+
+                                    @if (isOwnerRow)
                                     {
-                                        <span class="safety-number">@(12345 + i * 1111)</span>
+                                        <span class="tm-owner-badge" title="Team owner">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M2 7l5 4 5-7 5 7 5-4-2 13H4L2 7z"/>
+                                            </svg>
+                                            Owner
+                                        </span>
+                                    }
+                                    else if (canChangeRole)
+                                    {
+                                        <select class="tm-role-select"
+                                                value="@member.Role"
+                                                @onchange="@(e => HandleRoleChange(memberId, e.Value?.ToString() ?? "Member"))">
+                                            <option value="Admin">Admin</option>
+                                            <option value="Member">Member</option>
+                                        </select>
+                                    }
+
+                                    @if (canTransferTo)
+                                    {
+                                        <button class="tm-transfer-btn" title="Transfer ownership to this admin" @onclick="() => StartTransferOwnership(memberId)">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                                <polyline points="15 6 21 12 15 18"/><line x1="3" y1="12" x2="21" y2="12"/>
+                                            </svg>
+                                        </button>
+                                    }
+
+                                    @if (canRemove)
+                                    {
+                                        <button class="tm-row-x" title="Remove" @onclick="() => RemoveMember(memberId)">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                            </svg>
+                                        </button>
                                     }
                                 </div>
-                            </div>
+                            }
+                        }
 
-                            <div class="info-box">
-                                Compare these numbers with team members in person to verify their identity. If they match, you can be confident your communication is secure.
-                            </div>
-                        </div>
-                    }
-                    else if (activeTab == "general")
-                    {
-                        <div class="team-section">
-                            <div class="team-field">
-                                <label class="team-field-label">Team name</label>
-                                <GlassInput @bind-Value="editTeamName" Placeholder="Team name" />
-                            </div>
-
-                            @if (IsAdmin)
+                        @if (IsAdmin && SuggestedFriends.Any())
+                        {
+                            <div class="tm-section-label" style="margin-top: 18px;">Suggested · in your contacts</div>
+                            @foreach (var friend in SuggestedFriends)
                             {
-                                <div class="divider"></div>
-
-                                <div class="danger-zone">
-                                    <div class="danger-label">Danger zone</div>
-                                    <div class="danger-desc">Deleting this team will permanently remove all messages and members. This cannot be undone.</div>
-                                    <GlassButton Style="background: rgba(220,40,40,0.15); border-color: rgba(220,40,40,0.30); color: oklch(0.72 0.18 28);">
-                                        Delete team
-                                    </GlassButton>
+                                <div class="tm-suggest-row">
+                                    <Avatar Name="@friend.Name" ImageUrl="@ResolveImageUrl(friend.ProfileImageUrl)" Color="@(friend.NameColor ?? "var(--accent)")" Size="28" />
+                                    <div class="tm-suggest-name">@friend.Name</div>
+                                    <button class="glass-btn glass-btn-sm" @onclick="() => AddMember(friend.UserId)" disabled="@isInviting">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                                        </svg>
+                                        Add
+                                    </button>
                                 </div>
                             }
-                        </div>
+                        }
                     }
                 </div>
 
-                <!-- Footer -->
-                <div class="team-modal-footer modal-footer">
-                    <GlassButton OnClick="Close">Close</GlassButton>
-                    @if (activeTab == "general" && IsAdmin)
-                    {
-                        <GlassButton Primary="true" OnClick="SaveChanges">Save changes</GlassButton>
-                    }
-                </div>
             </GlassPanel>
         </div>
     </div>
+
+    @* Transfer ownership confirmation sub-modal *@
+    @if (transferTargetId != null && Team != null)
+    {
+        var targetMember = Members?.FirstOrDefault(m => m.User?.Id == transferTargetId);
+        var targetName = targetMember?.User?.Name ?? "this admin";
+        <div class="modal-overlay tm-delete-overlay" @onclick="CancelTransfer">
+            <div class="tm-delete-wrapper" @onclick:stopPropagation="true">
+                <GlassPanel Radius="20" Class="tm-delete-panel">
+                    <div class="tm-delete-body">
+                        <div class="tm-delete-title">Make @targetName the owner?</div>
+                        <div class="tm-delete-desc">
+                            You'll keep Admin access but lose ownership rights (delete team,
+                            promote/demote admins, transfer ownership). @targetName takes over.
+                        </div>
+                        <div class="tm-delete-actions">
+                            <button class="glass-btn" @onclick="CancelTransfer">Cancel</button>
+                            <GlassButton Primary="true" Disabled="@isTransferring" OnClick="ConfirmTransfer">
+                                @(isTransferring ? "Transferring…" : "Make owner")
+                            </GlassButton>
+                        </div>
+                    </div>
+                </GlassPanel>
+            </div>
+        </div>
+    }
+
+    @* Delete confirmation sub-modal — type team name to confirm *@
+    @if (showDeleteConfirm && Team != null)
+    {
+        <div class="modal-overlay tm-delete-overlay" @onclick="CancelDelete">
+            <div class="tm-delete-wrapper" @onclick:stopPropagation="true">
+                <GlassPanel Radius="20" Class="tm-delete-panel">
+                    <div class="tm-delete-body">
+                        <div class="tm-delete-title">Delete "@Team.Name"?</div>
+                        <div class="tm-delete-desc">
+                            This destroys the team key permanently. Every member loses access to past
+                            messages — they cannot be recovered, even by you. Type
+                            <strong>@Team.Name</strong> below to confirm.
+                        </div>
+                        <div class="glass-input" style="margin-top: 12px;">
+                            <input type="text" @bind="deleteConfirmText" @bind:event="oninput" placeholder="@Team.Name" />
+                        </div>
+                        <div class="tm-delete-actions">
+                            <button class="glass-btn" @onclick="CancelDelete">Cancel</button>
+                            <button class="tm-danger-btn"
+                                    disabled="@(deleteConfirmText != Team.Name || isDeleting)"
+                                    @onclick="DoDelete">
+                                @(isDeleting ? "Deleting…" : "Delete team")
+                            </button>
+                        </div>
+                    </div>
+                </GlassPanel>
+            </div>
+        </div>
+    }
 }
 
 <style>
-    .team-modal-header {
+    .team-manage-wrapper {
+        width: 100%;
+        max-width: 560px;
+        max-height: 80vh;
+        display: flex;
+    }
+
+    .team-manage-modal {
+        display: flex;
+        flex-direction: column;
+        max-height: 80vh;
+        width: 100%;
+    }
+
+    .tm-header {
         padding: 18px 22px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        border-bottom: 0.5px solid rgba(255, 255, 255, 0.10);
     }
 
-    .team-modal-header-left {
+    .tm-header-left {
         display: flex;
         align-items: center;
         gap: 12px;
     }
 
-    .team-modal-label {
+    .tm-glyph {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));
+        display: grid;
+        place-items: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.02em;
+        box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.30), 0 6px 18px var(--accent-glow);
+    }
+
+    .tm-eyebrow {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(255, 255, 255, 0.55);
         text-transform: uppercase;
         letter-spacing: 0.08em;
         font-weight: 600;
     }
 
-    .team-modal-title {
+    .tm-title {
         font-size: 17px;
         font-weight: 700;
         color: white;
         letter-spacing: -0.015em;
     }
 
-    .team-modal-tabs {
+    .tm-tabs {
         display: flex;
         gap: 2px;
         padding: 12px 22px 0;
     }
 
-    .team-tab {
+    .tm-tab {
         display: inline-flex;
         align-items: center;
         gap: 6px;
         padding: 7px 12px;
         border: none;
-        cursor: pointer;
         background: transparent;
         border-radius: 8px;
         font-size: 12px;
-        font-weight: 500;
-        color: rgba(255,255,255,0.65);
-        font-family: inherit;
-        transition: all 0.2s;
-    }
-
-    .team-tab:hover {
-        background: rgba(255,255,255,0.06);
-    }
-
-    .team-tab.active {
-        background: rgba(255,255,255,0.10);
-        color: white;
         font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.15s, color 0.15s;
     }
 
-    .team-modal-content {
+    .tm-tab:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tm-tab.active {
+        background: rgba(255, 255, 255, 0.10);
+        color: white;
+    }
+
+    .tm-body {
         flex: 1;
-        overflow: auto;
-        padding: 16px 22px;
-    }
-
-    .team-section {
+        overflow-y: auto;
+        padding: 16px 22px 22px;
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 18px;
     }
 
-    .team-section-label {
+
+    .tm-error {
+        padding: 10px 12px;
+        background: rgba(220, 60, 60, 0.15);
+        border: 0.5px solid rgba(220, 60, 60, 0.30);
+        border-radius: 10px;
+        font-size: 12px;
+        color: oklch(0.78 0.14 25);
+    }
+
+    .tm-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .tm-field-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.75);
+    }
+
+    .tm-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+
+    .tm-section-label {
         font-size: 11px;
         font-weight: 600;
-        letter-spacing: 0.08em;
+        color: rgba(255, 255, 255, 0.55);
         text-transform: uppercase;
-        color: rgba(255,255,255,0.45);
+        letter-spacing: 0.06em;
+        margin-top: 4px;
     }
 
-    .members-list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .member-row {
+    .tm-member-row {
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 10px 12px;
-        background: rgba(255,255,255,0.05);
-        border-radius: 12px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 0.5px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 4px;
     }
 
-    .member-info {
+    .tm-member-info {
         flex: 1;
         min-width: 0;
     }
 
-    .member-name {
+    .tm-member-name {
         font-size: 13px;
         font-weight: 600;
         color: white;
     }
 
-    .member-role {
-        font-size: 11px;
-        color: rgba(255,255,255,0.50);
+    .tm-member-you {
+        font-size: 10px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.50);
+        margin-left: 4px;
     }
 
-    .member-role.admin {
+    .tm-member-handle {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.55);
+    }
+
+    .tm-role-select {
+        appearance: none;
+        -webkit-appearance: none;
+        background: rgba(255, 255, 255, 0.06);
+        border: 0.5px solid rgba(255, 255, 255, 0.18);
+        color: white;
+        padding: 5px 28px 5px 10px;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        /* Custom chevron — replaces the OS dropdown arrow which doesn't
+           match the glass theme. */
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .tm-role-select:hover {
+        background-color: rgba(255, 255, 255, 0.10);
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .tm-role-select option {
+        background: #131820;
+        color: white;
+    }
+
+    .tm-owner-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, oklch(0.78 0.14 75 / 0.20), oklch(0.78 0.14 75 / 0.08));
+        border: 0.5px solid oklch(0.78 0.14 75 / 0.40);
+        color: oklch(0.86 0.10 75);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .tm-transfer-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, color 0.15s;
+    }
+
+    .tm-transfer-btn:hover {
+        background: rgba(255, 255, 255, 0.10);
         color: oklch(0.78 0.14 75);
     }
 
-    .member-actions {
-        display: flex;
-        gap: 6px;
+    .tm-row-x {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, color 0.15s;
     }
 
-    .error-banner {
-        padding: 10px 12px;
-        background: rgba(220,60,60,0.15);
-        border: 0.5px solid rgba(220,60,60,0.30);
-        border-radius: 10px;
-        font-size: 12px;
+    .tm-row-x:hover {
+        background: rgba(220, 60, 60, 0.15);
         color: oklch(0.78 0.14 25);
-        margin-bottom: 14px;
     }
 
-    .safety-numbers {
-        padding: 16px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.10);
-        border-radius: 12px;
-    }
-
-    .safety-number-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        text-align: center;
-    }
-
-    .safety-number {
-        font-family: ui-monospace, SF Mono, Menlo, monospace;
-        font-size: 13px;
-        color: rgba(255,255,255,0.75);
-        letter-spacing: 0.05em;
-    }
-
-    .info-box {
-        padding: 10px 12px;
+    .tm-suggest-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 10px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.08);
-        font-size: 11.5px;
-        color: rgba(255,255,255,0.65);
+        margin-bottom: 2px;
+    }
+
+    .tm-suggest-row:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tm-suggest-name {
+        flex: 1;
+        font-size: 12.5px;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .tm-danger {
+        margin-top: 10px;
+        padding: 14px;
+        border-radius: 12px;
+        background: rgba(220, 60, 60, 0.08);
+        border: 0.5px solid rgba(220, 60, 60, 0.30);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .tm-danger-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: oklch(0.78 0.14 25);
+    }
+
+    .tm-danger-sub {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.55);
+        margin-top: 2px;
+    }
+
+    .tm-danger-btn {
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        background: rgba(220, 60, 60, 0.15);
+        border: 0.5px solid rgba(220, 60, 60, 0.40);
+        color: oklch(0.85 0.12 25);
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.15s;
+    }
+
+    .tm-danger-btn:hover:not(:disabled) {
+        background: rgba(220, 60, 60, 0.25);
+    }
+
+    .tm-danger-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Bubble color picker (mirrors the chat-header version, same dimensions) */
+    .tm-bubble-sub {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.55);
+        margin-top: -2px;
+        margin-bottom: 6px;
+    }
+
+    .tm-bubble-preview {
+        position: relative;
+        display: block;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, color-mix(in oklch, var(--bc) 12%, transparent), rgba(255, 255, 255, 0.04) 60%);
+        border: 0.5px solid rgba(255, 255, 255, 0.12);
+        box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.10);
+        overflow: hidden;
+        margin-bottom: 12px;
+        cursor: pointer;
+    }
+
+    .tm-bubble-native {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        border: none;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .tm-bubble-glow {
+        position: absolute;
+        right: -40px;
+        bottom: -40px;
+        width: 140px;
+        height: 140px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--bc), transparent 70%);
+        filter: blur(22px);
+        opacity: 0.50;
+        pointer-events: none;
+    }
+
+    .tm-bubble-row {
+        position: relative;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .tm-bubble-sample {
+        padding: 9px 14px;
+        border-radius: 16px;
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: -0.005em;
+        border: 0.5px solid rgba(255, 255, 255, 0.18);
+        max-width: 70%;
+    }
+
+    .tm-bubble-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 0.5px solid rgba(255, 255, 255, 0.10);
+    }
+
+    .tm-bubble-slider-track {
+        position: relative;
+        flex: 1;
+        height: 22px;
+    }
+
+    .tm-bubble-slider-track::before {
+        content: "";
+        position: absolute;
+        inset: 6px 2px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #ff0040 0%, #ffae00 14%, #d4ff00 28%, #2cff5b 42%, #00f4ff 56%, #2c8bff 70%, #b25bff 84%, #ff34c2 100%);
+        border: 0.5px solid rgba(255, 255, 255, 0.18);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.30);
+    }
+
+    .tm-bubble-slider {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        background: transparent;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    .tm-bubble-slider::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(0, 0, 0, 0.35);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+
+    .tm-bubble-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(0, 0, 0, 0.35);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+
+    .tm-bubble-text {
+        width: 140px;
+        flex: 0 0 140px;
+        background: rgba(0, 0, 0, 0.18);
+        border: 0.5px solid rgba(255, 255, 255, 0.10);
+        border-radius: 8px;
+        outline: none;
+        color: white;
+        font-size: 12px;
+        padding: 6px 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+
+    .tm-bubble-reset {
+        margin-top: 8px;
+        align-self: flex-start;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 11px;
+        cursor: pointer;
+        padding: 4px 6px;
+        font-family: inherit;
+    }
+
+    .tm-bubble-reset:hover {
+        color: white;
+    }
+
+    /* Delete confirmation sub-modal — sits above the manage modal */
+    .tm-delete-overlay {
+        z-index: 300;
+    }
+
+    .tm-delete-wrapper {
+        width: 100%;
+        max-width: 440px;
+        display: flex;
+    }
+
+    .tm-delete-body {
+        padding: 20px 22px;
+    }
+
+    .tm-delete-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: white;
+        letter-spacing: -0.015em;
+    }
+
+    .tm-delete-desc {
+        margin-top: 8px;
+        font-size: 12.5px;
+        color: rgba(255, 255, 255, 0.65);
         line-height: 1.5;
     }
 
-    .team-field {
+    .tm-delete-actions {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-
-    .team-field-label {
-        font-size: 11.5px;
-        font-weight: 600;
-        color: rgba(255,255,255,0.75);
-    }
-
-    .danger-zone {
-        padding: 14px;
-        background: rgba(220,40,40,0.08);
-        border: 0.5px solid rgba(220,40,40,0.20);
-        border-radius: 12px;
-        display: flex;
-        flex-direction: column;
         gap: 8px;
-    }
-
-    .danger-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: oklch(0.72 0.18 28);
-    }
-
-    .danger-desc {
-        font-size: 11.5px;
-        color: rgba(255,255,255,0.55);
-        line-height: 1.4;
-    }
-
-    .team-modal-footer {
-        padding: 14px 22px;
-        border-top: 0.5px solid rgba(255,255,255,0.10);
-        display: flex;
         justify-content: flex-end;
-        gap: 8px;
+        margin-top: 14px;
+    }
+
+    /* Mobile: full-screen sheets for both the modal and the delete confirm */
+    @@media (max-width: 767px) {
+        .team-manage-wrapper,
+        .tm-delete-wrapper {
+            max-width: none;
+            max-height: 100dvh;
+            height: 100dvh;
+        }
+        .team-manage-modal {
+            max-height: 100dvh;
+            border-radius: 0 !important;
+        }
     }
 </style>
 
@@ -357,21 +798,79 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public TeamClient.TeamDTOPublic? Team { get; set; }
     [Parameter] public List<TeamClient.MemberDTOPublic>? Members { get; set; }
+    [Parameter] public List<FriendClient.FriendDTO>? Friends { get; set; }
     [Parameter] public string? CurrentUserId { get; set; }
     [Parameter] public bool IsAdmin { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<string> OnPromote { get; set; }
+    [Parameter] public EventCallback<string> OnDemote { get; set; }
     [Parameter] public EventCallback<string> OnRemove { get; set; }
+    [Parameter] public EventCallback<string> OnRename { get; set; }
+    [Parameter] public EventCallback<string> OnAddMember { get; set; }
+    [Parameter] public EventCallback<string> OnTransferOwnership { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
 
-    private string activeTab = "members";
+    // Bubble color (per-user). Parent owns the source-of-truth dict
+    // (userBubbleColors[teamId]); the modal reads via MyBubbleColor and
+    // writes via OnBubbleColorChange(color) / OnBubbleColorReset().
+    [Parameter] public string? MyBubbleColor { get; set; }
+    [Parameter] public EventCallback<string> OnBubbleColorChange { get; set; }
+    [Parameter] public EventCallback OnBubbleColorReset { get; set; }
+
+    private const string ApiBaseUrl = "https://localhost:7294";
+    private const string DefaultBubbleColor = "oklch(0.65 0.16 165)";
+
+    private string activeTab = "general";
     private string editTeamName = "";
+    private string inviteQuery = "";
+    private bool isSaving;
+    private bool isInviting;
+    private bool isDeleting;
+    private bool showDeleteConfirm;
+    private string deleteConfirmText = "";
+    private string? transferTargetId;
+    private bool isTransferring;
     private string? errorMessage;
+
+    private Guid? _lastTeamId;
 
     protected override void OnParametersSet()
     {
-        if (Team != null)
+        if (Team == null) return;
+
+        // Reset edit state when switching teams so half-edits don't leak.
+        if (_lastTeamId != Team.Id)
         {
+            _lastTeamId = Team.Id;
             editTeamName = Team.Name;
+            return;
+        }
+
+        if (!isSaving && (string.IsNullOrEmpty(editTeamName) || editTeamName == Team.Name))
+            editTeamName = Team.Name;
+    }
+
+    private bool RenameChanged =>
+        !string.IsNullOrWhiteSpace(editTeamName)
+        && editTeamName.Trim() != Team?.Name
+        && editTeamName.Length <= 100;
+
+    private string CurrentBubbleColor => MyBubbleColor ?? DefaultBubbleColor;
+
+    private IEnumerable<FriendClient.FriendDTO> SuggestedFriends
+    {
+        get
+        {
+            if (Friends == null) return Array.Empty<FriendClient.FriendDTO>();
+            var memberIds = (Members ?? new()).Select(m => m.User?.Id).Where(id => id != null).ToHashSet();
+            var query = (inviteQuery ?? "").Trim();
+            return Friends
+                .Where(f => !memberIds.Contains(f.UserId))
+                .Where(f => string.IsNullOrEmpty(query)
+                    || (f.Name?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (f.Handle?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                .Take(string.IsNullOrEmpty(query) ? 3 : 10);
         }
     }
 
@@ -385,15 +884,53 @@
 
     private async Task Close()
     {
-        activeTab = "members";
+        activeTab = "general";
         errorMessage = null;
+        showDeleteConfirm = false;
+        deleteConfirmText = "";
+        inviteQuery = "";
         await OnClose.InvokeAsync();
     }
 
-    private async Task PromoteMember(string userId)
+    private async Task DoRename()
+    {
+        if (!RenameChanged) return;
+        errorMessage = null;
+        isSaving = true;
+        try { await OnRename.InvokeAsync(editTeamName.Trim()); }
+        finally { isSaving = false; }
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+        deleteConfirmText = "";
+    }
+
+    private async Task DoDelete()
+    {
+        if (Team == null || deleteConfirmText != Team.Name) return;
+        errorMessage = null;
+        isDeleting = true;
+        try { await OnDelete.InvokeAsync(); }
+        finally
+        {
+            isDeleting = false;
+            showDeleteConfirm = false;
+            deleteConfirmText = "";
+        }
+    }
+
+    private async Task AddMember(string userId)
     {
         errorMessage = null;
-        await OnPromote.InvokeAsync(userId);
+        isInviting = true;
+        try { await OnAddMember.InvokeAsync(userId); }
+        finally
+        {
+            isInviting = false;
+            inviteQuery = "";
+        }
     }
 
     private async Task RemoveMember(string userId)
@@ -402,8 +939,97 @@
         await OnRemove.InvokeAsync(userId);
     }
 
-    private Task SaveChanges()
+    private async Task HandleRoleChange(string userId, string newRole)
     {
-        return Task.CompletedTask;
+        errorMessage = null;
+        if (newRole == "Admin") await OnPromote.InvokeAsync(userId);
+        else await OnDemote.InvokeAsync(userId);
+    }
+
+    // ---------- Transfer ownership ----------
+    private void StartTransferOwnership(string userId)
+    {
+        transferTargetId = userId;
+    }
+
+    private void CancelTransfer()
+    {
+        transferTargetId = null;
+    }
+
+    private async Task ConfirmTransfer()
+    {
+        if (string.IsNullOrEmpty(transferTargetId)) return;
+        errorMessage = null;
+        isTransferring = true;
+        try { await OnTransferOwnership.InvokeAsync(transferTargetId); }
+        finally
+        {
+            isTransferring = false;
+            transferTargetId = null;
+        }
+    }
+
+    // ---------- Bubble color helpers ----------
+
+    private string SafeHex(string color)
+    {
+        // <input type="color"> only accepts #RRGGBB. For oklch() / named colors,
+        // fall back to a neutral default so the picker mounts cleanly.
+        if (string.IsNullOrEmpty(color)) return "#10b981";
+        if (color.StartsWith("#") && (color.Length == 7 || color.Length == 4)) return color;
+        return "#10b981";
+    }
+
+    private int GetHue(string color)
+    {
+        // Pull the third numeric token out of oklch(0.68 0.16 H). Default 165
+        // (teal) when the color is a hex/named value where hue isn't trivial.
+        if (string.IsNullOrEmpty(color) || !color.StartsWith("oklch", StringComparison.OrdinalIgnoreCase))
+            return 165;
+        try
+        {
+            var inside = color[color.IndexOf('(')..color.IndexOf(')')].Trim('(', ')');
+            var parts = inside.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3 && double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h))
+                return (int)Math.Round(h);
+        }
+        catch { }
+        return 165;
+    }
+
+    // Auto-persist handlers — every drag immediately fires the parent's
+    // BubbleColorChange callback, which updates the shared userBubbleColors
+    // dict and persists server-side. Matches the chat header picker.
+    private async Task OnPickerInput(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        if (!string.IsNullOrEmpty(v)) await OnBubbleColorChange.InvokeAsync(v);
+    }
+
+    private async Task OnSliderInput(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var hue)) return;
+        await OnBubbleColorChange.InvokeAsync($"oklch(0.68 0.16 {hue})");
+    }
+
+    private async Task OnHexInput(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        if (!string.IsNullOrWhiteSpace(v)) await OnBubbleColorChange.InvokeAsync(v);
+    }
+
+    private async Task DoBubbleReset()
+    {
+        await OnBubbleColorReset.InvokeAsync();
+    }
+
+    // ---------- Image URL ----------
+
+    private string? ResolveImageUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        if (url.StartsWith("http")) return url;
+        return $"{ApiBaseUrl}{url}";
     }
 }

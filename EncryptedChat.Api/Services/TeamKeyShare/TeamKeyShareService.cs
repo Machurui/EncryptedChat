@@ -29,7 +29,7 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
         Member? adminMembership = await _context.Members
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == adminUserId);
-        if (adminMembership == null || adminMembership.Role != "Admin")
+        if (adminMembership == null || !Member.IsAdminOrAbove(adminMembership.Role))
             return KeyShareInsertResult.Forbidden;
 
         Team? team = await _context.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == teamId);
@@ -64,7 +64,7 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
     {
         Member? adminMembership = await _context.Members
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == adminUserId);
-        if (adminMembership == null || adminMembership.Role != "Admin")
+        if (adminMembership == null || !Member.IsAdminOrAbove(adminMembership.Role))
             return RemoveAndRotateResult.Forbidden;
 
         Member? removedMembership = await _context.Members

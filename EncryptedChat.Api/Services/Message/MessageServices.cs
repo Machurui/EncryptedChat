@@ -224,7 +224,8 @@ public class MessageService(EncryptedChatContext context) : IMessageService
 
         bool isOwner = messageToDelete.Sender?.Id == actorId;
         bool isAdmin = await _context.Members
-            .AnyAsync(m => m.TeamId == messageToDelete.Team.Id && m.UserId == actorId && m.Role == Member.AdminRole);
+            .AnyAsync(m => m.TeamId == messageToDelete.Team.Id && m.UserId == actorId
+                           && (m.Role == Member.AdminRole || m.Role == Member.OwnerRole));
 
         if (!isOwner && !isAdmin)
             return null;

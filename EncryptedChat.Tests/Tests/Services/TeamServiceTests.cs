@@ -51,7 +51,7 @@ public class TeamServiceTests : IDisposable
         return user;
     }
 
-    private async Task<Team> CreateTeam(string name, User admin)
+    private async Task<Team> CreateTeam(string name, User admin, string role = Member.AdminRole)
     {
         Team team = new()
         {
@@ -64,7 +64,7 @@ public class TeamServiceTests : IDisposable
             Team = team,
             User = admin,
             UserId = admin.Id,
-            Role = Member.AdminRole
+            Role = role
         });
         _context.Teams.Add(team);
         await _context.SaveChangesAsync();
@@ -74,16 +74,16 @@ public class TeamServiceTests : IDisposable
     #region CreateAsync
 
     [Fact]
-    public async Task CreateAsync_CreatesTeam_WithCreatorAsAdmin()
+    public async Task CreateAsync_CreatesTeam_WithCreatorAsOwner()
     {
         User creator = await CreateUser("creator");
-        TeamDTO dto = new() { Name = "New Team", Admins = [], Members = [] };
+        TeamDTO dto = new() { Name = "New Team", Admins = [], Members = [], MemberKeyShares = new() { [creator.Id] = "wrapped" } };
 
         TeamDTOPublic? result = await _service.CreateAsync(dto, creator.Id);
 
         result.Should().NotBeNull();
         result!.Name.Should().Be("New Team");
-        result.Members.Should().ContainSingle(m => m.User!.Id == creator.Id && m.Role == Member.AdminRole);
+        result.Members.Should().ContainSingle(m => m.User!.Id == creator.Id && m.Role == Member.OwnerRole);
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class TeamServiceTests : IDisposable
     public async Task CreateAsync_TrimsName()
     {
         User creator = await CreateUser("creator");
-        TeamDTO dto = new() { Name = "  Trimmed  ", Admins = [], Members = [] };
+        TeamDTO dto = new() { Name = "  Trimmed  ", Admins = [], Members = [], MemberKeyShares = new() { [creator.Id] = "wrapped" } };
 
         TeamDTOPublic? result = await _service.CreateAsync(dto, creator.Id);
 
@@ -135,13 +135,13 @@ public class TeamServiceTests : IDisposable
     {
         User creator = await CreateUser("creator");
         User admin2 = await CreateUser("admin2");
-        TeamDTO dto = new() { Name = "Team", Admins = [admin2.Id], Members = [] };
+        TeamDTO dto = new() { Name = "Team", Admins = [admin2.Id], Members = [], MemberKeyShares = new() { [creator.Id] = "wrapped", [admin2.Id] = "wrapped2" } };
 
         TeamDTOPublic? result = await _service.CreateAsync(dto, creator.Id);
 
         result.Should().NotBeNull();
         result!.Members.Should().HaveCount(2);
-        result.Members.Should().Contain(m => m.User!.Id == creator.Id && m.Role == Member.AdminRole);
+        result.Members.Should().Contain(m => m.User!.Id == creator.Id && m.Role == Member.OwnerRole);
         result.Members.Should().Contain(m => m.User!.Id == admin2.Id && m.Role == Member.AdminRole);
     }
 
@@ -150,7 +150,7 @@ public class TeamServiceTests : IDisposable
     {
         User creator = await CreateUser("creator");
         User member = await CreateUser("member");
-        TeamDTO dto = new() { Name = "Team", Admins = [], Members = [member.Id] };
+        TeamDTO dto = new() { Name = "Team", Admins = [], Members = [member.Id], MemberKeyShares = new() { [creator.Id] = "wrapped", [member.Id] = "wrapped2" } };
 
         TeamDTOPublic? result = await _service.CreateAsync(dto, creator.Id);
 
@@ -162,13 +162,29 @@ public class TeamServiceTests : IDisposable
     public async Task CreateAsync_GeneratesUniqueSlug()
     {
         User creator = await CreateUser("creator");
-        TeamDTO dto1 = new() { Name = "Same Name", Admins = [], Members = [] };
-        TeamDTO dto2 = new() { Name = "Same Name", Admins = [], Members = [] };
+        TeamDTO dto1 = new() { Name = "Same Name", Admins = [], Members = [], MemberKeyShares = new() { [creator.Id] = "w1" } };
+        TeamDTO dto2 = new() { Name = "Same Name", Admins = [], Members = [], MemberKeyShares = new() { [creator.Id] = "w2" } };
 
         TeamDTOPublic? team1 = await _service.CreateAsync(dto1, creator.Id);
         TeamDTOPublic? team2 = await _service.CreateAsync(dto2, creator.Id);
 
         team1!.Slug.Should().NotBe(team2!.Slug);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReturnsNull_WhenKeyShareCoverageIncomplete()
+    {
+        // True E2E: every member (creator + listed members) must have a wrapped
+        // key share. Here the member is missing one → creation must be rejected
+        // with zero side effects rather than shipping a member who can't decrypt.
+        User creator = await CreateUser("creator");
+        User member = await CreateUser("member");
+        TeamDTO dto = new() { Name = "Team", Admins = [], Members = [member.Id], MemberKeyShares = new() { [creator.Id] = "wrapped" } };
+
+        TeamDTOPublic? result = await _service.CreateAsync(dto, creator.Id);
+
+        result.Should().BeNull();
+        (await _context.Teams.AnyAsync()).Should().BeFalse();
     }
 
     #endregion
@@ -252,15 +268,31 @@ public class TeamServiceTests : IDisposable
     #region DeleteAsync
 
     [Fact]
-    public async Task DeleteAsync_DeletesTeam_WhenAdmin()
+    public async Task DeleteAsync_DeletesTeam_WhenOwner()
     {
-        User admin = await CreateUser("admin");
-        Team team = await CreateTeam("To Delete", admin);
+        User owner = await CreateUser("owner");
+        Team team = await CreateTeam("To Delete", owner, Member.OwnerRole);
 
-        TeamDTOPublic? result = await _service.DeleteAsync(team.Id, admin.Id);
+        TeamDTOPublic? result = await _service.DeleteAsync(team.Id, owner.Id);
 
         result.Should().NotBeNull();
         (await _context.Teams.FindAsync(team.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ReturnsNull_WhenAdminNotOwner()
+    {
+        // Owner-only action: an Admin (not Owner) must be denied.
+        User owner = await CreateUser("owner");
+        User admin = await CreateUser("admin");
+        Team team = await CreateTeam("Team", owner, Member.OwnerRole);
+        _context.Members.Add(new Member { TeamId = team.Id, UserId = admin.Id, Role = Member.AdminRole });
+        await _context.SaveChangesAsync();
+
+        TeamDTOPublic? result = await _service.DeleteAsync(team.Id, admin.Id);
+
+        result.Should().BeNull();
+        (await _context.Teams.FindAsync(team.Id)).Should().NotBeNull();
     }
 
     [Fact]
@@ -415,19 +447,36 @@ public class TeamServiceTests : IDisposable
     #region PromoteToAdminAsync
 
     [Fact]
-    public async Task PromoteToAdminAsync_PromotesMember_WhenAdmin()
+    public async Task PromoteToAdminAsync_PromotesMember_WhenOwner()
     {
+        User owner = await CreateUser("owner");
+        User member = await CreateUser("member");
+        Team team = await CreateTeam("Team", owner, Member.OwnerRole);
+        _context.Members.Add(new Member { TeamId = team.Id, UserId = member.Id, Role = Member.MemberRole });
+        await _context.SaveChangesAsync();
+
+        bool result = await _service.PromoteToAdminAsync(team.Id, member.Id, owner.Id);
+
+        result.Should().BeTrue();
+        Member? promoted = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == team.Id && m.UserId == member.Id);
+        promoted!.Role.Should().Be(Member.AdminRole);
+    }
+
+    [Fact]
+    public async Task PromoteToAdminAsync_ReturnsFalse_WhenAdminNotOwner()
+    {
+        // Owner-only action: an Admin cannot promote other members.
+        User owner = await CreateUser("owner");
         User admin = await CreateUser("admin");
         User member = await CreateUser("member");
-        Team team = await CreateTeam("Team", admin);
+        Team team = await CreateTeam("Team", owner, Member.OwnerRole);
+        _context.Members.Add(new Member { TeamId = team.Id, UserId = admin.Id, Role = Member.AdminRole });
         _context.Members.Add(new Member { TeamId = team.Id, UserId = member.Id, Role = Member.MemberRole });
         await _context.SaveChangesAsync();
 
         bool result = await _service.PromoteToAdminAsync(team.Id, member.Id, admin.Id);
 
-        result.Should().BeTrue();
-        Member? promoted = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == team.Id && m.UserId == member.Id);
-        promoted!.Role.Should().Be(Member.AdminRole);
+        result.Should().BeFalse();
     }
 
     [Fact]
@@ -473,19 +522,36 @@ public class TeamServiceTests : IDisposable
     #region DemoteFromAdminAsync
 
     [Fact]
-    public async Task DemoteFromAdminAsync_DemotesAdmin_WhenAdmin()
+    public async Task DemoteFromAdminAsync_DemotesAdmin_WhenOwner()
     {
+        User owner = await CreateUser("owner");
+        User admin2 = await CreateUser("admin2");
+        Team team = await CreateTeam("Team", owner, Member.OwnerRole);
+        _context.Members.Add(new Member { TeamId = team.Id, UserId = admin2.Id, Role = Member.AdminRole });
+        await _context.SaveChangesAsync();
+
+        bool result = await _service.DemoteFromAdminAsync(team.Id, admin2.Id, owner.Id);
+
+        result.Should().BeTrue();
+        Member? demoted = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == team.Id && m.UserId == admin2.Id);
+        demoted!.Role.Should().Be(Member.MemberRole);
+    }
+
+    [Fact]
+    public async Task DemoteFromAdminAsync_ReturnsFalse_WhenAdminNotOwner()
+    {
+        // Owner-only action: an Admin cannot demote another Admin.
+        User owner = await CreateUser("owner");
         User admin1 = await CreateUser("admin1");
         User admin2 = await CreateUser("admin2");
-        Team team = await CreateTeam("Team", admin1);
+        Team team = await CreateTeam("Team", owner, Member.OwnerRole);
+        _context.Members.Add(new Member { TeamId = team.Id, UserId = admin1.Id, Role = Member.AdminRole });
         _context.Members.Add(new Member { TeamId = team.Id, UserId = admin2.Id, Role = Member.AdminRole });
         await _context.SaveChangesAsync();
 
         bool result = await _service.DemoteFromAdminAsync(team.Id, admin2.Id, admin1.Id);
 
-        result.Should().BeTrue();
-        Member? demoted = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == team.Id && m.UserId == admin2.Id);
-        demoted!.Role.Should().Be(Member.MemberRole);
+        result.Should().BeFalse();
     }
 
     [Fact]

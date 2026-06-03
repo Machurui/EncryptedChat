@@ -295,6 +295,29 @@ public class AttachmentServiceTests : IDisposable
     }
 
     [Fact(Skip = SkipReason)]
+    public async Task DeleteAsync_DeletesAttachment_WhenTeamOwner()
+    {
+        User sender = await CreateUser("sender");
+        User teamOwner = await CreateUser("teamowner");
+        Team team = await CreateTeam("Team", teamOwner);
+        Member ownerMembership = await _context.Members.FirstAsync(m => m.TeamId == team.Id && m.UserId == teamOwner.Id);
+        ownerMembership.Role = Member.OwnerRole;
+        _context.Members.Add(new Member { TeamId = team.Id, UserId = sender.Id, Role = Member.MemberRole });
+        await _context.SaveChangesAsync();
+
+        Message message = await CreateMessage(sender, team);
+
+        _mockStorage.Setup(s => s.SaveAsync(It.IsAny<byte[]>(), team.Id)).ReturnsAsync("path/file.enc");
+        _mockStorage.Setup(s => s.DeleteAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var (created, _, _) = await _service.CreateAsync(message.Id, MakeUpload([1, 2, 3], "text/plain", team.KeyGeneration), sender.Id);
+
+        bool result = await _service.DeleteAsync(created!.Id, teamOwner.Id);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact(Skip = SkipReason)]
     public async Task DeleteAsync_ReturnsFalse_WhenNotOwnerNorAdmin()
     {
         User admin = await CreateUser("admin");

@@ -14,11 +14,13 @@ namespace EncryptedChat.Controllers;
 public class FriendController(
     IFriendService friendService,
     IUserService userService,
-    IHubContext<ChatHub> hubContext) : ControllerBase
+    IHubContext<ChatHub> hubContext,
+    ILogger<FriendController> logger) : ControllerBase
 {
     private readonly IFriendService _friendService = friendService;
     private readonly IUserService _userService = userService;
     private readonly IHubContext<ChatHub> _hubContext = hubContext;
+    private readonly ILogger<FriendController> _logger = logger;
 
     private string? GetCurrentUserId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -73,6 +75,7 @@ public class FriendController(
         if (request == null)
             return BadRequest(new { Message = "Could not send friend request. User may not exist or request already exists." });
 
+        _logger.LogInformation("[FriendController] Broadcasting FriendRequestReceived to UserId={AddresseeId}, RequestId={RequestId}", addresseeId, request.RequestId);
         await _hubContext.Clients.User(addresseeId).SendAsync("FriendRequestReceived", request);
 
         return Ok(new { Message = "Friend request sent." });
@@ -91,6 +94,7 @@ public class FriendController(
 
         if (!string.IsNullOrEmpty(requesterId) && accepterAsFriend != null)
         {
+            _logger.LogInformation("[FriendController] Broadcasting FriendRequestAccepted to UserId={RequesterId}, RequestId={RequestId}", requesterId, requestId);
             await _hubContext.Clients.User(requesterId).SendAsync("FriendRequestAccepted", requestId, accepterAsFriend);
         }
 
@@ -110,6 +114,7 @@ public class FriendController(
 
         if (!string.IsNullOrEmpty(otherUserId))
         {
+            _logger.LogInformation("[FriendController] Broadcasting FriendRequestCancelled to UserId={OtherUserId}, RequestId={RequestId}", otherUserId, requestId);
             await _hubContext.Clients.User(otherUserId).SendAsync("FriendRequestCancelled", requestId);
         }
 

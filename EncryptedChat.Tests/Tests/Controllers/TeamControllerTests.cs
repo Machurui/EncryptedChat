@@ -380,6 +380,9 @@ public class TeamControllerTests
         _mockTeamService
             .Setup(s => s.PromoteToAdminAsync(teamId, memberId, _userId))
             .ReturnsAsync(true);
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId, memberId });
 
         TeamController controller = CreateController(_userId);
         IActionResult result = await controller.PromoteToAdmin(teamId, new MemberActionDTO(memberId));
@@ -424,6 +427,9 @@ public class TeamControllerTests
         _mockTeamService
             .Setup(s => s.DemoteFromAdminAsync(teamId, adminId, _userId))
             .ReturnsAsync(true);
+        _mockTeamService
+            .Setup(s => s.GetMemberUserIdsAsync(teamId))
+            .ReturnsAsync(new List<string> { _userId, adminId });
 
         TeamController controller = CreateController(_userId);
         IActionResult result = await controller.DemoteFromAdmin(teamId, adminId);
@@ -490,11 +496,11 @@ public class TeamControllerTests
         _mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
 
         _mockTeamService
-            .Setup(s => s.GetOrCreateDirectMessageWithStatusAsync(_userId, friendId))
+            .Setup(s => s.GetOrCreateDirectMessageWithStatusAsync(_userId, friendId, It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync((dmDto, true)); // isNew = true (would historically trigger broadcast)
 
         TeamController controller = CreateController(_userId);
-        ActionResult<TeamDTOPublic> result = await controller.GetOrCreateDirectMessage(friendId);
+        ActionResult<TeamDTOPublic> result = await controller.GetOrCreateDirectMessage(friendId, null);
 
         result.Result.Should().BeOfType<OkObjectResult>();
 

@@ -63,6 +63,10 @@
                     <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
                 </svg>
                 Chats
+                @if (activeNav == "friends" && TotalUnread > 0)
+                {
+                    <span class="nav-tab-badge">@(TotalUnread > 9 ? "9+" : TotalUnread.ToString())</span>
+                }
             </button>
             <button class="nav-tab @(activeNav == "friends" ? "active" : "")" @onclick='() => activeNav = "friends"'>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -947,12 +951,14 @@
                             </svg>
                         </button>
 
-                        @* Input with @mention highlight overlay *@
-                        <div class="composer-overlay-container">
-                            <div id="composer-highlight" class="composer-highlight" aria-hidden="true">@((MarkupString)RenderComposerHighlight(newMessageText))</div>
-                            <input id="composer-input" type="text" class="composer-input" placeholder="Send an encrypted message..."
-                                   value="@newMessageText" @oninput="HandleMessageInput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers" disabled="@isSending" />
-                        </div>
+                        @* Plain visible textarea. Wraps natively, auto-grows via JS up to
+                            max-height. The @mention overlay pattern was dropped — it caused
+                            too many alignment / clipping / emoji-rendering bugs. Mentions
+                            still render colored in sent messages via RenderMessageWithMentions. *@
+                        <textarea id="composer-input" class="composer-input" placeholder="Send an encrypted message..."
+                                  value="@newMessageText"
+                                  @oninput="HandleMessageInput" @onkeydown="HandleKeyDown" @onfocus="CloseAllPickers"
+                                  disabled="@isSending" rows="1"></textarea>
 
                         @* Emoji button *@
                         <div class="picker-container popup-container">
@@ -1170,11 +1176,21 @@
     IsOpen="@isMemberModalOpen"
     Team="@selectedTeam"
     Members="@teamDetails?.Members?.ToList()"
+    Friends="@friends"
     CurrentUserId="@_userId"
     IsAdmin="@IsCurrentUserAdmin"
+    IsOwner="@IsCurrentUserOwner"
+    MyBubbleColor="@(selectedTeamId.HasValue && userBubbleColors.TryGetValue(selectedTeamId.Value, out var __bc) ? __bc : null)"
     OnClose="CloseMemberModal"
     OnPromote="PromoteMember"
-    OnRemove="RemoveMember" />
+    OnDemote="DemoteMember"
+    OnRemove="RemoveMember"
+    OnRename="RenameTeam"
+    OnDelete="DeleteTeam"
+    OnAddMember="AddTeamMember"
+    OnTransferOwnership="TransferTeamOwnership"
+    OnBubbleColorChange="HandleBubbleColorFromModal"
+    OnBubbleColorReset="HandleBubbleColorResetFromModal" />
 
 @* ── New Team Modal ── *@
 <NewTeamModal
@@ -2674,7 +2690,12 @@
 
     .composer {
         display: flex;
-        align-items: center;
+        /* flex-end so attach / emoji / send anchor to the bottom of the
+           textarea when it grows past one line. With single-line content
+           the visual is identical to align-items: center; with multi-line
+           the buttons stay paired with the bottom row instead of floating
+           between text lines. */
+        align-items: flex-end;
         gap: 10px;
         padding: 6px 8px 6px 14px;
         border-radius: 16px;
@@ -2693,6 +2714,15 @@
         font-size: 14px;
         padding: 8px 0;
         font-family: inherit;
+        /* textarea-specific: prevent manual resize, wrap long content,
+           grow up to ~6 lines then scroll. JS sets explicit height
+           each input event to match scrollHeight; max-height caps it. */
+        resize: none;
+        line-height: 1.4;
+        max-height: 144px;
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
     }
 
     .composer-input::placeholder {
@@ -2733,12 +2763,20 @@
         white-space: nowrap;
     }
 
-    /* Composer icon buttons match the send button size (36×36) for visual rhythm. */
-    .composer .icon-btn {
+    /* Composer icon buttons match the send button size (36×36) for visual
+       rhythm — on every viewport (mobile, tablet, desktop). The global
+       max-width: 1023px rule in app.css bumps generic .icon-btn min-width
+       to 44px for touch targets; explicitly reset min-* here so the
+       composer row stays at 36×36 across tablet too. */
+    .composer .icon-btn,
+    .composer .send-btn {
         width: 36px;
         height: 36px;
-        border-radius: 12px;
+        min-width: 36px;
+        min-height: 36px;
+        box-sizing: border-box;
     }
+    .composer .icon-btn { border-radius: 12px; }
 
     /* ── Picker containers ── */
     .picker-container .icon-btn.active {
@@ -3404,21 +3442,33 @@
         }
 
         /* Bubble color and Pinned popovers normally anchor to their (now
-           hidden) trigger button. On mobile, escape that and become a
-           centered bottom sheet so they remain usable. */
+           hidden) trigger button. On mobile, sit under the chat header
+           rather than at the absolute viewport top — the header stays
+           visible/usable, and the dropdown doesn't compete with the
+           keyboard / composer at the bottom. Offset ≈ header height
+           (~70px) + small gap, plus safe-area for notch devices. */
         .header-dropdown.chat-bubble-color-dropdown,
         .header-dropdown.pinned-dropdown {
             position: fixed;
-            inset: auto 12px max(12px, env(safe-area-inset-bottom, 0)) 12px;
-            top: auto;
-            right: auto;
+            top: calc(env(safe-area-inset-top, 0) + 76px);
+            right: 12px;
             left: 12px;
+            bottom: auto;
             max-width: none;
             min-width: 0;
-            max-height: 70vh;
+            max-height: calc(100dvh - env(safe-area-inset-top, 0) - 96px);
             overflow-y: auto;
             z-index: 200;
-            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+        }
+
+        /* Mobile back to sidebar: selectedTeamId stays set (so re-tapping the
+           same team is cheap), but the row should NOT look active anymore
+           because we're no longer "in" that conversation visually. Reset the
+           active styling when the layout isn't showing the conversation. */
+        .chat-floating-layout:not(.mobile-show-conversation) .team-row.active {
+            background: transparent;
+            box-shadow: none;
         }
 
         .chat-floating-layout .chat-sidebar-panel { display: flex; flex: 1; }
@@ -3449,13 +3499,15 @@
 
         .composer-input {
             font-size: 16px;
-            min-height: var(--touch-target-min);
+            /* Tighter cap on mobile — 144px takes up too much vertical real
+               estate when the on-screen keyboard is open. ~4 lines of 16px
+               text fits in 96px. */
+            max-height: 96px;
         }
 
-        .composer .icon-btn {
-            min-width: var(--touch-target-min);
-            min-height: var(--touch-target-min);
-        }
+        /* Composer 36×36 is enforced by the base .composer .icon-btn /
+           .composer .send-btn rule above (which sets min-width / min-height
+           too), so no additional override is needed for mobile. */
 
         /* Emoji/GIF pickers : center on mobile, max-width viewport */
         .emoji-picker,
@@ -3484,6 +3536,7 @@
     private record TeamDeletedEvent(Guid TeamId);
     private record TeamMemberEvent(Guid TeamId, string UserId, TeamClient.TeamDTOPublic? Team);
     private record TeamMemberRemovedEvent(Guid TeamId, string UserId);
+    private record TeamMemberRoleChangedEvent(Guid TeamId, string UserId, string NewRole);
     private record MessagesExpiredEvent(Guid TeamId, List<Guid> MessageIds);
     private record TeamLastMessageEvent(Guid TeamId, string? LastMessagePreview, DateTime? LastMessageTime, string? LastMessageSenderName);
     private record UserTypingEvent(Guid TeamId, string UserId, string UserName);
@@ -3639,6 +3692,12 @@
     private Dictionary<Guid, int> unreadCounts = new();
     private Dictionary<Guid, DateTime> lastReadTime = new();
 
+    // Aggregate unread across all teams/DMs, surfaced on the Chats tab while the
+    // Friends tab is active (per-conversation badges are hidden there). Respects
+    // NotificationPreference implicitly: unreadCounts is only incremented when
+    // shouldCountUnread is true in the ReceiveMessage handler.
+    private int TotalUnread => unreadCounts.Values.Sum();
+
     // Last message updates (from real-time events)
     private record TeamLastMessageInfo(string? Preview, DateTime? Time, string? SenderName);
     private Dictionary<Guid, TeamLastMessageInfo> lastMessageUpdates = new();
@@ -3779,9 +3838,15 @@
 
     private void OpenAddFriendModal() => showAddFriendModal = true;
 
+    // IsAdmin = Admin OR Owner — i.e. "admin or above" for permission checks
+    // that allow either privileged role. IsOwner is the stricter Owner-only.
     private bool IsCurrentUserAdmin =>
-        selectedTeam?.Role == "Admin" ||
-        teamDetails?.Members?.Any(m => m.User?.Id == _userId && m.Role == "Admin") == true;
+        selectedTeam?.Role == "Admin" || selectedTeam?.Role == "Owner" ||
+        teamDetails?.Members?.Any(m => m.User?.Id == _userId && (m.Role == "Admin" || m.Role == "Owner")) == true;
+
+    private bool IsCurrentUserOwner =>
+        selectedTeam?.Role == "Owner" ||
+        teamDetails?.Members?.Any(m => m.User?.Id == _userId && m.Role == "Owner") == true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -3819,7 +3884,23 @@
         await LoadTeams();
         await LoadFriends();
 
-        if (teams.Any())
+        // SignalR must init even when the user has zero teams — otherwise new
+        // users never receive FriendRequestReceived / FriendRequestAccepted /
+        // FriendRequestCancelled / FriendRemoved broadcasts (they're routed via
+        // Clients.User, not team groups, so they don't depend on JoinTeam).
+        if (!_signalRInitialized)
+        {
+            await InitializeSignalR();
+        }
+
+        // Auto-select the first team only when the layout can fit both panels
+        // side-by-side. On mobile (≤ 767px) selecting a team flips into the
+        // single-pane conversation view, hiding the sidebar — landing users
+        // there forces an extra back-tap just to see their team list. Match
+        // the standard mobile chat-app UX: land on the list, tap to enter.
+        int viewportWidth = 0;
+        try { viewportWidth = await JS.InvokeAsync<int>("getViewportWidth"); } catch { viewportWidth = 1024; /* assume desktop on failure */ }
+        if (teams.Any() && viewportWidth > 767)
         {
             await SelectTeam(teams.First().Id);
         }
@@ -4393,9 +4474,20 @@ private async Task SelectStatus(string status)
 
     private async Task SelectTeam(Guid teamId)
     {
-        // Prevent re-entry and skip if already selected
-        if (_isSelectingTeam || selectedTeamId == teamId)
+        if (_isSelectingTeam) return;
+
+        // Already selected: nothing to (re)load, but on mobile we still need to
+        // flip back into the conversation pane. The Back button only hides it
+        // (mobileShowConversation = false) without clearing selectedTeamId, so
+        // tapping the same team again must re-show the conversation — without
+        // this it looks like the click does nothing.
+        if (selectedTeamId == teamId)
         {
+            if (!mobileShowConversation)
+            {
+                mobileShowConversation = true;
+                StateHasChanged();
+            }
             return;
         }
 
@@ -4682,6 +4774,18 @@ private async Task SelectStatus(string status)
                 if (!string.IsNullOrEmpty(_userId))
                     await ChatClient.DecryptMessageAsync(message, _userId);
 
+                // Sidebar preview: server can no longer fill TeamLastMessage
+                // with plaintext (E2E). Inject the just-decrypted text into the
+                // local cache so the team-row preview shows "name: hello" right
+                // away instead of "name: ".
+                if (!string.IsNullOrEmpty(message.Text))
+                {
+                    lastMessageUpdates[message.TeamId] = new TeamLastMessageInfo(
+                        message.Text,
+                        message.Date,
+                        message.Sender?.Name);
+                }
+
                 // Store message (check for duplicates by Id)
                 if (!teamMessages.ContainsKey(message.TeamId))
                     teamMessages[message.TeamId] = new();
@@ -4863,18 +4967,21 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<Guid>("FriendRequestCancelled", async requestId =>
             {
+                Console.WriteLine($"[SignalR] FriendRequestCancelled received: {requestId}");
                 pendingRequests = pendingRequests.Where(r => r.RequestId != requestId).ToList();
                 await InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<string>("FriendRemoved", async removedByUserId =>
             {
+                Console.WriteLine($"[SignalR] FriendRemoved received: {removedByUserId}");
                 friends = friends.Where(f => f.UserId != removedByUserId).ToList();
                 await InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<FriendClient.FriendRequestDTO>("FriendRequestReceived", async request =>
             {
+                Console.WriteLine($"[SignalR] FriendRequestReceived: requestId={request.RequestId}, from={request.Name} ({request.UserId})");
                 if (!pendingRequests.Any(r => r.RequestId == request.RequestId))
                 {
                     pendingRequests.Add(request);
@@ -4884,6 +4991,7 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<Guid, FriendClient.FriendDTO>("FriendRequestAccepted", async (requestId, newFriend) =>
             {
+                Console.WriteLine($"[SignalR] FriendRequestAccepted: requestId={requestId}, friend={newFriend.Name} ({newFriend.UserId})");
                 pendingRequests = pendingRequests.Where(r => r.RequestId != requestId).ToList();
                 if (!friends.Any(f => f.UserId == newFriend.UserId))
                 {
@@ -5008,6 +5116,24 @@ private async Task SelectStatus(string status)
                     await LoadTeamDetails();
                 }
                 await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<TeamMemberRoleChangedEvent>("TeamMemberRoleChanged", async evt =>
+            {
+                // Update the member's role in-place so the manage modal and any
+                // role-gated UI (admin-only buttons) reflect the change without
+                // a full refetch. Only refresh teamDetails when this concerns
+                // the currently-selected team — other teams will sync the next
+                // time they're opened.
+                if (evt.TeamId == selectedTeamId && teamDetails?.Members != null)
+                {
+                    var idx = teamDetails.Members.FindIndex(m => m.User?.Id == evt.UserId);
+                    if (idx >= 0)
+                    {
+                        teamDetails.Members[idx] = teamDetails.Members[idx] with { Role = evt.NewRole };
+                    }
+                    await InvokeAsync(StateHasChanged);
+                }
             });
 
             hubConnection.On<MessagesExpiredEvent>("MessagesExpired", async evt =>
@@ -5406,6 +5532,16 @@ private async Task SelectStatus(string status)
                     if (messagesState != LoadState.Success)
                         messagesState = LoadState.Success;
                     TriggerMessageFadeIn(result.Value.Id);
+
+                    // Update the sidebar preview locally — server can't fill it (E2E),
+                    // and ReceiveMessage may not echo back to the sender quickly.
+                    if (!string.IsNullOrEmpty(result.Value.Text))
+                    {
+                        lastMessageUpdates[result.Value.TeamId] = new TeamLastMessageInfo(
+                            result.Value.Text,
+                            result.Value.Date,
+                            result.Value.Sender?.Name);
+                    }
                 }
 
                 // Only clear if not rate-limited. If RateLimited event arrived during the
@@ -5431,6 +5567,11 @@ private async Task SelectStatus(string status)
             {
                 Console.WriteLine($"chatScroll.follow (SendMessage) failed: {ex.Message}");
             }
+            // Collapse the textarea back to one row after a clear. The JS
+            // input listener only runs on user input; a C# value reset alone
+            // leaves stale style.height inherited from the multi-line content
+            // we just sent.
+            try { await JS.InvokeVoidAsync("composerOverlay.resize", "composer-input"); } catch { }
         }
     }
 
@@ -5471,10 +5612,21 @@ private async Task SelectStatus(string status)
 
     private async Task InsertEmoji(string emoji)
     {
-        newMessageText += emoji;
+        // Insert at caret rather than appending to end. The textarea may have
+        // multiple lines; "end" would put the emoji at the bottom-right glyph
+        // of whatever's already typed, which surprises users mid-edit.
+        int caret;
+        try { caret = await JS.InvokeAsync<int>("composerOverlay.getCursorPos", "composer-input"); }
+        catch { caret = newMessageText.Length; }
+        if (caret < 0 || caret > newMessageText.Length) caret = newMessageText.Length;
+
+        newMessageText = newMessageText.Insert(caret, emoji);
         showEmojiPicker = false;
         emojiSearch = "";
-        await FocusComposerInput();
+        // Atomic focus + caret placement — bypasses the racy multi-step
+        // FocusComposerInput which would otherwise drop the caret at 0.
+        try { await JS.InvokeVoidAsync("composerOverlay.focusAndSetCursor", "composer-input", caret + emoji.Length); } catch { }
+        try { await JS.InvokeVoidAsync("composerOverlay.resize", "composer-input"); } catch { }
     }
 
     // GIF picker methods
@@ -5867,15 +6019,29 @@ private async Task SelectStatus(string status)
         return messages.Count(m => m.Text?.Contains(headerSearchQuery, StringComparison.OrdinalIgnoreCase) == true);
     }
 
+    // Header dropdowns (more menu, pinned, bubble color) are mutually
+    // exclusive: opening one closes the others. Without this, multiple
+    // floating panels can stack and overlap — especially noticeable on
+    // mobile where each consumes most of the screen.
+    private void CloseAllHeaderDropdowns()
+    {
+        showHeaderMoreMenu = false;
+        showPinnedDropdown = false;
+        showBubbleColorPicker = false;
+    }
+
     private void ToggleHeaderMoreMenu()
     {
-        showHeaderMoreMenu = !showHeaderMoreMenu;
+        bool willOpen = !showHeaderMoreMenu;
+        CloseAllHeaderDropdowns();
+        showHeaderMoreMenu = willOpen;
     }
 
     private async Task TogglePinnedDropdown()
     {
-        showPinnedDropdown = !showPinnedDropdown;
-        showHeaderMoreMenu = false;
+        bool willOpen = !showPinnedDropdown;
+        CloseAllHeaderDropdowns();
+        showPinnedDropdown = willOpen;
 
         if (showPinnedDropdown && selectedTeamId.HasValue)
         {
@@ -5897,7 +6063,12 @@ private async Task SelectStatus(string status)
 
     private bool showBubbleColorPicker;
 
-    private void ToggleBubbleColorPicker() => showBubbleColorPicker = !showBubbleColorPicker;
+    private void ToggleBubbleColorPicker()
+    {
+        bool willOpen = !showBubbleColorPicker;
+        CloseAllHeaderDropdowns();
+        showBubbleColorPicker = willOpen;
+    }
 
     // Live preview during the native <input type="color"> drag. Updates the
     // CSS variable directly via JS so the bubbles re-paint at native browser
@@ -5932,6 +6103,33 @@ private async Task SelectStatus(string status)
         if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, null))
         {
             userBubbleColors.Remove(selectedTeamId.Value);
+            StateHasChanged();
+        }
+    }
+
+    // Bridges from the TeamManageModal's bubble-color picker. Same store as the
+    // chat-header picker (userBubbleColors), so both UIs reflect the change
+    // instantly without explicit re-sync.
+    private async Task HandleBubbleColorFromModal(string color)
+    {
+        if (!selectedTeamId.HasValue || string.IsNullOrWhiteSpace(color)) return;
+        userBubbleColors[selectedTeamId.Value] = color;
+        // Repaint bubbles immediately via the CSS variable, bypassing Blazor
+        // re-render of the 5000-line Chat.razor for smooth drag.
+        try { await JS.InvokeVoidAsync("setBubbleColorPreview", color); } catch { }
+        StateHasChanged();
+        // Persist server-side fire-and-forget; the optimistic update wins in
+        // the UI even if the request is in flight.
+        _ = BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, color);
+    }
+
+    private async Task HandleBubbleColorResetFromModal()
+    {
+        if (!selectedTeamId.HasValue) return;
+        if (await BubbleColorClient.SetBubbleColorAsync(selectedTeamId.Value, null))
+        {
+            userBubbleColors.Remove(selectedTeamId.Value);
+            try { await JS.InvokeVoidAsync("setBubbleColorPreview", "oklch(0.65 0.16 165)"); } catch { }
             StateHasChanged();
         }
     }
@@ -6020,6 +6218,101 @@ private async Task SelectStatus(string status)
             await LoadTeamDetails();
         else
             memberError = result.ErrorMessage;
+    }
+
+    private async Task DemoteMember(string userId)
+    {
+        memberError = null;
+        var result = await TeamClient.DemoteFromAdminAsync(selectedTeamId!.Value, userId);
+        if (result.Success)
+            await LoadTeamDetails();
+        else
+            memberError = result.ErrorMessage;
+    }
+
+    private async Task TransferTeamOwnership(string newOwnerId)
+    {
+        memberError = null;
+        if (!selectedTeamId.HasValue) return;
+        var result = await TeamClient.TransferOwnershipAsync(selectedTeamId.Value, newOwnerId);
+        if (result.Success)
+            await LoadTeamDetails();
+        else
+            memberError = result.ErrorMessage;
+    }
+
+    private async Task RenameTeam(string newName)
+    {
+        memberError = null;
+        if (!selectedTeamId.HasValue) return;
+        var result = await TeamClient.UpdateTeamAsync(selectedTeamId.Value, new TeamClient.TeamUpdateDTO(Name: newName));
+        if (!result.Success)
+        {
+            memberError = result.ErrorMessage;
+            return;
+        }
+        // Update local team list + selectedTeam so the header / sidebar reflect
+        // the new name immediately, without waiting for a server broadcast.
+        var idx = teams.FindIndex(t => t.Id == selectedTeamId.Value);
+        if (idx >= 0 && result.Value != null)
+        {
+            teams[idx] = result.Value;
+            if (selectedTeam?.Id == selectedTeamId) selectedTeam = result.Value;
+        }
+        StateHasChanged();
+    }
+
+    private async Task DeleteTeam()
+    {
+        memberError = null;
+        if (!selectedTeamId.HasValue) return;
+        var deletedId = selectedTeamId.Value;
+        var result = await TeamClient.DeleteTeamAsync(deletedId);
+        if (!result.Success)
+        {
+            memberError = result.ErrorMessage;
+            return;
+        }
+        // Pull the team out of every local state, leave SignalR group, close
+        // the manage modal, deselect — the user lands back on the sidebar.
+        teams.RemoveAll(t => t.Id == deletedId);
+        teamMessages.Remove(deletedId);
+        if (hubConnection?.State == HubConnectionState.Connected)
+        {
+            try { await hubConnection.InvokeAsync("LeaveTeam", deletedId); } catch { }
+        }
+        isMemberModalOpen = false;
+        selectedTeamId = null;
+        selectedTeam = null;
+        teamDetails = null;
+        mobileShowConversation = false;
+        StateHasChanged();
+    }
+
+    private async Task AddTeamMember(string userId)
+    {
+        memberError = null;
+        if (!selectedTeamId.HasValue) return;
+
+        // 1. Add the member server-side (creates the Member row).
+        var addResult = await TeamClient.AddMemberAsync(selectedTeamId.Value, userId);
+        if (!addResult.Success)
+        {
+            memberError = addResult.ErrorMessage;
+            return;
+        }
+
+        // 2. Upload the new member's wrapped TeamKeyShare. Without this, the
+        //    new member's local cache stays empty → they can't decrypt or send.
+        //    Same fundamental bug we fixed for DMs and team creation.
+        int generation = selectedTeam?.KeyGeneration ?? 1;
+        bool keyShareOk = await TeamClient.AddMemberKeyShareAsync(selectedTeamId.Value, generation, userId);
+        if (!keyShareOk)
+        {
+            memberError = "Member added but failed to provision their encryption key. They may need to re-bootstrap.";
+        }
+
+        await LoadTeamDetails();
     }
 
     private void OpenNewTeamModal()
@@ -6198,7 +6491,11 @@ private async Task SelectStatus(string status)
 
     private string GetLastMessagePreview(Guid teamId)
     {
-        if (lastMessageUpdates.TryGetValue(teamId, out var update) && update.Preview != null)
+        // E2E: the server can no longer read message plaintext, so it
+        // broadcasts TeamLastMessageUpdated with an EMPTY preview ("" not
+        // null). Treat empty the same as missing so we fall through to the
+        // teamMessages cache (populated client-side from decrypted blobs).
+        if (lastMessageUpdates.TryGetValue(teamId, out var update) && !string.IsNullOrEmpty(update.Preview))
         {
             var who = update.SenderName?.Split(' ')[0] ?? "Someone";
             var text = update.Preview.Length > 30 ? update.Preview[..30] + "..." : update.Preview;
@@ -6255,7 +6552,14 @@ private async Task SelectStatus(string status)
 
     private async Task StartDirectMessage(string friendId)
     {
-        var result = await TeamClient.GetOrCreateDirectMessageAsync(friendId);
+        Console.WriteLine($"[StartDirectMessage] friendId={friendId}, _userId={_userId ?? "NULL"}");
+        if (string.IsNullOrEmpty(_userId))
+        {
+            Console.WriteLine("[StartDirectMessage] aborted: _userId is empty");
+            return;
+        }
+        var result = await TeamClient.GetOrCreateDirectMessageAsync(_userId, friendId);
+        Console.WriteLine($"[StartDirectMessage] result.Success={result.Success}, error={result.ErrorMessage ?? "<none>"}, value={(result.Value == null ? "NULL" : result.Value.Id.ToString())}");
         if (result.Success && result.Value != null)
         {
             if (!teams.Any(t => t.Id == result.Value.Id))

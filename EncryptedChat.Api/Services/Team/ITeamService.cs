@@ -23,7 +23,15 @@ namespace EncryptedChat.Services
 
         Task<bool> IsAdminAsync(string userId, Guid teamId);
 
+        Task<bool> IsOwnerAsync(string userId, Guid teamId);
+
         Task<bool> IsMemberAsync(string userId, Guid teamId);
+
+        // Atomic ownership transfer. fromUserId must currently be Owner;
+        // toUserId must already be a member of the team. Returns false on
+        // any precondition violation. On success: fromUserId becomes Admin,
+        // toUserId becomes Owner, both within a single SaveChanges call.
+        Task<bool> TransferOwnershipAsync(Guid teamId, string fromUserId, string toUserId);
 
         Task<bool> AddMemberAsync(Guid teamId, string userId, string actorId);
 
@@ -35,9 +43,9 @@ namespace EncryptedChat.Services
 
         Task<IReadOnlyList<string>> GetMemberUserIdsAsync(Guid teamId);
 
-        Task<TeamDTOPublic?> GetOrCreateDirectMessageAsync(string userId, string friendId);
+        Task<TeamDTOPublic?> GetOrCreateDirectMessageAsync(string userId, string friendId, string? myWrappedKey = null, string? friendWrappedKey = null);
 
-        Task<(TeamDTOPublic? Dm, bool IsNew)> GetOrCreateDirectMessageWithStatusAsync(string userId, string friendId);
+        Task<(TeamDTOPublic? Dm, bool IsNew)> GetOrCreateDirectMessageWithStatusAsync(string userId, string friendId, string? myWrappedKey = null, string? friendWrappedKey = null);
 
         Task<TeamDTOPublic?> GetTeamByUrlTokenAsync(string token, string userId);
     }

@@ -178,38 +178,41 @@ public class ChatHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, TeamGroup(teamId));
     }
 
-    public async Task SendMessageToTeam(Guid teamId, string text)
+    public async Task<MessageDTOPublic?> SendMessageToTeam(Guid teamId, string encryptedText, string iv, string signature, int keyGeneration)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return;
+        if (string.IsNullOrEmpty(encryptedText) || string.IsNullOrEmpty(iv) || string.IsNullOrEmpty(signature))
+            return null;
 
-        if (text.Length > MaxMessageLength)
-            return;
+        if (encryptedText.Length > MaxMessageLength * 2)
+            return null;
 
         string? senderId = GetUserId();
         if (string.IsNullOrWhiteSpace(senderId))
-            return;
+            return null;
 
         var rateCheck = _rateLimitService.CheckAndRecord(senderId);
         if (!rateCheck.Allowed)
         {
             await Clients.Caller.SendAsync("RateLimited", rateCheck.RetryAfterMs);
-            return;
+            return null;
         }
 
         bool isMember = await _teamService.IsMemberAsync(senderId, teamId);
         if (!isMember)
-            return;
+            return null;
 
         MessageDTO dto = new()
         {
-            Text = text,
-            Team = teamId
+            Team = teamId,
+            EncryptedText = encryptedText,
+            Iv = iv,
+            Signature = signature,
+            KeyGeneration = keyGeneration
         };
 
         MessageDTOPublic? created = await _messageService.CreateAsync(dto, senderId);
         if (created is null)
-            return;
+            return null;
 
         // Ensure the sender's connection is in the team group BEFORE broadcasting.
         // Required for fresh DMs where the client-side JoinTeam may not have
@@ -242,10 +245,15 @@ public class ChatHub : Hub
         var memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
         if (memberIds.Count > 0)
         {
-            var preview = text.Length > 50 ? text[..50] + "..." : text;
-            preview = preview.Replace("\n", " ").Trim();
-            await _realtimeService.BroadcastTeamLastMessageAsync(teamId, memberIds, preview, created.Date, created.Sender?.Name);
+            // Server can no longer read the plaintext (true E2E). Clients
+            // render their own preview from the message they just decrypted.
+            await _realtimeService.BroadcastTeamLastMessageAsync(teamId, memberIds, string.Empty, created.Date, created.Sender?.Name);
         }
+
+        // Return the saved message so the sender can render it locally — robust
+        // even if the group broadcast didn't reach them (e.g., fresh DM race).
+        // The client uses message.Id to dedup against the eventual ReceiveMessage.
+        return created;
     }
 
     public async Task StartTyping(Guid teamId)

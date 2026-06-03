@@ -81,6 +81,23 @@ public sealed class TeamKeyShareServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task InsertKeyShareForMemberAsync_AllowsOwner()
+    {
+        // Regression: the team creator's role is "Owner" (TeamService.CreateAsync),
+        // and Owner is "admin or above" (see TeamService.IsAdminAsync). The actor
+        // check must accept Owner — not only the literal "Admin" — otherwise
+        // provisioning a freshly added member's key share returns 403.
+        var teamId = Guid.NewGuid();
+        await SeedTeamAsync(teamId, "Team", generation: 1);
+        await SeedMemberAsync(teamId, "owner", Member.OwnerRole);
+        await SeedMemberAsync(teamId, "newbie", Member.MemberRole);
+
+        var result = await _service.InsertKeyShareForMemberAsync("owner", teamId, "newbie", "wrapped");
+
+        result.Should().Be(KeyShareInsertResult.Ok);
+    }
+
+    [Fact]
     public async Task InsertKeyShareForMemberAsync_ReturnsAlreadyExists_OnSecondInsert()
     {
         var teamId = Guid.NewGuid();
@@ -159,6 +176,26 @@ public sealed class TeamKeyShareServiceTests : IDisposable
         });
 
         result.Should().Be(RemoveAndRotateResult.CannotRemoveLastAdmin);
+    }
+
+    [Fact]
+    public async Task RemoveMemberAndRotateAsync_AllowsOwner()
+    {
+        // Same root cause as InsertKeyShareForMemberAsync_AllowsOwner: the actor
+        // authorization must treat Owner as admin-or-above.
+        var teamId = Guid.NewGuid();
+        await SeedTeamAsync(teamId, "Team", generation: 1);
+        await SeedMemberAsync(teamId, "owner", Member.OwnerRole);
+        await SeedMemberAsync(teamId, "bob", Member.MemberRole);
+        await SeedMemberAsync(teamId, "carol", Member.MemberRole);
+
+        var result = await _service.RemoveMemberAndRotateAsync("owner", teamId, "bob", new[]
+        {
+            new KeyShareEntryDTO("owner", "ownerG2"),
+            new KeyShareEntryDTO("carol", "carolG2")
+        });
+
+        result.Should().Be(RemoveAndRotateResult.Ok);
     }
 
     private async Task SeedTeamAsync(Guid id, string name, int generation)

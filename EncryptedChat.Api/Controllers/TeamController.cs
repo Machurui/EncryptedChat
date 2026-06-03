@@ -219,6 +219,45 @@ namespace EncryptedChat.Controllers
             if (!success)
                 return NotFound();
 
+            // Broadcast so every member's UI updates the badge / role select
+            // without an F5. Includes the demoted/promoted user themselves so
+            // their own view of "I am admin" flips too.
+            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            if (memberIds.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIds)
+                    .SendAsync("TeamMemberRoleChanged", new { TeamId = id, UserId = dto.UserId, NewRole = "Admin" });
+            }
+
+            return NoContent();
+        }
+
+        // POST: api/Team/{id}/owner - Transfer ownership to another admin.
+        // Body: { NewOwnerId: "..." } — must be an existing Admin.
+        [HttpPost("{id}/owner")]
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> TransferOwnership(Guid id, [FromBody] MemberActionDTO dto)
+        {
+            string? currentUserId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(currentUserId))
+                return Unauthorized();
+
+            bool success = await _teamService.TransferOwnershipAsync(id, currentUserId, dto.UserId);
+            if (!success)
+                return BadRequest(new { Message = "Cannot transfer ownership. You must be the current owner and the target must be an existing admin." });
+
+            // Two role changes broadcast as separate events — clients update
+            // both rows. Order matters: old owner first so any "I'm owner"
+            // local state on the recipient flips before the new role arrives.
+            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            if (memberIds.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIds)
+                    .SendAsync("TeamMemberRoleChanged", new { TeamId = id, UserId = currentUserId, NewRole = "Admin" });
+                await _hubContext.Clients.Users(memberIds)
+                    .SendAsync("TeamMemberRoleChanged", new { TeamId = id, UserId = dto.UserId, NewRole = "Owner" });
+            }
+
             return NoContent();
         }
 
@@ -238,19 +277,29 @@ namespace EncryptedChat.Controllers
             if (!success)
                 return NotFound();
 
+            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            if (memberIds.Count > 0)
+            {
+                await _hubContext.Clients.Users(memberIds)
+                    .SendAsync("TeamMemberRoleChanged", new { TeamId = id, UserId = userId, NewRole = "Member" });
+            }
+
             return NoContent();
         }
 
-        // POST: api/Team/dm/{friendId} - Get or create a DM with a friend
+        // POST: api/Team/dm/{friendId} - Get or create a DM with a friend.
+        // Body provides the wrapped Team.Secret for BOTH members (required when
+        // creating a new DM; ignored when an existing DM is returned).
         [HttpPost("dm/{friendId}")]
         [Authorize(Roles = "User")]
-        public async Task<ActionResult<TeamDTOPublic>> GetOrCreateDirectMessage(string friendId)
+        public async Task<ActionResult<TeamDTOPublic>> GetOrCreateDirectMessage(string friendId, [FromBody] CreateDmDTO? dto = null)
         {
             string? currentUserId = GetCurrentUserId();
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            var (dm, _) = await _teamService.GetOrCreateDirectMessageWithStatusAsync(currentUserId, friendId);
+            var (dm, _) = await _teamService.GetOrCreateDirectMessageWithStatusAsync(
+                currentUserId, friendId, dto?.MyWrappedKey, dto?.FriendWrappedKey);
             if (dm == null)
                 return BadRequest(new { Message = "Could not create direct message channel." });
 

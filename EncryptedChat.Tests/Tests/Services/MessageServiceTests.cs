@@ -576,6 +576,23 @@ public class MessageServiceTests : IDisposable
     }
 
     [Fact(Skip = SkipReason)]
+    public async Task DeleteAsync_RemovesMessage_WhenTeamOwner()
+    {
+        User sender = await CreateUser("sender");
+        User teamOwner = await CreateUser("teamowner");
+        Team team = await CreateTeam();
+        await AddMember(sender, team, Member.MemberRole);
+        await AddMember(teamOwner, team, Member.OwnerRole);
+        Message message = await CreateMessage(sender, team, "To delete");
+
+        MessageDTOPublic? result = await _service.DeleteAsync(message.Id, teamOwner.Id);
+
+        result.Should().NotBeNull();
+        Message? deleted = await _context.Messages.FindAsync(message.Id);
+        deleted.Should().BeNull();
+    }
+
+    [Fact(Skip = SkipReason)]
     public async Task DeleteAsync_ReturnsNull_WhenNotOwnerNorAdmin()
     {
         User owner = await CreateUser("owner");

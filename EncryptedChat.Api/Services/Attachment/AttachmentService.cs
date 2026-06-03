@@ -159,7 +159,8 @@ public class AttachmentService(
 
         bool isOwner = attachment.Message.Sender?.Id == userId;
         bool isAdmin = await _context.Members
-            .AnyAsync(m => m.TeamId == attachment.Message.Team.Id && m.UserId == userId && m.Role == Member.AdminRole);
+            .AnyAsync(m => m.TeamId == attachment.Message.Team.Id && m.UserId == userId
+                           && (m.Role == Member.AdminRole || m.Role == Member.OwnerRole));
 
         if (!isOwner && !isAdmin)
             return false;

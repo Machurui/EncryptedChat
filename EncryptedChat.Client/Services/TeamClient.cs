@@ -21,8 +21,11 @@ public class TeamClient
         _userClient = userClient;
     }
 
-    // DTO match API — InitialKeyShare carries the ECIES-wrapped Team.Secret for the creator (E2E).
-    public record TeamDTO(ICollection<string> Admins, ICollection<string> Members, string Name, string? Glyph = null, string? Color = null, string? MessageLifetime = null, string? InitialKeyShare = null);
+    // DTO match API. MemberKeyShares (userId → base64 ECIES-wrapped secret)
+    // must cover every entry in Admins ∪ Members including the creator —
+    // server rejects creation otherwise. InitialKeyShare is kept for back-
+    // compat with single-member creator-only teams.
+    public record TeamDTO(ICollection<string> Admins, ICollection<string> Members, string Name, string? Glyph = null, string? Color = null, string? MessageLifetime = null, string? InitialKeyShare = null, Dictionary<string, string>? MemberKeyShares = null);
     public record TeamKeyShareResponse(Guid TeamId, int Generation, string WrappedKey, DateTime CreatedAt);
     public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null, string Status = "offline");
     public record TeamDTOPublic(
@@ -75,15 +78,41 @@ public class TeamClient
     // can immediately encrypt their first message without an extra unwrap.
     public async Task<Result<TeamDTOPublic>> AddTeamAsync(string creatorUserId, ICollection<string> admins, ICollection<string> members, string name, string? glyph = null, string? color = null, string? messageLifetime = null)
     {
-        var pubKeys = await _userClient.GetPublicKeysAsync(creatorUserId);
-        if (pubKeys == null)
-            return Result<TeamDTOPublic>.Fail("Cannot create team: your encryption keys are not set up. Open the app once to bootstrap.");
+        // Aggregate every member that will be on the team — admins ∪ members
+        // ∪ creator (creator is forced into the admin set server-side too).
+        // The server now requires a wrapped Team.Secret for every one of
+        // them, otherwise it rejects with 400 and no team is created.
+        HashSet<string> allMemberIds = new(admins);
+        foreach (var m in members) allMemberIds.Add(m);
+        allMemberIds.Add(creatorUserId);
 
-        byte[] creatorEncryptionPub = Convert.FromBase64String(pubKeys.EncryptionPublicKey);
+        // Fetch each member's encryption public key in parallel. If any
+        // member has no key bootstrapped, bail before creating the team —
+        // otherwise we'd ship a team with a stuck member.
+        var fetchTasks = allMemberIds.ToDictionary(
+            id => id,
+            id => _userClient.GetPublicKeysAsync(id));
+        await Task.WhenAll(fetchTasks.Values);
+
+        var pubKeys = fetchTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Result);
+        var missing = pubKeys.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList();
+        if (missing.Count > 0)
+            return Result<TeamDTOPublic>.Fail(
+                $"Cannot create team: encryption keys not set up for member(s) {string.Join(", ", missing)}.");
+
         byte[] teamSecret = await _crypto.GenerateTeamSecretAsync();
-        byte[] wrapped = await _crypto.WrapKeyAsync(teamSecret, creatorEncryptionPub);
 
-        var dto = new TeamDTO(admins, members, name, glyph, color, messageLifetime, Convert.ToBase64String(wrapped));
+        Dictionary<string, string> memberShares = new();
+        foreach (var (id, keys) in pubKeys)
+        {
+            byte[] pub = Convert.FromBase64String(keys!.EncryptionPublicKey);
+            byte[] wrapped = await _crypto.WrapKeyAsync(teamSecret, pub);
+            memberShares[id] = Convert.ToBase64String(wrapped);
+        }
+
+        // InitialKeyShare kept null — the server now picks up MemberKeyShares
+        // which covers the creator too. Sending both would be redundant.
+        var dto = new TeamDTO(admins, members, name, glyph, color, messageLifetime, null, memberShares);
         var res = await _http.PostAsJsonAsync("api/team", dto);
         var body = await res.Content.ReadAsStringAsync();
 
@@ -96,9 +125,9 @@ public class TeamClient
         if (team == null)
             return Result<TeamDTOPublic>.Fail("Invalid response.");
 
-        // Cache the unwrapped Team.Secret at gen 1 so the creator can send
-        // immediately. Other members will populate their cache lazily via
-        // LoadKeySharesIntoCacheAsync.
+        // Cache for the creator so they can encrypt immediately. Other
+        // members fetch + unwrap via LoadKeySharesIntoCacheAsync the first
+        // time they open the team.
         _keyCache.Put(team.Id, 1, teamSecret);
 
         return Result<TeamDTOPublic>.Ok(team);
@@ -353,28 +382,109 @@ public class TeamClient
         }
     }
 
-    // ---------- Get or Create DM ----------
-    public async Task<Result<TeamDTOPublic>> GetOrCreateDirectMessageAsync(string friendId)
+    // ---------- Transfer Ownership ----------
+    public async Task<Result> TransferOwnershipAsync(Guid teamId, string newOwnerId)
     {
         try
         {
-            var res = await _http.PostAsync($"api/team/dm/{friendId}", null);
+            var res = await _http.PostAsJsonAsync($"api/team/{teamId}/owner", new { UserId = newOwnerId });
             var body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
+                return Result.Fail(ParseMessage(body) ?? "Failed to transfer ownership.");
+
+            return Result.Ok();
+        }
+        catch (Exception)
+        {
+            return Result.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Demote from Admin ----------
+    public async Task<Result> DemoteFromAdminAsync(Guid teamId, string userId)
+    {
+        try
+        {
+            var res = await _http.DeleteAsync($"api/team/{teamId}/admins/{userId}");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+                return Result.Fail(ParseMessage(body) ?? "Failed to demote member.");
+
+            return Result.Ok();
+        }
+        catch (Exception)
+        {
+            return Result.Fail("Unexpected error.");
+        }
+    }
+
+    // ---------- Get or Create DM ----------
+    // True E2E: the server can't generate the Team.Secret for a fresh DM (it
+    // would have to read plaintext). Instead we always send wrapped shares for
+    // both members. If a DM already exists the server ignores them and just
+    // returns the existing row; otherwise it persists the shares atomically
+    // with the team so neither user gets stuck without keys.
+    public async Task<Result<TeamDTOPublic>> GetOrCreateDirectMessageAsync(string myUserId, string friendId)
+    {
+        Console.WriteLine($"[DM] GetOrCreateDirectMessageAsync start. myUserId={myUserId}, friendId={friendId}");
+        try
+        {
+            var myPubKeys = await _userClient.GetPublicKeysAsync(myUserId);
+            Console.WriteLine($"[DM] myPubKeys: {(myPubKeys == null ? "NULL" : "ok")}");
+            var friendPubKeys = await _userClient.GetPublicKeysAsync(friendId);
+            Console.WriteLine($"[DM] friendPubKeys: {(friendPubKeys == null ? "NULL" : "ok")}");
+            if (myPubKeys == null || friendPubKeys == null)
+                return Result<TeamDTOPublic>.Fail("Cannot fetch public keys for DM bootstrap.");
+
+            byte[] myPub = Convert.FromBase64String(myPubKeys.EncryptionPublicKey);
+            byte[] friendPub = Convert.FromBase64String(friendPubKeys.EncryptionPublicKey);
+            Console.WriteLine($"[DM] pubkey bytes: myPub={myPub.Length} friendPub={friendPub.Length}");
+
+            byte[] teamSecret = await _crypto.GenerateTeamSecretAsync();
+            Console.WriteLine($"[DM] teamSecret generated, len={teamSecret.Length}");
+            byte[] myWrapped = await _crypto.WrapKeyAsync(teamSecret, myPub);
+            Console.WriteLine($"[DM] wrapped for me, len={myWrapped.Length}");
+            byte[] friendWrapped = await _crypto.WrapKeyAsync(teamSecret, friendPub);
+            Console.WriteLine($"[DM] wrapped for friend, len={friendWrapped.Length}");
+
+            var payload = new
+            {
+                MyWrappedKey = Convert.ToBase64String(myWrapped),
+                FriendWrappedKey = Convert.ToBase64String(friendWrapped)
+            };
+
+            Console.WriteLine($"[DM] POSTing api/team/dm/{friendId}");
+            var res = await _http.PostAsJsonAsync($"api/team/dm/{friendId}", payload);
+            var body = await res.Content.ReadAsStringAsync();
+            Console.WriteLine($"[DM] POST response status={(int)res.StatusCode}, bodyLen={body.Length}");
+
+            if (!res.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[DM] POST FAILED. body={body}");
                 return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "Failed to create direct message.");
+            }
 
             var dm = JsonSerializer.Deserialize<TeamDTOPublic>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (dm == null)
+            {
+                Console.WriteLine("[DM] deserialized DM == null");
                 return Result<TeamDTOPublic>.Fail("Invalid response.");
+            }
+
+            Console.WriteLine($"[DM] DM created/fetched: id={dm.Id} name={dm.Name}");
+            _keyCache.Put(dm.Id, 1, teamSecret);
+            Console.WriteLine($"[DM] secret cached at gen 1 for {dm.Id}");
 
             return Result<TeamDTOPublic>.Ok(dm);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return Result<TeamDTOPublic>.Fail("Unexpected error.");
+            Console.WriteLine($"[DM] EXCEPTION: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+            return Result<TeamDTOPublic>.Fail($"Unexpected error: {ex.Message}");
         }
     }
 

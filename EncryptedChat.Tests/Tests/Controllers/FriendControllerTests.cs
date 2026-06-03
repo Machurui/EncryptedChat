@@ -6,6 +6,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace EncryptedChat.Tests;
@@ -30,7 +31,7 @@ public class FriendControllerTests
 
     private FriendController CreateController(string? userId = null)
     {
-        var controller = new FriendController(_mockFriendService.Object, _mockUserService.Object, _mockHub.Object);
+        var controller = new FriendController(_mockFriendService.Object, _mockUserService.Object, _mockHub.Object, Mock.Of<ILogger<FriendController>>());
         var claims = new List<Claim>();
         if (userId != null)
             claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));

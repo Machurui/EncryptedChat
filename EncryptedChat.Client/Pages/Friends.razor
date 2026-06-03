@@ -1,13 +1,16 @@
 @page "/friends"
 @layout EmptyLayout
 @attribute [Authorize]
+@implements IAsyncDisposable
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
 @using EncryptedChat.Client.Services
 @using EncryptedChat.Client.Pages.Components
 
 @inject AuthenticationStateProvider AuthStateProvider
+@inject AuthClient AuthClient
 @inject FriendClient FriendClient
 @inject NavigationManager Navigation
 
@@ -495,6 +498,10 @@
     private List<FriendClient.FriendRequestDTO> incomingRequests = new();
     private List<FriendClient.FriendRequestDTO> outgoingRequests = new();
 
+    private HubConnection? hubConnection;
+
+    private record FriendProfileUpdate(string Id, string Name, string? Handle, int Level, string? NameColor, string? ProfileImageUrl, string Status, string? StatusMessage, DateTime? LastSeenAt);
+
     private IEnumerable<FriendClient.FriendDTO> filteredFriends => friends
         .Where(f =>
         {
@@ -519,11 +526,134 @@
 
         _userId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
         await LoadDataAsync();
+        await InitSignalRAsync();
     }
 
-    private async Task LoadDataAsync()
+    private async Task InitSignalRAsync()
     {
-        isLoading = true;
+        try
+        {
+            var token = await AuthClient.GetSignalRTokenAsync();
+            if (string.IsNullOrEmpty(token))
+            {
+                Console.WriteLine("[Friends/SignalR] No token returned by /api/auth/signalr-token — connection skipped.");
+                return;
+            }
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl($"https://localhost:7294/hubs/chat?access_token={token}")
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.Closed += err =>
+            {
+                Console.WriteLine($"[Friends/SignalR] Connection closed. Error: {err?.Message ?? "none"}");
+                return Task.CompletedTask;
+            };
+
+            hubConnection.On<FriendClient.FriendRequestDTO>("FriendRequestReceived", async request =>
+            {
+                Console.WriteLine($"[Friends/SignalR] FriendRequestReceived: {request.RequestId} from {request.Name}");
+                if (!incomingRequests.Any(r => r.RequestId == request.RequestId))
+                {
+                    incomingRequests.Add(request);
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<Guid, FriendClient.FriendDTO>("FriendRequestAccepted", async (requestId, newFriend) =>
+            {
+                Console.WriteLine($"[Friends/SignalR] FriendRequestAccepted: {requestId} → {newFriend.Name}");
+                outgoingRequests = outgoingRequests.Where(r => r.RequestId != requestId).ToList();
+                incomingRequests = incomingRequests.Where(r => r.RequestId != requestId).ToList();
+                if (!friends.Any(f => f.UserId == newFriend.UserId))
+                    friends.Add(newFriend);
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<Guid>("FriendRequestCancelled", async requestId =>
+            {
+                Console.WriteLine($"[Friends/SignalR] FriendRequestCancelled: {requestId}");
+                incomingRequests = incomingRequests.Where(r => r.RequestId != requestId).ToList();
+                outgoingRequests = outgoingRequests.Where(r => r.RequestId != requestId).ToList();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("FriendRemoved", async removedByUserId =>
+            {
+                Console.WriteLine($"[Friends/SignalR] FriendRemoved by {removedByUserId}");
+                friends = friends.Where(f => f.UserId != removedByUserId).ToList();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<FriendProfileUpdate>("FriendProfileUpdated", async update =>
+            {
+                var idx = friends.FindIndex(f => f.UserId == update.Id);
+                if (idx >= 0)
+                {
+                    friends[idx] = friends[idx] with
+                    {
+                        Name = update.Name,
+                        Handle = update.Handle,
+                        NameColor = update.NameColor ?? friends[idx].NameColor,
+                        ProfileImageUrl = update.ProfileImageUrl,
+                        Status = update.Status,
+                        StatusMessage = update.StatusMessage
+                    };
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<FriendProfileUpdate>("FriendRequestProfileUpdated", async update =>
+            {
+                bool changed = false;
+                var inc = incomingRequests.FindIndex(r => r.UserId == update.Id);
+                if (inc >= 0)
+                {
+                    incomingRequests[inc] = incomingRequests[inc] with
+                    {
+                        Name = update.Name,
+                        Handle = update.Handle,
+                        NameColor = update.NameColor ?? incomingRequests[inc].NameColor,
+                        ProfileImageUrl = update.ProfileImageUrl
+                    };
+                    changed = true;
+                }
+                var outg = outgoingRequests.FindIndex(r => r.UserId == update.Id);
+                if (outg >= 0)
+                {
+                    outgoingRequests[outg] = outgoingRequests[outg] with
+                    {
+                        Name = update.Name,
+                        Handle = update.Handle,
+                        NameColor = update.NameColor ?? outgoingRequests[outg].NameColor,
+                        ProfileImageUrl = update.ProfileImageUrl
+                    };
+                    changed = true;
+                }
+                if (changed) await InvokeAsync(StateHasChanged);
+            });
+
+            await hubConnection.StartAsync();
+            Console.WriteLine($"[Friends/SignalR] Connected. ConnectionId={hubConnection.ConnectionId}, UserId={_userId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Friends/SignalR] Init failed: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection != null)
+        {
+            try { await hubConnection.DisposeAsync(); } catch { }
+        }
+    }
+
+    private async Task LoadDataAsync(bool silent = false)
+    {
+        if (!silent) isLoading = true;
 
         try
         {
@@ -541,41 +671,56 @@
         }
         finally
         {
-            isLoading = false;
+            if (!silent) isLoading = false;
         }
     }
 
     private async Task HandleRequestSent()
     {
-        await LoadDataAsync();
+        await LoadDataAsync(silent: true);
     }
 
     private async Task AcceptRequest(Guid requestId)
     {
+        var req = incomingRequests.FirstOrDefault(r => r.RequestId == requestId);
         var result = await FriendClient.AcceptRequestAsync(requestId);
-        if (result.Success)
-            await LoadDataAsync();
+        if (!result.Success) return;
+
+        incomingRequests = incomingRequests.Where(r => r.RequestId != requestId).ToList();
+        if (req != null && !friends.Any(f => f.UserId == req.UserId))
+        {
+            friends.Add(new FriendClient.FriendDTO(
+                req.UserId, req.Name, req.Handle, req.Level, req.NameColor,
+                req.ProfileImageUrl, DateTime.UtcNow));
+        }
+        StateHasChanged();
     }
 
     private async Task RejectRequest(Guid requestId)
     {
         var result = await FriendClient.RejectRequestAsync(requestId);
-        if (result.Success)
-            await LoadDataAsync();
+        if (!result.Success) return;
+
+        incomingRequests = incomingRequests.Where(r => r.RequestId != requestId).ToList();
+        StateHasChanged();
     }
 
     private async Task CancelRequest(Guid requestId)
     {
         var result = await FriendClient.RejectRequestAsync(requestId);
-        if (result.Success)
-            await LoadDataAsync();
+        if (!result.Success) return;
+
+        outgoingRequests = outgoingRequests.Where(r => r.RequestId != requestId).ToList();
+        StateHasChanged();
     }
 
     private async Task RemoveFriend(string friendId)
     {
         var result = await FriendClient.RemoveFriendAsync(friendId);
-        if (result.Success)
-            await LoadDataAsync();
+        if (!result.Success) return;
+
+        friends = friends.Where(f => f.UserId != friendId).ToList();
+        StateHasChanged();
     }
 
     private string GetDisplayStatus(string status) => status switch

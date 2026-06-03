@@ -31,4 +31,13 @@ public class TeamDTO
     // handle with a deferred key-share provisioning step.
     [MaxLength(256)]
     public string? InitialKeyShare { get; set; }
+
+    // True E2E multi-member: keyed by member userId, value is the base64
+    // ECIES-wrapped Team.Secret for that member. The creator wraps the same
+    // secret with each member's EncryptionPublicKey client-side; the server
+    // inserts one TeamKeyShare per entry atomically with the team itself,
+    // so no member is ever left without keys. Required to cover every entry
+    // in Admins ∪ Members (creator included). Server rejects with 400 if a
+    // member appears without a corresponding wrapped key.
+    public Dictionary<string, string>? MemberKeyShares { get; set; }
 }
