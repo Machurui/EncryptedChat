@@ -115,6 +115,8 @@
             }
         }
 
+        let _activeNotification = null;
+
         async function showNotification(title, body) {
             if (!('Notification' in window)) return;
 
@@ -122,12 +124,22 @@
                 await Notification.requestPermission();
             }
 
-            if (Notification.permission === 'granted') {
-                new Notification(title, {
-                    body: body,
-                    icon: '/favicon.png',
-                    tag: 'encrypted-chat-message'
-                });
+            if (Notification.permission !== 'granted') return;
+
+            if (_activeNotification) {
+                try { _activeNotification.close(); } catch { }
+            }
+            _activeNotification = new Notification(title, {
+                body: body,
+                icon: '/favicon.png',
+                tag: 'encrypted-chat-message'
+            });
+        }
+
+        function clearActiveNotifications() {
+            if (_activeNotification) {
+                try { _activeNotification.close(); } catch { }
+                _activeNotification = null;
             }
         }
 
