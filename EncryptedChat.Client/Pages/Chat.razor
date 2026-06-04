@@ -3726,6 +3726,11 @@
     // Conversations the user muted (Discord-style: no toast, dot instead of count).
     private HashSet<Guid> mutedTeams = new();
 
+    // Payloads broadcast by the server to the user's OWN connections (multi-device sync).
+    private record SelfReadStateEvent(Guid TeamId, DateTime? LastReadAt);
+    private record SelfMuteEvent(Guid TeamId, bool Muted);
+    private record SelfSettingsEvent(string? NotificationPreference, string? Status);
+
     // Aggregate unread across all teams/DMs, surfaced on the Chats tab while the
     // Friends tab is active (per-conversation badges are hidden there). Badges
     // reflect real unread: unreadCounts increments for every incoming message
@@ -4896,6 +4901,31 @@ private async Task SelectStatus(string status)
 
                     await InvokeAsync(StateHasChanged);
                 }
+            });
+
+            // Multi-device sync: the server broadcasts these to all of the user's
+            // own connections (Clients.User) whenever they change settings/read/mute
+            // on any device.
+            hubConnection.On<SelfReadStateEvent>("SelfReadStateChanged", async evt =>
+            {
+                unreadCounts[evt.TeamId] = 0;
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<SelfMuteEvent>("SelfMuteChanged", async evt =>
+            {
+                if (evt.Muted) mutedTeams.Add(evt.TeamId);
+                else mutedTeams.Remove(evt.TeamId);
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<SelfSettingsEvent>("SelfSettingsChanged", async evt =>
+            {
+                currentNotificationPreference = (evt.NotificationPreference ?? "all").ToLowerInvariant().Trim();
+                if (!string.IsNullOrWhiteSpace(evt.Status))
+                    currentStatus = evt.Status!;
+                await NotifyStateChangedAsync();
+                await InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>
