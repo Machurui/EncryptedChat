@@ -40,6 +40,15 @@ public class UserControllerTests
             .Setup(s => s.IsOnline(It.IsAny<string>()))
             .Returns(false);
 
+        // UpdateMe broadcasts SelfSettingsChanged via Clients.User(...) (and may use
+        // Group/Users for status/profile fan-out), so the hub Clients must be mocked.
+        Mock<IHubClients> mockClients = new();
+        Mock<IClientProxy> mockClientProxy = new();
+        mockClients.Setup(c => c.User(It.IsAny<string>())).Returns(mockClientProxy.Object);
+        mockClients.Setup(c => c.Users(It.IsAny<IReadOnlyList<string>>())).Returns(mockClientProxy.Object);
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockClientProxy.Object);
+        mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
         Mock<IUserKeysService> mockUserKeys = new();
         UserController controller = new(mockService.Object, mockFriendService.Object, mockHubContext.Object, mockPresenceService.Object, mockEnv.Object, mockUserKeys.Object);
 
