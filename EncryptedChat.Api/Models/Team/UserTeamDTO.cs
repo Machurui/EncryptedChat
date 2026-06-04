@@ -23,4 +23,8 @@ public class UserTeamDTO
     public DateTime? LastMessageTime { get; set; }
 
     public string? LastMessageSenderName { get; set; }
+
+    public int UnreadCount { get; set; } = 0;
+
+    public bool IsMuted { get; set; } = false;
 }

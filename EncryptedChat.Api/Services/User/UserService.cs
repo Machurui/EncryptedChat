@@ -104,7 +104,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .AsNoTracking()
             .Include(m => m.Team)
             .Where(m => m.UserId == userId && m.Team != null)
-            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Role })
+            .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Role, m.LastReadAt, m.IsMuted })
             .ToListAsync();
 
         var teamIds = userTeams.Select(t => t.Id).ToList();
@@ -126,6 +126,24 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .Where(m => m != null)
             .ToDictionary(m => m!.Team!.Id, m => m!);
 
+        // Per-team unread = messages from OTHER users newer than this member's
+        // read marker. One SQL statement (correlated count per membership);
+        // bounded by the user's team count.
+        var unreadList = await _context.Members
+            .AsNoTracking()
+            .Where(m => m.UserId == userId && teamIds.Contains(m.TeamId))
+            .Select(m => new
+            {
+                m.TeamId,
+                Count = _context.Messages.Count(msg =>
+                    msg.Team!.Id == m.TeamId
+                    && msg.Sender!.Id != userId
+                    && (m.LastReadAt == null || msg.Date > m.LastReadAt))
+            })
+            .ToListAsync();
+
+        var unreadDict = unreadList.ToDictionary(x => x.TeamId, x => x.Count);
+
         List<UserTeamDTO> teams = userTeams.Select(t => new UserTeamDTO
         {
             Id = t.Id,
@@ -135,7 +153,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             Glyph = t.Glyph,
             Color = t.Color,
             MessageLifetime = t.MessageLifetime,
-            IsDirect = t.IsDirect
+            IsDirect = t.IsDirect,
+            UnreadCount = unreadDict.GetValueOrDefault(t.Id, 0),
+            IsMuted = t.IsMuted
         }).ToList();
 
         foreach (var team in teams)
