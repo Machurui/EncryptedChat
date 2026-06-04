@@ -376,6 +376,25 @@ namespace EncryptedChat.Controllers
 
             return NoContent();
         }
+
+        // PUT: api/Team/{teamId}/mute — set the caller's mute flag.
+        [HttpPut("{teamId:guid}/mute")]
+        public async Task<IActionResult> SetMute(Guid teamId, [FromBody] MuteDTO dto)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            bool ok = await _teamService.SetMutedAsync(userId, teamId, dto.Muted);
+            if (!ok)
+                return NotFound();
+
+            // Sync the caller's other devices.
+            await _hubContext.Clients.User(userId).SendAsync("SelfMuteChanged",
+                new { TeamId = teamId, Muted = dto.Muted });
+
+            return NoContent();
+        }
     }
 
     public record MemberActionDTO(string UserId);

@@ -362,6 +362,22 @@ public class TeamService : ITeamService
         return now;
     }
 
+    public async Task<bool> SetMutedAsync(string userId, Guid teamId, bool muted)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        Member? member = await _context.Members
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.TeamId == teamId);
+        if (member == null)
+            return false;
+
+        member.IsMuted = muted;
+        member.ModifiedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> AddMemberAsync(Guid teamId, string userId, string actorId)
     {
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))

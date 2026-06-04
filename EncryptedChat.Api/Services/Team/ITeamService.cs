@@ -31,6 +31,9 @@ namespace EncryptedChat.Services
         // timestamp written, or null if the user is not a member.
         Task<DateTime?> MarkReadAsync(string userId, Guid teamId);
 
+        // Sets the caller's mute flag for the team. Returns false if not a member.
+        Task<bool> SetMutedAsync(string userId, Guid teamId, bool muted);
+
         // Atomic ownership transfer. fromUserId must currently be Owner;
         // toUserId must already be a member of the team. Returns false on
         // any precondition violation. On success: fromUserId becomes Admin,

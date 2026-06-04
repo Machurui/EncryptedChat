@@ -104,6 +104,40 @@ public class TeamServiceTests : IDisposable
 
     #endregion
 
+    #region SetMutedAsync
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SetMutedAsync_Member_WritesFlag(bool muted)
+    {
+        User user = await CreateUser("muter");
+        Team team = await CreateTeam("Mutable", user);
+        // Start from the opposite state so the assertion is meaningful both ways.
+        Member seed = await _context.Members.FirstAsync(m => m.UserId == user.Id && m.TeamId == team.Id);
+        seed.IsMuted = !muted;
+        await _context.SaveChangesAsync();
+
+        bool ok = await _service.SetMutedAsync(user.Id, team.Id, muted);
+
+        ok.Should().BeTrue();
+        Member member = await _context.Members.FirstAsync(m => m.UserId == user.Id && m.TeamId == team.Id);
+        member.IsMuted.Should().Be(muted);
+    }
+
+    [Fact]
+    public async Task SetMutedAsync_NonMember_ReturnsFalse()
+    {
+        User owner = await CreateUser("owner2");
+        Team team = await CreateTeam("Private2", owner);
+
+        bool ok = await _service.SetMutedAsync("stranger", team.Id, true);
+
+        ok.Should().BeFalse();
+    }
+
+    #endregion
+
     #region CreateAsync
 
     [Fact]
