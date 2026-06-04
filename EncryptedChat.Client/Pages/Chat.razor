@@ -3691,11 +3691,14 @@
     // Unread tracking
     private Dictionary<Guid, int> unreadCounts = new();
     private Dictionary<Guid, DateTime> lastReadTime = new();
+    // Conversations the user muted (Discord-style: no toast, dot instead of count).
+    private HashSet<Guid> mutedTeams = new();
 
     // Aggregate unread across all teams/DMs, surfaced on the Chats tab while the
-    // Friends tab is active (per-conversation badges are hidden there). Respects
-    // NotificationPreference implicitly: unreadCounts is only incremented when
-    // shouldCountUnread is true in the ReceiveMessage handler.
+    // Friends tab is active (per-conversation badges are hidden there). Badges
+    // reflect real unread: unreadCounts increments for every incoming message
+    // from another user, independent of NotificationPreference/status (those
+    // only gate toasts — see NotificationPolicy).
     private int TotalUnread => unreadCounts.Values.Sum();
 
     // Last message updates (from real-time events)
@@ -4235,6 +4238,7 @@ private async Task SelectStatus(string status)
     {
         currentStatus = status;
         await SaveStatusAndClose();
+        await NotifyStateChangedAsync();
     }
 
     private async Task SaveStatus()
@@ -4273,9 +4277,10 @@ private async Task SelectStatus(string status)
         showProfileModal = true;
     }
 
-    private void HandleProfileStatusChanged(string newStatus)
+    private async Task HandleProfileStatusChanged(string newStatus)
     {
         currentStatus = newStatus;
+        await NotifyStateChangedAsync();
     }
 
     private void HandleProfileStatusMessageChanged(string? newMessage)
@@ -4326,10 +4331,22 @@ private async Task SelectStatus(string status)
         currentTypingIndicators = value;
     }
 
-    private void HandleNotificationPreferenceChanged(string value)
+    private async Task HandleNotificationPreferenceChanged(string value)
     {
         currentNotificationPreference = (value ?? "all").ToLowerInvariant().Trim();
         Console.WriteLine($"[Profile] NotificationPreference changed to: '{currentNotificationPreference}'");
+        await NotifyStateChangedAsync();
+    }
+
+    // When the effective state suppresses toasts (preference 'none' or DnD),
+    // immediately close any toast currently on screen.
+    private async Task NotifyStateChangedAsync()
+    {
+        bool toastsSuppressed = currentNotificationPreference == "none" || currentStatus == "busy";
+        if (toastsSuppressed)
+        {
+            await JS.InvokeVoidAsync("clearActiveNotifications");
+        }
     }
 
     private async Task HandleProfileSave()
@@ -4814,28 +4831,22 @@ private async Task SelectStatus(string status)
                 {
                     teamMessages[message.TeamId].Add(message);
 
-                    var pref = (currentNotificationPreference ?? "all").ToLowerInvariant().Trim();
                     var messageTeam = teams.FirstOrDefault(t => t.Id == message.TeamId);
                     var isDm = messageTeam?.IsDirect ?? false;
                     var isMentioned = MessageMentionsUser(message.Text);
+                    var isOwn = message.Sender?.Id == _userId;
+                    var isMuted = mutedTeams.Contains(message.TeamId);
 
-                    // Determine if we should show unread badge based on preference
-                    var shouldCountUnread = pref switch
-                    {
-                        "all" => true,
-                        "mentions" => isDm || isMentioned,
-                        "none" => false,
-                        _ => true
-                    };
-
-                    if (shouldCountUnread)
+                    // Badge = real unread, ALWAYS. Only guard against our own
+                    // messages (e.g. sent from another device). Independent of
+                    // notification preference and status.
+                    if (!isOwn)
                     {
                         IncrementUnread(message.TeamId);
-                        Console.WriteLine($"[SignalR] Unread incremented for {message.TeamId}, count = {GetUnreadCount(message.TeamId)}");
                     }
 
-                    // Send browser notification (same logic as unread)
-                    if (shouldCountUnread && message.Sender?.Id != _userId && currentStatus != "busy")
+                    // Toast = preference + status + mute (see NotificationPolicy).
+                    if (NotificationPolicy.ShouldShowToast(currentNotificationPreference, isDm, isMentioned, currentStatus, isOwn, isMuted))
                     {
                         var senderName = message.Sender?.Name ?? "Someone";
                         var notifTitle = isDm ? senderName : $"{senderName} in {messageTeam?.Name ?? "Team"}";
