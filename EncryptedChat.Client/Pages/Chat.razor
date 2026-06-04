@@ -4022,6 +4022,13 @@
                 return;
             }
             teams = result.Value ?? [];
+            // Seed unread badges + mute state from the server (persisted across reloads/devices).
+            foreach (var t in teams)
+            {
+                unreadCounts[t.Id] = t.UnreadCount;
+                if (t.IsMuted) mutedTeams.Add(t.Id);
+                else mutedTeams.Remove(t.Id);
+            }
             teamsState = teams.Any() ? LoadState.Success : LoadState.Empty;
         }
         catch (Exception ex)
@@ -4546,6 +4553,7 @@ private async Task SelectStatus(string status)
             var isFirstVisit = !_visitedTeams.Contains(teamId);
             _visitedTeams.Add(teamId);
             MarkTeamAsRead(teamId);
+            _ = TeamClient.MarkReadAsync(teamId); // fire-and-forget server sync
 
             await LoadTeamDetails();
 

@@ -41,7 +41,9 @@ public class TeamClient
         DateTime? LastMessageTime = null,
         string? LastMessageSenderName = null,
         string UrlToken = "",
-        int KeyGeneration = 1);
+        int KeyGeneration = 1,
+        int UnreadCount = 0,
+        bool IsMuted = false);
     public record TeamUpdateDTO(string? Name = null, string? Glyph = null, string? Color = null, string? MessageLifetime = null);
 
     public class Result
@@ -280,6 +282,20 @@ public class TeamClient
         catch (Exception)
         {
             return Result<List<TeamDTOPublic>>.Fail("Unexpected error while fetching teams.");
+        }
+    }
+
+    // ---------- Mark a conversation read (server read-marker) ----------
+    public async Task<bool> MarkReadAsync(Guid teamId)
+    {
+        try
+        {
+            var res = await _http.PostAsync($"api/team/{teamId}/read", null);
+            return res.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
         }
     }
 
