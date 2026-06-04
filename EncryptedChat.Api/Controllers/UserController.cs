@@ -70,6 +70,14 @@ public class UserController(
                 }
             }
 
+            // Sync the caller's OWN other devices: notification preference + status
+            // so their toast policy updates and active toasts clear in real time.
+            await _hubContext.Clients.User(userId).SendAsync("SelfSettingsChanged", new
+            {
+                result.User.NotificationPreference,
+                result.User.Status
+            });
+
             return Ok(result.User);
         }
 
