@@ -757,6 +757,8 @@
     .profile-avatar-large .avatar-status-dot.invisible,
     .profile-avatar-large .avatar-status-dot.offline {
         background: #9ca3af;
+        /* Beat the global .invisible utility (visibility:hidden) — see Chat.razor. */
+        visibility: visible;
     }
 
     .profile-avatar-actions {
@@ -1088,6 +1090,8 @@
 
     .status-option-dot.invisible {
         background: var(--status-invisible);
+        /* Beat the global .invisible utility (visibility:hidden) — see Chat.razor. */
+        visibility: visible;
     }
 
     .status-option-label {
