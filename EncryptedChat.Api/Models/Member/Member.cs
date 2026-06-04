@@ -44,4 +44,12 @@ public class Member
     [Required]
     [MaxLength(16)]
     public string UrlToken { get; set; } = string.Empty;
+
+    // Per-membership read marker. null = nothing read yet (all messages unread).
+    // Unread = messages in the team with Date > LastReadAt and Sender != this user.
+    public DateTime? LastReadAt { get; set; }
+
+    // Per-conversation mute (Discord-style): suppresses toasts and hides the
+    // numeric unread badge (a discreet dot is shown instead). Personal to the member.
+    public bool IsMuted { get; set; } = false;
 }
