@@ -27,6 +27,10 @@ namespace EncryptedChat.Services
 
         Task<bool> IsMemberAsync(string userId, Guid teamId);
 
+        // Sets the caller's read marker for the team to now. Returns the
+        // timestamp written, or null if the user is not a member.
+        Task<DateTime?> MarkReadAsync(string userId, Guid teamId);
+
         // Atomic ownership transfer. fromUserId must currently be Owner;
         // toUserId must already be a member of the team. Returns false on
         // any precondition violation. On success: fromUserId becomes Admin,

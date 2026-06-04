@@ -71,6 +71,39 @@ public class TeamServiceTests : IDisposable
         return team;
     }
 
+    #region MarkReadAsync
+
+    [Fact]
+    public async Task MarkReadAsync_Member_SetsLastReadAt_AndReturnsTimestamp()
+    {
+        User user = await CreateUser("reader");
+        Team team = await CreateTeam("Readable", user);
+
+        DateTime before = DateTime.UtcNow;
+        DateTime? result = await _service.MarkReadAsync(user.Id, team.Id);
+
+        result.Should().NotBeNull();
+        result!.Value.Should().BeOnOrAfter(before);
+        Member member = await _context.Members.FirstAsync(m => m.UserId == user.Id && m.TeamId == team.Id);
+        member.LastReadAt.Should().NotBeNull();
+        member.LastReadAt!.Value.Should().Be(result.Value);
+    }
+
+    [Fact]
+    public async Task MarkReadAsync_NonMember_ReturnsNull_AndDoesNotWrite()
+    {
+        User owner = await CreateUser("owner");
+        Team team = await CreateTeam("Private", owner);
+
+        DateTime? result = await _service.MarkReadAsync("stranger", team.Id);
+
+        result.Should().BeNull();
+        Member member = await _context.Members.FirstAsync(m => m.UserId == owner.Id && m.TeamId == team.Id);
+        member.LastReadAt.Should().BeNull();
+    }
+
+    #endregion
+
     #region CreateAsync
 
     [Fact]

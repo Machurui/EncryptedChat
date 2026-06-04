@@ -357,6 +357,25 @@ namespace EncryptedChat.Controllers
                 _ => BadRequest()
             };
         }
+
+        // POST: api/Team/{teamId}/read — mark the conversation read for the caller.
+        [HttpPost("{teamId:guid}/read")]
+        public async Task<IActionResult> MarkRead(Guid teamId)
+        {
+            string? userId = GetCurrentUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            DateTime? readAt = await _teamService.MarkReadAsync(userId, teamId);
+            if (readAt == null)
+                return NotFound();
+
+            // Sync the caller's other devices.
+            await _hubContext.Clients.User(userId).SendAsync("SelfReadStateChanged",
+                new { TeamId = teamId, LastReadAt = readAt });
+
+            return NoContent();
+        }
     }
 
     public record MemberActionDTO(string UserId);

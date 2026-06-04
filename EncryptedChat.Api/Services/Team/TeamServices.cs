@@ -345,6 +345,23 @@ public class TeamService : ITeamService
             .AnyAsync(m => m.TeamId == teamId && m.UserId == userId);
     }
 
+    public async Task<DateTime?> MarkReadAsync(string userId, Guid teamId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        Member? member = await _context.Members
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.TeamId == teamId);
+        if (member == null)
+            return null;
+
+        DateTime now = DateTime.UtcNow;
+        member.LastReadAt = now;
+        member.ModifiedAt = now;
+        await _context.SaveChangesAsync();
+        return now;
+    }
+
     public async Task<bool> AddMemberAsync(Guid teamId, string userId, string actorId)
     {
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
