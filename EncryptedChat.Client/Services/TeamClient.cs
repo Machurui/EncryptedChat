@@ -299,6 +299,20 @@ public class TeamClient
         }
     }
 
+    // ---------- Mute / unmute a conversation (per-member) ----------
+    public async Task<bool> SetMutedAsync(Guid teamId, bool muted)
+    {
+        try
+        {
+            var res = await _http.PutAsJsonAsync($"api/team/{teamId}/mute", new { Muted = muted });
+            return res.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // ---------- Get Team Details (with members) ----------
     public record MemberDTOPublic(UserDTOPublic? User, string Role);
     public record TeamDetailDTO(Guid Id, string Name, string Slug, string Glyph, string Color, string MessageLifetime, bool IsDirect, List<MemberDTOPublic>? Members);

@@ -118,7 +118,11 @@
                                 </div>
                                 <div class="team-preview @(hasUnread ? "unread" : "")">@GetLastMessagePreview(dm.Id)</div>
                             </div>
-                            @if (hasUnread)
+                            @if (hasUnread && IsTeamMuted(dm.Id))
+                            {
+                                <span class="unread-dot" title="Muted — new messages"></span>
+                            }
+                            else if (hasUnread)
                             {
                                 <span class="unread-badge">@unreadCount</span>
                             }
@@ -167,7 +171,11 @@
                                     </div>
                                     <div class="team-preview @(hasUnread ? "unread" : "")">@GetLastMessagePreview(team.Id)</div>
                                 </div>
-                                @if (hasUnread)
+                                @if (hasUnread && IsTeamMuted(team.Id))
+                                {
+                                    <span class="unread-dot" title="Muted — new messages"></span>
+                                }
+                                else if (hasUnread)
                                 {
                                     <span class="unread-badge">@unreadCount</span>
                                 }
@@ -482,6 +490,20 @@
                             <button class="icon-btn mobile-hide-direct" @onclick="OpenHeaderSearch" title="Search">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             </button>
+                            @if (selectedTeamId.HasValue)
+                            {
+                                <button class="icon-btn mobile-hide-direct" title="@(IsTeamMuted(selectedTeamId.Value) ? "Unmute" : "Mute")"
+                                        @onclick="() => ToggleMute(selectedTeamId.Value)">
+                                    @if (IsTeamMuted(selectedTeamId.Value))
+                                    {
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l22 22"/><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg>
+                                    }
+                                    else
+                                    {
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/></svg>
+                                    }
+                                </button>
+                            }
                             @if (selectedTeam?.IsDirect != true)
                             {
                                 <button class="icon-btn mobile-hide-direct @(showMembersRail ? "active" : "")" @onclick="ToggleMembersRail" title="Members">
@@ -1571,6 +1593,16 @@
         text-align: center;
         box-shadow: 0 0 12px color-mix(in oklch, var(--accent, oklch(0.65 0.16 165)) 50%, transparent);
         flex: 0 0 auto;
+    }
+
+    .unread-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent, oklch(0.65 0.16 165));
+        box-shadow: 0 0 10px color-mix(in oklch, var(--accent, oklch(0.65 0.16 165)) 50%, transparent);
+        flex: 0 0 auto;
+        align-self: center;
     }
 
     .friends-section {
@@ -6610,6 +6642,25 @@ private async Task SelectStatus(string status)
     {
         unreadCounts[teamId] = 0;
         lastReadTime[teamId] = DateTime.UtcNow;
+    }
+
+    private bool IsTeamMuted(Guid teamId) => mutedTeams.Contains(teamId);
+
+    private async Task ToggleMute(Guid teamId)
+    {
+        bool newMuted = !mutedTeams.Contains(teamId);
+        if (newMuted) mutedTeams.Add(teamId);
+        else mutedTeams.Remove(teamId);
+        StateHasChanged();
+
+        bool ok = await TeamClient.SetMutedAsync(teamId, newMuted);
+        if (!ok)
+        {
+            // Revert optimistic change on failure.
+            if (newMuted) mutedTeams.Remove(teamId);
+            else mutedTeams.Add(teamId);
+            StateHasChanged();
+        }
     }
 
     private void IncrementUnread(Guid teamId)
