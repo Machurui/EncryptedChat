@@ -1978,3 +1978,8 @@ a:focus-visible,
     }
 }
 
+.safety-panel { max-width: 420px; padding: 24px; }
+.safety-number { font-family: monospace; font-size: 18px; letter-spacing: 2px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+.safety-warning { color: oklch(0.68 0.18 28); font-weight: 600; }
+.safety-verified { color: oklch(0.72 0.16 150); font-weight: 600; }
+

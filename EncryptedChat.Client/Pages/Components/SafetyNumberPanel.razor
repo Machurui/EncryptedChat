@@ -1,0 +1,90 @@
+@using EncryptedChat.Client.Services.Crypto
+@inject IKeyVerificationService KeyVerify
+@inject UserClient Users
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div class="glass-panel safety-panel" @onclick:stopPropagation="true">
+            <h3>Safety number — @DisplayName</h3>
+
+            @if (_loading)
+            {
+                <p>Loading…</p>
+            }
+            else if (_number == null)
+            {
+                <p>This contact has not set up encryption keys yet.</p>
+            }
+            else
+            {
+                <pre class="safety-number">@_number</pre>
+
+                @if (_changed)
+                {
+                    <p class="safety-warning">⚠️ This contact's safety number changed since you last pinned it. If you did not expect this, do not trust it.</p>
+                    <button class="glass-btn" @onclick="TrustNewKey">Trust the new key</button>
+                }
+                else if (_status == "verified")
+                {
+                    <p class="safety-verified">✓ Verified</p>
+                }
+                else
+                {
+                    <p>Compare these digits with @DisplayName out of band (call, in person). If they match:</p>
+                    <button class="glass-btn" @onclick="MarkVerified">Mark as verified</button>
+                }
+            }
+
+            <button class="glass-btn" @onclick="Close">Close</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string UserId { get; set; } = "";
+    [Parameter] public string DisplayName { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _loading;
+    private string? _number;
+    private string? _status;
+    private bool _changed;
+    private string? _servedSign;
+    private string? _servedEnc;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!IsOpen || string.IsNullOrEmpty(UserId)) return;
+        _loading = true;
+        var keys = await Users.GetPublicKeysAsync(UserId);
+        if (keys == null) { _number = null; _loading = false; return; }
+
+        _servedSign = keys.SigningPublicKey;
+        _servedEnc = keys.EncryptionPublicKey;
+        _number = KeyVerify.ComputeSafetyNumber(UserId, _servedSign, _servedEnc);
+
+        var result = await KeyVerify.CheckAndPinAsync(UserId, _servedSign, _servedEnc);
+        _changed = result == KeyPinResult.Changed;
+        var st = await KeyVerify.GetStatusAsync(UserId);
+        _status = st?.Status;
+        _loading = false;
+    }
+
+    private async Task MarkVerified()
+    {
+        await KeyVerify.MarkVerifiedAsync(UserId);
+        _status = "verified";
+    }
+
+    private async Task TrustNewKey()
+    {
+        if (_servedSign == null || _servedEnc == null) return;
+        await KeyVerify.TrustNewKeyAsync(UserId, _servedSign, _servedEnc);
+        _changed = false;
+        _status = "pinned";
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+}
