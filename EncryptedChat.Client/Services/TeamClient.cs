@@ -11,14 +11,16 @@ public class TeamClient
     private readonly KeyVaultService _vault;
     private readonly TeamKeyCacheService _keyCache;
     private readonly UserClient _userClient;
+    private readonly IKeyVerificationService _keyVerify;
 
-    public TeamClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient)
+    public TeamClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient, IKeyVerificationService keyVerify)
     {
         _http = http;
         _crypto = crypto;
         _vault = vault;
         _keyCache = keyCache;
         _userClient = userClient;
+        _keyVerify = keyVerify;
     }
 
     // DTO match API. MemberKeyShares (userId → base64 ECIES-wrapped secret)
@@ -107,7 +109,10 @@ public class TeamClient
         Dictionary<string, string> memberShares = new();
         foreach (var (id, keys) in pubKeys)
         {
-            byte[] pub = Convert.FromBase64String(keys!.EncryptionPublicKey);
+            if (await _keyVerify.CheckAndPinAsync(id, keys!.SigningPublicKey, keys.EncryptionPublicKey)
+                    == KeyPinResult.Changed)
+                throw new KeyChangedException(id);
+            byte[] pub = Convert.FromBase64String(keys.EncryptionPublicKey);
             byte[] wrapped = await _crypto.WrapKeyAsync(teamSecret, pub);
             memberShares[id] = Convert.ToBase64String(wrapped);
         }
@@ -172,6 +177,9 @@ public class TeamClient
 
         var newMemberPubKeys = await _userClient.GetPublicKeysAsync(newMemberId);
         if (newMemberPubKeys == null) return false;
+        if (await _keyVerify.CheckAndPinAsync(newMemberId, newMemberPubKeys.SigningPublicKey, newMemberPubKeys.EncryptionPublicKey)
+                == KeyPinResult.Changed)
+            throw new KeyChangedException(newMemberId);
         byte[] pub = Convert.FromBase64String(newMemberPubKeys.EncryptionPublicKey);
 
         byte[] wrappedBlob = await _crypto.WrapKeyAsync(teamSecret, pub);
@@ -192,6 +200,9 @@ public class TeamClient
         {
             var pubKeys = await _userClient.GetPublicKeysAsync(memberId);
             if (pubKeys == null) return false;
+            if (await _keyVerify.CheckAndPinAsync(memberId, pubKeys.SigningPublicKey, pubKeys.EncryptionPublicKey)
+                    == KeyPinResult.Changed)
+                throw new KeyChangedException(memberId);
             byte[] pub = Convert.FromBase64String(pubKeys.EncryptionPublicKey);
             byte[] wrappedBlob = await _crypto.WrapKeyAsync(newTeamSecret, pub);
             newKeyShares.Add(new { MemberId = memberId, WrappedKey = Convert.ToBase64String(wrappedBlob) });
@@ -468,6 +479,10 @@ public class TeamClient
             if (myPubKeys == null || friendPubKeys == null)
                 return Result<TeamDTOPublic>.Fail("Cannot fetch public keys for DM bootstrap.");
 
+            if (await _keyVerify.CheckAndPinAsync(friendId, friendPubKeys.SigningPublicKey, friendPubKeys.EncryptionPublicKey)
+                    == KeyPinResult.Changed)
+                return Result<TeamDTOPublic>.Fail("KEY_CHANGED:" + friendId);
+
             byte[] myPub = Convert.FromBase64String(myPubKeys.EncryptionPublicKey);
             byte[] friendPub = Convert.FromBase64String(friendPubKeys.EncryptionPublicKey);
             Console.WriteLine($"[DM] pubkey bytes: myPub={myPub.Length} friendPub={friendPub.Length}");
@@ -538,4 +553,10 @@ public class TeamClient
         }
         catch { return null; }
     }
+}
+
+public sealed class KeyChangedException(string userId)
+    : Exception($"Safety number changed for user {userId}; secret-sharing refused.")
+{
+    public string UserId { get; } = userId;
 }
