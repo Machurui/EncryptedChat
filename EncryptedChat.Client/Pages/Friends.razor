@@ -169,6 +169,9 @@
                                 <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
                             </svg>
                         </IconButton>
+                        <IconButton Title="Safety number" Size="28" OnClick="() => OpenSafety(friend.UserId, friend.Name)">
+                            🔒
+                        </IconButton>
                         <IconButton Title="Remove" Size="28" OnClick="() => RemoveFriend(friend.UserId)">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
@@ -195,6 +198,9 @@
 </div>
 
 <AddFriendModal IsOpen="@showAddModal" OnClose="() => showAddModal = false" OnRequestSent="HandleRequestSent" />
+
+<SafetyNumberPanel IsOpen="_showSafety" UserId="_safetyUserId" DisplayName="_safetyName"
+                   OnClose="() => _showSafety = false" />
 
 <style>
     .friends-page {
@@ -493,6 +499,15 @@
     private bool showAddModal;
     private string searchQuery = string.Empty;
     private string activeTab = "all";
+
+    private bool _showSafety;
+    private string _safetyUserId = "";
+    private string _safetyName = "";
+
+    private void OpenSafety(string userId, string name)
+    {
+        _safetyUserId = userId; _safetyName = name; _showSafety = true;
+    }
 
     private List<FriendClient.FriendDTO> friends = new();
     private List<FriendClient.FriendRequestDTO> incomingRequests = new();
