@@ -787,6 +787,10 @@
                                         {
                                             <div class="message-header">
                                                 <span class="message-author" style="color: @(msg.Sender?.NameColor ?? "#FFFFFF");">@msg.Sender?.Name</span>
+                                                @if (msg.SenderKeyChanged)
+                                                {
+                                                    <span class="safety-warning" title="This sender's safety number changed — verify before trusting">⚠️</span>
+                                                }
                                                 <span class="message-time">@FormatMessageTimestamp(msg.Date)</span>
                                             </div>
                                         }
@@ -1260,6 +1264,9 @@
     UserId="@(_userId ?? "")"
     OnSuccess="() => showKeyBootstrap = false"
     OnClose="() => showKeyBootstrap = false" />
+
+<SafetyNumberPanel IsOpen="_showSafety" UserId="_safetyUserId" DisplayName="_safetyName"
+                   OnClose="() => _showSafety = false" />
 
 @* ── Status Menu (same level as modals for consistent styling) ── *@
 @if (showStatusMenu)
@@ -3625,6 +3632,12 @@
 
     private List<TeamClient.TeamDTOPublic> teams = new();
     private List<FriendClient.FriendDTO> friends = new();
+
+    // Safety-number panel host (key transparency)
+    private bool _showSafety;
+    private string _safetyUserId = "";
+    private string _safetyName = "";
+
     private List<FriendClient.FriendRequestDTO> pendingRequests = new();
     private string friendsTab = "all";
     private bool showAddFriendModal;
@@ -6405,10 +6418,19 @@ private async Task SelectStatus(string status)
         //    new member's local cache stays empty → they can't decrypt or send.
         //    Same fundamental bug we fixed for DMs and team creation.
         int generation = selectedTeam?.KeyGeneration ?? 1;
-        bool keyShareOk = await TeamClient.AddMemberKeyShareAsync(selectedTeamId.Value, generation, userId);
-        if (!keyShareOk)
+        try
         {
-            memberError = "Member added but failed to provision their encryption key. They may need to re-bootstrap.";
+            bool keyShareOk = await TeamClient.AddMemberKeyShareAsync(selectedTeamId.Value, generation, userId);
+            if (!keyShareOk)
+            {
+                memberError = "Member added but failed to provision their encryption key. They may need to re-bootstrap.";
+            }
+        }
+        catch (KeyChangedException ex)
+        {
+            memberError = "This member's safety number changed — key sharing was refused. Verify their safety number, then trust the new key.";
+            var changedName = teamDetails?.Members?.FirstOrDefault(m => m.User?.Id == ex.UserId)?.User?.Name ?? "this member";
+            OpenSafety(ex.UserId, changedName);
         }
 
         await LoadTeamDetails();
@@ -6659,6 +6681,13 @@ private async Task SelectStatus(string status)
         }
         var result = await TeamClient.GetOrCreateDirectMessageAsync(_userId, friendId);
         Console.WriteLine($"[StartDirectMessage] result.Success={result.Success}, error={result.ErrorMessage ?? "<none>"}, value={(result.Value == null ? "NULL" : result.Value.Id.ToString())}");
+        if (!result.Success && result.ErrorMessage?.StartsWith("KEY_CHANGED:") == true)
+        {
+            var changedId = result.ErrorMessage["KEY_CHANGED:".Length..];
+            var changedName = friends.FirstOrDefault(f => f.UserId == changedId)?.Name ?? "this contact";
+            OpenSafety(changedId, changedName);
+            return;
+        }
         if (result.Success && result.Value != null)
         {
             if (!teams.Any(t => t.Id == result.Value.Id))
@@ -6684,6 +6713,11 @@ private async Task SelectStatus(string status)
             await SelectTeam(result.Value.Id);
             activeNav = "chats";
         }
+    }
+
+    private void OpenSafety(string userId, string name)
+    {
+        _safetyUserId = userId; _safetyName = name; _showSafety = true;
     }
 
     private void MarkTeamAsRead(Guid teamId)
