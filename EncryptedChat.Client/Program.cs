@@ -50,6 +50,8 @@ builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.CryptoService>()
 builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.KeyVaultService>();
 builder.Services.AddSingleton<EncryptedChat.Client.Services.Crypto.TeamKeyCacheService>();
 builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.BootstrapKeyService>();
+builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.IPinStore, EncryptedChat.Client.Services.Crypto.IndexedDbPinStore>();
+builder.Services.AddScoped<EncryptedChat.Client.Services.Crypto.IKeyVerificationService, EncryptedChat.Client.Services.Crypto.KeyVerificationService>();
 
 // Flowbite Import
 builder.Services.AddScoped<IFlowbiteService, FlowbiteService>();
