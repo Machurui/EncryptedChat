@@ -12,6 +12,7 @@ public class ChatClient
     private readonly KeyVaultService _vault;
     private readonly TeamKeyCacheService _keyCache;
     private readonly UserClient _userClient;
+    private readonly IKeyVerificationService _keyVerify;
     private readonly ConcurrentDictionary<string, UserClient.PublicKeysResponse> _senderPubKeyCache = new();
 
     public class MessageDTOPublic
@@ -33,6 +34,11 @@ public class ChatClient
         [System.Text.Json.Serialization.JsonIgnore]
         public string? DisplayText { get; set; }
 
+        // Runtime-only: set to true by DecryptMessageAsync when the sender's
+        // served keys differ from the TOFU-pinned keys (key transparency warning).
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool SenderKeyChanged { get; set; }
+
         // TEMP-Task14: shim for existing Chat.razor markup that still reads
         // `msg.Text`. Task 14 rewires the UI to read DisplayText directly and
         // this property goes away.
@@ -49,13 +55,14 @@ public class ChatClient
         public string? ProfileImageUrl { get; set; }
     }
 
-    public ChatClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient)
+    public ChatClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient, IKeyVerificationService keyVerify)
     {
         _http = http;
         _crypto = crypto;
         _vault = vault;
         _keyCache = keyCache;
         _userClient = userClient;
+        _keyVerify = keyVerify;
     }
 
     public class Result<T>
@@ -186,6 +193,12 @@ public class ChatClient
                 _senderPubKeyCache[senderId] = senderPubKeys;
         }
         if (senderPubKeys == null) return null;
+
+        // Non-blocking: a changed sender key is surfaced as a warning. We cannot
+        // un-receive a message, but the user should be alerted to verify.
+        if (await _keyVerify.CheckAndPinAsync(senderId, senderPubKeys.SigningPublicKey, senderPubKeys.EncryptionPublicKey)
+                == KeyPinResult.Changed)
+            message.SenderKeyChanged = true;
 
         byte[] senderSigning = Convert.FromBase64String(senderPubKeys.SigningPublicKey);
 
