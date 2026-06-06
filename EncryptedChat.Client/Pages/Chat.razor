@@ -1381,7 +1381,7 @@
     .brand-title {
         font-size: 14px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.01em;
     }
 
@@ -1397,8 +1397,8 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: oklch(0.74 0.15 145);
-        box-shadow: 0 0 6px oklch(0.74 0.15 145);
+        background: var(--status-online);
+        box-shadow: 0 0 6px var(--status-online);
     }
 
     .nav-tabs {
@@ -1411,7 +1411,7 @@
         flex: 1;
         padding: 7px 0;
         border-radius: 9px;
-        background: rgba(255,255,255,0.04);
+        background: var(--bg-hover);
         border: 0.5px solid rgba(255,255,255,0.08);
         color: rgba(255,255,255,0.65);
         font-size: 12px;
@@ -1433,7 +1433,7 @@
     .nav-tab.active {
         background: rgba(255,255,255,0.12);
         border-color: rgba(255,255,255,0.20);
-        color: white;
+        color: var(--text-primary);
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20);
     }
 
@@ -1443,7 +1443,7 @@
         padding: 0 5px;
         border-radius: 999px;
         background: var(--accent, oklch(0.65 0.16 165));
-        color: white;
+        color: var(--text-primary);
         min-width: 14px;
         text-align: center;
     }
@@ -1498,7 +1498,7 @@
     }
 
     .team-row:hover:not(.active) {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .team-row.active {
@@ -1522,7 +1522,7 @@
         border-radius: 10px;
         display: grid;
         place-items: center;
-        color: white;
+        color: var(--text-primary);
         font-weight: 700;
         font-size: 13px;
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 2px 6px rgba(0,0,0,0.20);
@@ -1557,7 +1557,7 @@
     .team-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1565,13 +1565,13 @@
 
     .team-time {
         font-size: 10px;
-        color: rgba(255,255,255,0.5);
+        color: var(--text-muted);
         flex: 0 0 auto;
     }
 
     .team-preview {
         font-size: 11px;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
         font-weight: 400;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1595,7 +1595,7 @@
         font-size: 10px;
         font-weight: 700;
         background: var(--accent, oklch(0.65 0.16 165));
-        color: white;
+        color: var(--text-primary);
         min-width: 18px;
         text-align: center;
         box-shadow: 0 0 12px color-mix(in oklch, var(--accent, oklch(0.65 0.16 165)) 50%, transparent);
@@ -1652,7 +1652,7 @@
         height: 10px;
         border-radius: 50%;
         border: 2px solid rgba(0,0,0,0.55);
-        background: #9ca3af;
+        background: var(--status-invisible);
     }
 
     .friend-status-dot.online {
@@ -1671,7 +1671,7 @@
 
     .friend-status-dot.offline,
     .friend-status-dot.invisible {
-        background: #9ca3af !important;
+        background: var(--status-invisible) !important;
     }
 
     .friend-row-info {
@@ -1682,7 +1682,7 @@
     .friend-row-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1709,7 +1709,7 @@
     .profile-dock {
         position: relative;
         padding: 12px;
-        border-top: 0.5px solid rgba(255,255,255,0.10);
+        border-top: 0.5px solid var(--border);
         margin-top: auto;
     }
 
@@ -1729,11 +1729,11 @@
     }
 
     .profile-dock-btn:hover {
-        background: rgba(255,255,255,0.04);
+        background: var(--bg-hover);
     }
 
     .profile-dock-btn.active {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .profile-avatar-wrapper {
@@ -1749,7 +1749,7 @@
     .profile-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1776,17 +1776,17 @@
     }
 
     .profile-status-text.online::before {
-        background: oklch(0.74 0.15 145);
-        box-shadow: 0 0 6px oklch(0.74 0.15 145);
+        background: var(--status-online);
+        box-shadow: 0 0 6px var(--status-online);
     }
 
     .profile-status-text.away::before {
-        background: oklch(0.78 0.14 75);
+        background: var(--status-away);
     }
 
     .profile-status-text.busy::before {
-        background: oklch(0.68 0.18 28);
-        box-shadow: 0 0 6px oklch(0.68 0.18 28);
+        background: var(--status-busy);
+        box-shadow: 0 0 6px var(--status-busy);
     }
 
     .profile-status-text.invisible::before,
@@ -1806,18 +1806,18 @@
     }
 
     .status-dot.online {
-        background: oklch(0.74 0.15 145) !important;
-        box-shadow: 0 0 6px oklch(0.74 0.15 145);
+        background: var(--status-online) !important;
+        box-shadow: 0 0 6px var(--status-online);
     }
 
     .status-dot.away {
-        background: oklch(0.78 0.14 75) !important;
+        background: var(--status-away) !important;
         box-shadow: none;
     }
 
     .status-dot.busy {
-        background: oklch(0.68 0.18 28) !important;
-        box-shadow: 0 0 6px oklch(0.68 0.18 28);
+        background: var(--status-busy) !important;
+        box-shadow: 0 0 6px var(--status-busy);
     }
 
     .status-dot.invisible,
@@ -1842,17 +1842,17 @@
     }
 
     .status-dot-small.online {
-        background: oklch(0.74 0.15 145);
-        box-shadow: 0 0 5px oklch(0.74 0.15 145);
+        background: var(--status-online);
+        box-shadow: 0 0 5px var(--status-online);
     }
 
     .status-dot-small.away {
-        background: oklch(0.78 0.14 75);
+        background: var(--status-away);
     }
 
     .status-dot-small.busy {
-        background: oklch(0.68 0.18 28);
-        box-shadow: 0 0 5px oklch(0.68 0.18 28);
+        background: var(--status-busy);
+        box-shadow: 0 0 5px var(--status-busy);
     }
 
     .status-dot-small.invisible,
@@ -1881,7 +1881,7 @@
     .friends-title {
         font-size: 14px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.01em;
     }
 
@@ -1904,7 +1904,7 @@
         font-size: 11.5px;
         font-weight: 600;
         background: transparent;
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         color: rgba(255,255,255,0.65);
         cursor: pointer;
         font-family: inherit;
@@ -1916,13 +1916,13 @@
     }
 
     .friends-tab:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .friends-tab.active {
         background: rgba(255,255,255,0.12);
         border-color: rgba(255,255,255,0.18);
-        color: white;
+        color: var(--text-primary);
     }
 
     .tab-badge {
@@ -1931,7 +1931,7 @@
         padding: 0 5px;
         border-radius: 999px;
         background: var(--accent, oklch(0.65 0.16 165));
-        color: white;
+        color: var(--text-primary);
         min-width: 14px;
         text-align: center;
     }
@@ -1953,7 +1953,7 @@
     }
 
     .friend-row:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .friend-avatar-wrapper {
@@ -1975,7 +1975,7 @@
     .friend-row-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1993,7 +1993,7 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: #9ca3af;
+        background: var(--status-invisible);
     }
 
     .friend-status-indicator.online {
@@ -2012,7 +2012,7 @@
 
     .friend-status-indicator.offline,
     .friend-status-indicator.invisible {
-        background: #9ca3af;
+        background: var(--status-invisible);
     }
 
     .friend-more-menu {
@@ -2075,7 +2075,7 @@
         border-radius: 14px;
         margin-bottom: 6px;
         background: rgba(255,255,255,0.05);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
     }
 
     .request-header {
@@ -2093,7 +2093,7 @@
     .request-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .request-meta {
@@ -2122,7 +2122,7 @@
     .profile-name {
         font-size: 13px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2130,7 +2130,7 @@
 
     .profile-status {
         font-size: 10px;
-        color: oklch(0.74 0.15 145);
+        color: var(--status-online);
     }
 
     /* ── Conversation column ── */
@@ -2176,7 +2176,7 @@
     .conversation-title {
         font-size: 15px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.01em;
     }
 
@@ -2306,7 +2306,7 @@
         padding: 9px 14px;
         border-radius: 16px;
         background: rgba(255,255,255,0.10);
-        color: white;
+        color: var(--text-primary);
         font-size: 13.5px;
         line-height: 1.45;
         border: 0.5px solid rgba(255,255,255,0.15);
@@ -2403,7 +2403,7 @@
     .chat-bubble-preview-sample {
         padding: 9px 14px;
         border-radius: 16px;
-        color: white;
+        color: var(--text-primary);
         font-size: 13px;
         font-weight: 500;
         letter-spacing: -0.005em;
@@ -2418,8 +2418,8 @@
         gap: 10px;
         padding: 8px 10px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
     }
 
     .chat-bubble-slider-track {
@@ -2476,10 +2476,10 @@
         width: 130px;
         flex: 0 0 130px;
         background: rgba(0,0,0,0.18);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         border-radius: 8px;
         outline: none;
-        color: white;
+        color: var(--text-primary);
         font-size: 12px;
         padding: 6px 10px;
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -2487,16 +2487,16 @@
 
     .chat-bubble-reset-btn {
         align-self: flex-start;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         color: rgba(255,255,255,0.85);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         padding: 5px 10px;
         border-radius: 6px;
         font-size: 11px;
         cursor: pointer;
     }
 
-    .chat-bubble-reset-btn:hover { background: rgba(255,255,255,0.10); }
+    .chat-bubble-reset-btn:hover { background: var(--border); }
 
     .chat-bubble-helper {
         font-size: 10.5px;
@@ -2571,7 +2571,7 @@
         align-items: center;
         gap: 8px;
         padding: 8px 12px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.12);
         border-radius: 8px;
         color: rgba(255,255,255,0.85);
@@ -2664,7 +2664,7 @@
 
     .composer-wrapper {
         padding: 12px 16px 14px;
-        border-top: 0.5px solid rgba(255,255,255,0.10);
+        border-top: 0.5px solid var(--border);
     }
 
     /* Picker anchor : desktop + tablet only ; mobile pickers use position:fixed */
@@ -2680,7 +2680,7 @@
         justify-content: space-between;
         padding: 8px 12px;
         margin-bottom: 8px;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.12);
         border-radius: 10px;
     }
@@ -2720,7 +2720,7 @@
         height: 22px;
         border-radius: 50%;
         border: none;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         color: rgba(255,255,255,0.6);
         cursor: pointer;
         transition: all 0.15s;
@@ -2742,7 +2742,7 @@
         gap: 10px;
         padding: 6px 8px 6px 14px;
         border-radius: 16px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.18);
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.25);
     }
@@ -2753,7 +2753,7 @@
         background: transparent;
         border: none;
         outline: none;
-        color: white;
+        color: var(--text-primary);
         font-size: 14px;
         padding: 8px 0;
         font-family: inherit;
@@ -2781,7 +2781,7 @@
         border-radius: 12px;
         border: 0.5px solid rgba(255,255,255,0.22);
         background: rgba(255,255,255,0.10);
-        color: white;
+        color: var(--text-primary);
         cursor: default;
         transition: all 0.2s;
     }
@@ -2849,16 +2849,16 @@
 
     .emoji-picker-header {
         padding: 10px;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        border-bottom: 0.5px solid var(--border);
     }
 
     .emoji-search {
         width: 100%;
         padding: 8px 12px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.12);
         border-radius: 8px;
-        color: white;
+        color: var(--text-primary);
         font-size: 13px;
         outline: none;
     }
@@ -2919,16 +2919,16 @@
 
     .gif-picker-header {
         padding: 10px;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        border-bottom: 0.5px solid var(--border);
     }
 
     .gif-search {
         width: 100%;
         padding: 8px 12px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.12);
         border-radius: 8px;
-        color: white;
+        color: var(--text-primary);
         font-size: 13px;
         outline: none;
     }
@@ -2992,7 +2992,7 @@
         gap: 6px;
         padding: 8px 10px;
         overflow-x: auto;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        border-bottom: 0.5px solid var(--border);
         scrollbar-width: thin;
     }
     .gif-chips::-webkit-scrollbar { height: 4px; }
@@ -3002,7 +3002,7 @@
         flex: 0 0 auto;
         padding: 5px 10px;
         border-radius: 999px;
-        background: rgba(255,255,255,0.07);
+        background: var(--bg-input);
         border: 0.5px solid rgba(255,255,255,0.12);
         color: rgba(255,255,255,0.85);
         font-size: 12px;
@@ -3016,7 +3016,7 @@
     .gif-chip.active {
         background: var(--accent-glow);
         border-color: var(--accent);
-        color: white;
+        color: var(--text-primary);
     }
 
     .gif-load-sentinel {
@@ -3034,7 +3034,7 @@
         text-align: center;
         font-size: 10px;
         color: rgba(255,255,255,0.35);
-        border-top: 0.5px solid rgba(255,255,255,0.10);
+        border-top: 0.5px solid var(--border);
     }
 
     .empty-state-panel {
@@ -3103,7 +3103,7 @@
     .member-name {
         font-size: 12.5px;
         font-weight: 500;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -3120,7 +3120,7 @@
 
     .members-footer {
         padding: 12px;
-        border-top: 0.5px solid rgba(255,255,255,0.10);
+        border-top: 0.5px solid var(--border);
     }
 
     .mobile-close {
@@ -3198,14 +3198,14 @@
         background: transparent;
         cursor: pointer;
         font-family: inherit;
-        color: white;
+        color: var(--text-primary);
         font-size: 12.5px;
         text-align: left;
         transition: background 0.15s;
     }
 
     .status-preset-btn:hover:not(.selected) {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .status-preset-dot {
@@ -3287,7 +3287,7 @@
         cursor: pointer;
         font-family: inherit;
         font-size: 12.5px;
-        color: white;
+        color: var(--text-primary);
         text-align: left;
     }
 
@@ -3296,7 +3296,7 @@
     }
 
     .status-edit-profile:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .status-signout-btn {
@@ -3369,7 +3369,7 @@
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border: 0.5px solid rgba(255, 255, 255, 0.15);
-        color: white;
+        color: var(--text-primary);
         cursor: pointer;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         transition: opacity 0.2s, transform 0.2s, background 0.2s;
