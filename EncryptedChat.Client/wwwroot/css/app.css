@@ -80,18 +80,59 @@
 
     /* ── Responsive ── */
     --touch-target-min: 44px;
+
+    /* ── Semantic tokens (theme-agnostic; Tailwind V2 will map these) ── */
+    --surface: #080b11;            /* app background */
+    --surface-2: #12141a;          /* panels / secondary */
+    --surface-3: #1a1c24;          /* tertiary */
+    --surface-raised: #0d0f14;
+    --surface-elevated: #1e2028;
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --bg-active: rgba(255, 255, 255, 0.08);
+    --bg-input: rgba(255, 255, 255, 0.07);
+    --border: rgba(255, 255, 255, 0.10);
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --text: white;
+    --text-faint: rgba(255, 255, 255, 0.5);
+    --glass-bg: rgba(24, 26, 27, 0.15);
 }
 
-:root.theme-light {
-    /* Light theme overrides */
-    --glass-tint: rgba(0, 0, 0, 0.04);
-    --glass-border: rgba(0, 0, 0, 0.12);
+:root[data-theme="light"] {
+    /* Light theme — cool/clean */
+    --surface: #f5f7fa;
+    --surface-2: #ffffff;
+    --surface-3: #eef1f5;
+    --surface-raised: #ffffff;
+    --surface-elevated: #ffffff;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(0, 0, 0, 0.07);
+    --bg-input: rgba(0, 0, 0, 0.04);
+    --border: rgba(0, 0, 0, 0.10);
+    --border-subtle: rgba(0, 0, 0, 0.06);
 
-    --bg-primary: #f5f7fa;
-    --bg-secondary: #ffffff;
+    --text: #1a1a2e;
     --text-primary: #1a1a2e;
     --text-secondary: rgba(26, 26, 46, 0.7);
     --text-muted: rgba(26, 26, 46, 0.5);
+    --text-faint: rgba(26, 26, 46, 0.5);
+    --text-disabled: rgba(26, 26, 46, 0.35);
+
+    --accent: oklch(0.58 0.17 165);
+    --accent-glow: oklch(0.58 0.17 165 / 0.25);
+
+    --bg-primary: #f5f7fa;
+    --bg-secondary: #ffffff;
+
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-tint: rgba(0, 0, 0, 0.04);
+    --glass-border: rgba(0, 0, 0, 0.10);
+    --glass-shine: rgba(255, 255, 255, 0.6);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+
+    --skeleton-bg: rgba(0, 0, 0, 0.05);
+    --skeleton-shimmer: rgba(0, 0, 0, 0.09);
+
+    --dark-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
 }
 
 body {
@@ -154,23 +195,23 @@ input::-webkit-credentials-auto-fill-button {
 }
 
 /* Light theme glass adjustments */
-:root.theme-light .glass-panel {
+:root[data-theme="light"] .glass-panel {
     background: rgba(255, 255, 255, 0.7);
     border-color: rgba(0, 0, 0, 0.08);
 }
 
-:root.theme-light .glass-input {
+:root[data-theme="light"] .glass-input {
     background: rgba(0, 0, 0, 0.04);
     border-color: rgba(0, 0, 0, 0.08);
     color: var(--text-primary);
 }
 
-:root.theme-light .glass-input input,
-:root.theme-light .glass-input input::placeholder {
+:root[data-theme="light"] .glass-input input,
+:root[data-theme="light"] .glass-input input::placeholder {
     color: var(--text-secondary);
 }
 
-:root.theme-light .glass-btn:not(.primary) {
+:root[data-theme="light"] .glass-btn:not(.primary) {
     background: rgba(0, 0, 0, 0.04);
     border-color: rgba(0, 0, 0, 0.12);
     color: var(--text-primary);
