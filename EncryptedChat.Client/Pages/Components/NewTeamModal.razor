@@ -226,7 +226,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        border-bottom: 0.5px solid var(--border);
     }
 
     .new-team-header-left {
@@ -241,7 +241,7 @@
         border-radius: 12px;
         display: grid;
         place-items: center;
-        color: white;
+        color: var(--text-primary);
         font-size: 22px;
         font-weight: 700;
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.30), 0 6px 18px rgba(0,0,0,0.20);
@@ -258,7 +258,7 @@
     .new-team-title {
         font-size: 17px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.015em;
     }
 
@@ -286,33 +286,33 @@
     }
 
     .step-pill.current {
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border-color: rgba(255,255,255,0.16);
-        color: white;
+        color: var(--text-primary);
     }
 
     .step-pill.completed {
-        color: white;
+        color: var(--text-primary);
     }
 
     .step-pill-num {
         width: 16px;
         height: 16px;
         border-radius: 50%;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         display: grid;
         place-items: center;
         font-size: 9px;
-        color: white;
+        color: var(--text-primary);
         font-weight: 700;
     }
 
     .step-pill-num.active {
-        background: rgba(255,255,255,0.18);
+        background: var(--glass-border);
     }
 
     .step-pill-num.completed {
-        background: oklch(0.65 0.16 165);
+        background: var(--accent);
     }
 
     .new-team-content {
@@ -363,7 +363,7 @@
     }
 
     .accent-option.selected {
-        border: 1.5px solid white;
+        border: 1.5px solid var(--text-primary);
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.40), 0 0 0 3px rgba(255,255,255,0.15);
     }
 
@@ -376,9 +376,9 @@
         width: 36px;
         height: 36px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.10);
-        color: white;
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
+        color: var(--text-primary);
         font-size: 18px;
         font-weight: 700;
         cursor: pointer;
@@ -388,7 +388,7 @@
     }
 
     .glyph-option:hover {
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
     }
 
     .glyph-option.selected {
@@ -415,9 +415,9 @@
         gap: 6px;
         padding: 4px 4px 4px 4px;
         border-radius: 999px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.14);
-        color: white;
+        color: var(--text-primary);
         font-size: 12px;
     }
 
@@ -480,7 +480,7 @@
     }
 
     .contact-row:hover {
-        background: rgba(255,255,255,0.04);
+        background: var(--bg-hover);
     }
 
     .contact-avatar {
@@ -492,7 +492,7 @@
         place-items: center;
         font-size: 13px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         flex-shrink: 0;
     }
 
@@ -504,7 +504,7 @@
     .contact-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -512,11 +512,11 @@
 
     .contact-status {
         font-size: 10.5px;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
     }
 
     .contact-status.online {
-        color: oklch(0.74 0.15 145);
+        color: var(--status-online);
     }
 
     .lifetime-options {
@@ -530,20 +530,20 @@
         border-radius: 9px;
         font-size: 12px;
         font-weight: 600;
-        background: rgba(255,255,255,0.06);
-        border: 0.5px solid rgba(255,255,255,0.10);
-        color: white;
+        background: var(--border-subtle);
+        border: 0.5px solid var(--border);
+        color: var(--text-primary);
         font-family: inherit;
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .lifetime-option:hover:not(.selected) {
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
     }
 
     .lifetime-option.selected {
-        background: linear-gradient(135deg, oklch(0.65 0.16 165), oklch(0.45 0.16 195));
+        background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 195));
         border-color: transparent;
         box-shadow: 0 4px 14px rgba(100, 200, 170, 0.25);
     }
@@ -568,7 +568,7 @@
     .encryption-banner-title {
         font-size: 13px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .encryption-banner-text {
@@ -580,7 +580,7 @@
 
     .new-team-footer {
         padding: 14px 22px;
-        border-top: 0.5px solid rgba(255,255,255,0.10);
+        border-top: 0.5px solid var(--border);
         display: flex;
         gap: 8px;
     }

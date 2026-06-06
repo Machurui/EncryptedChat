@@ -106,7 +106,7 @@
                                     </div>
 
                                     <div class="info-box">
-                                        <div style="font-weight: 600; color: white; margin-bottom: 4px; font-size: 12px;">Strong password tips</div>
+                                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px; font-size: 12px;">Strong password tips</div>
                                         Use a passphrase of 4 or more random words, or a 16+ character mix. Avoid reusing passwords from other accounts.
                                     </div>
 
@@ -381,7 +381,7 @@
                                         {
                                             <GlassInput @bind-Value="localHandle" Placeholder="your_handle">
                                                 <Icon>
-                                                    <span style="color: rgba(255,255,255,0.5);">@@</span>
+                                                    <span style="color: var(--text-muted);">@@</span>
                                                 </Icon>
                                             </GlassInput>
                                             <div class="handle-helper-text">Choose your handle. Letters, numbers, underscore (3–32 chars). This cannot be changed later.</div>
@@ -606,7 +606,7 @@
 <style>
     .profile-modal-header {
         padding: 20px 26px 18px;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
+        border-bottom: 0.5px solid var(--border);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -623,7 +623,7 @@
     .profile-modal-title {
         font-size: 17px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.015em;
         margin-top: 2px;
     }
@@ -637,7 +637,7 @@
     .profile-modal-tabs {
         width: 200px;
         flex: 0 0 200px;
-        border-right: 0.5px solid rgba(255,255,255,0.10);
+        border-right: 0.5px solid var(--border);
         padding: 14px 10px;
         display: flex;
         flex-direction: column;
@@ -661,13 +661,13 @@
     }
 
     .profile-tab:hover {
-        background: rgba(255,255,255,0.04);
+        background: var(--bg-hover);
     }
 
     .profile-tab.active {
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border-color: rgba(255,255,255,0.14);
-        color: white;
+        color: var(--text-primary);
         font-weight: 600;
     }
 
@@ -725,7 +725,7 @@
         justify-content: center;
         font-size: 24px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         text-shadow: 0 1px 2px rgba(0,0,0,0.3);
     }
 
@@ -737,7 +737,7 @@
         height: 18px;
         border-radius: 50%;
         border: 3px solid #1a1a1a;
-        background: #9ca3af;
+        background: var(--status-invisible);
     }
 
     .profile-avatar-large .avatar-status-dot.online {
@@ -756,7 +756,7 @@
 
     .profile-avatar-large .avatar-status-dot.invisible,
     .profile-avatar-large .avatar-status-dot.offline {
-        background: #9ca3af;
+        background: var(--status-invisible);
         /* Beat the global .invisible utility (visibility:hidden) — see Chat.razor. */
         visibility: visible;
     }
@@ -778,9 +778,9 @@
         gap: 6px;
         padding: 7px 12px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.14);
-        color: white;
+        color: var(--text-primary);
         font-size: 12px;
         font-weight: 500;
         cursor: pointer;
@@ -815,8 +815,8 @@
         align-items: center;
         gap: 6px;
         padding: 8px 12px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
         border-radius: 8px;
         color: rgba(255,255,255,0.85);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -839,7 +839,7 @@
         align-items: center;
         gap: 10px;
         padding: 8px 12px;
-        background: rgba(255,255,255,0.07);
+        background: var(--bg-input);
         border: 0.5px solid rgba(255,255,255,0.12);
         border-radius: 12px;
     }
@@ -875,7 +875,7 @@
         flex: 1;
         background: transparent;
         border: none;
-        color: white;
+        color: var(--text-primary);
         font-family: ui-monospace, SF Mono, Menlo, monospace;
         font-size: 13px;
         text-transform: uppercase;
@@ -894,10 +894,10 @@
         border-radius: 14px;
         background: linear-gradient(135deg,
             color-mix(in srgb, var(--ncc, white) 9%, transparent),
-            rgba(255,255,255,0.04) 60%);
+            var(--bg-hover) 60%);
         border: 0.5px solid rgba(255,255,255,0.12);
         box-shadow:
-            inset 1px 1px 1px rgba(255,255,255,0.10),
+            inset 1px 1px 1px var(--border),
             0 0 24px color-mix(in srgb, var(--ncc, white) 8%, transparent);
         overflow: hidden;
         cursor: pointer;
@@ -906,7 +906,7 @@
     .name-color-preview:hover {
         border-color: color-mix(in srgb, var(--ncc, white) 33%, transparent);
         box-shadow:
-            inset 1px 1px 1px rgba(255,255,255,0.10),
+            inset 1px 1px 1px var(--border),
             0 0 30px color-mix(in srgb, var(--ncc, white) 14%, transparent);
     }
 
@@ -956,8 +956,8 @@
         display: flex; align-items: center; gap: 10px;
         padding: 8px 10px; margin-top: 12px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
     }
     .name-color-slider-track {
         position: relative; flex: 1; height: 22px;
@@ -969,7 +969,7 @@
         background: linear-gradient(90deg,
             #ff0040 0%, #ffae00 14%, #d4ff00 28%, #2cff5b 42%,
             #00f4ff 56%, #2c8bff 70%, #b25bff 84%, #ff34c2 100%);
-        border: 0.5px solid rgba(255,255,255,0.18);
+        border: 0.5px solid var(--glass-border);
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.30);
         pointer-events: none;
     }
@@ -984,14 +984,14 @@
     .name-color-slider::-webkit-slider-thumb {
         appearance: none; -webkit-appearance: none;
         width: 18px; height: 18px; border-radius: 50%;
-        background: white;
+        background: var(--text-primary);
         border: 2px solid rgba(0,0,0,0.4);
         box-shadow: 0 1px 3px rgba(0,0,0,0.5);
         cursor: pointer;
     }
     .name-color-slider::-moz-range-thumb {
         width: 18px; height: 18px; border-radius: 50%;
-        background: white;
+        background: var(--text-primary);
         border: 2px solid rgba(0,0,0,0.4);
         cursor: pointer;
     }
@@ -999,10 +999,10 @@
     .name-color-text-input {
         flex: 0 0 140px;
         background: rgba(0,0,0,0.18);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         border-radius: 8px;
         outline: none;
-        color: white;
+        color: var(--text-primary);
         font-size: 12px;
         padding: 6px 10px;
         font-family: ui-monospace, 'SF Mono', Menlo, monospace;
@@ -1011,7 +1011,7 @@
 
     .name-color-helper {
         font-size: 10.5px;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
         margin-top: 10px;
         line-height: 1.4;
     }
@@ -1051,9 +1051,9 @@
         gap: 12px;
         padding: 11px 14px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.08);
-        color: white;
+        background: var(--bg-hover);
+        border: 0.5px solid var(--bg-active);
+        color: var(--text-primary);
         font-size: 13px;
         font-family: inherit;
         cursor: pointer;
@@ -1061,11 +1061,11 @@
     }
 
     .status-option:hover:not(.selected) {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .status-option.selected {
-        border-color: rgba(255,255,255,0.18);
+        border-color: var(--glass-border);
     }
 
     .status-option-dot {
@@ -1106,8 +1106,8 @@
     .info-box {
         padding: 10px 12px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.08);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--bg-active);
         font-size: 11.5px;
         color: rgba(255,255,255,0.65);
         line-height: 1.5;
@@ -1119,8 +1119,8 @@
         gap: 12px;
         padding: 12px 14px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.08);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--bg-active);
     }
 
     .security-row-info {
@@ -1131,7 +1131,7 @@
     .security-row-label {
         font-size: 12px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .security-row-value {
@@ -1143,7 +1143,7 @@
 
     .divider {
         height: 1px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         margin: 16px 0;
     }
 
@@ -1158,12 +1158,12 @@
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
     }
 
     .profile-modal-footer {
         padding: 14px 22px;
-        border-top: 0.5px solid rgba(255,255,255,0.10);
+        border-top: 0.5px solid var(--border);
         display: flex;
         justify-content: flex-end;
         gap: 8px;
@@ -1183,22 +1183,22 @@
         padding: 14px 12px;
         border-radius: 12px;
         border: 1px solid rgba(255,255,255,0.12);
-        background: rgba(255,255,255,0.04);
-        color: rgba(255,255,255,0.7);
+        background: var(--bg-hover);
+        color: var(--text-secondary);
         font-family: inherit;
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .theme-option:hover {
-        background: rgba(255,255,255,0.08);
-        border-color: rgba(255,255,255,0.18);
+        background: var(--bg-active);
+        border-color: var(--glass-border);
     }
 
     .theme-option.selected {
         background: rgba(52, 211, 153, 0.12);
         border-color: rgba(52, 211, 153, 0.4);
-        color: white;
+        color: var(--text-primary);
     }
 
     .theme-icon {
@@ -1225,7 +1225,7 @@
     .toggle-row-label {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .toggle-row-desc {
@@ -1263,13 +1263,13 @@
         height: 16px;
         left: 3px;
         bottom: 3px;
-        background: white;
+        background: var(--text-primary);
         border-radius: 50%;
         transition: transform 0.2s;
     }
 
     .toggle-switch input:checked + .toggle-slider {
-        background: oklch(0.65 0.16 165);
+        background: var(--accent);
     }
 
     .toggle-switch input:checked + .toggle-slider::before {
@@ -1283,7 +1283,7 @@
     .notification-header {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         margin-bottom: 4px;
     }
 
@@ -1305,9 +1305,9 @@
         gap: 10px;
         padding: 10px 12px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.08);
-        color: white;
+        background: var(--bg-hover);
+        border: 0.5px solid var(--bg-active);
+        color: var(--text-primary);
         font-size: 12.5px;
         font-family: inherit;
         cursor: pointer;
@@ -1316,11 +1316,11 @@
     }
 
     .notification-option:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .notification-option.selected {
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
         border-color: rgba(255,255,255,0.16);
     }
 
@@ -1328,7 +1328,7 @@
         width: 14px;
         height: 14px;
         border-radius: 50%;
-        border: 1.5px solid rgba(255,255,255,0.30);
+        border: 1.5px solid var(--text-disabled);
         display: grid;
         place-items: center;
         transition: all 0.15s;
@@ -1336,7 +1336,7 @@
 
     .notification-radio.selected {
         border-color: transparent;
-        background: oklch(0.65 0.16 165);
+        background: var(--accent);
         box-shadow: 0 0 0 3px rgba(100, 200, 170, 0.30);
     }
 
@@ -1344,7 +1344,7 @@
         width: 5px;
         height: 5px;
         border-radius: 50%;
-        background: white;
+        background: var(--text-primary);
     }
 
     .encryption-banner {
@@ -1366,7 +1366,7 @@
     .encryption-banner-title {
         font-size: 13px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .encryption-banner-text {
@@ -1395,7 +1395,7 @@
     .warning-banner-title {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .warning-banner-text {
@@ -1416,16 +1416,16 @@
         width: 32px;
         height: 32px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.12);
-        color: white;
+        color: var(--text-primary);
         display: grid;
         place-items: center;
         cursor: pointer;
     }
 
     .back-btn:hover {
-        background: rgba(255,255,255,0.10);
+        background: var(--border);
     }
 
     .security-subview-label {
@@ -1439,7 +1439,7 @@
     .security-subview-title {
         font-size: 17px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.015em;
         margin-top: 2px;
     }
@@ -1471,7 +1471,7 @@
         flex: 1;
         height: 3px;
         border-radius: 2px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-active);
     }
 
     .strength-segment.active.weak { background: oklch(0.68 0.18 30); }
@@ -1520,7 +1520,7 @@
         padding: 40px 20px;
         border-radius: 14px;
         background: rgba(0,0,0,0.30);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -1531,7 +1531,7 @@
         width: 56px;
         height: 56px;
         border-radius: 14px;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.15);
         display: grid;
         place-items: center;
@@ -1541,7 +1541,7 @@
     .recovery-hidden-title {
         font-size: 14px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .recovery-hidden-text {
@@ -1563,7 +1563,7 @@
         border-radius: 8px;
         font-size: 11px;
         font-weight: 600;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.12);
         color: rgba(255,255,255,0.85);
         cursor: pointer;
@@ -1571,7 +1571,7 @@
     }
 
     .hide-btn:hover {
-        background: rgba(255,255,255,0.10);
+        background: var(--border);
     }
 
     .recovery-grid {
@@ -1581,17 +1581,17 @@
         padding: 18px;
         border-radius: 14px;
         background: rgba(0,0,0,0.30);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
     }
 
     .recovery-word {
         padding: 10px 12px;
         border-radius: 8px;
-        background: rgba(255,255,255,0.06);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        background: var(--border-subtle);
+        border: 0.5px solid var(--border);
         font-family: ui-monospace, SF Mono, Menlo, monospace;
         font-size: 13px;
-        color: white;
+        color: var(--text-primary);
         display: flex;
         align-items: baseline;
         gap: 8px;
@@ -1614,25 +1614,25 @@
         gap: 10px;
         padding: 10px 12px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
         cursor: pointer;
         font-family: inherit;
-        color: white;
+        color: var(--text-primary);
         font-size: 12px;
         text-align: left;
     }
 
     .recovery-confirm-btn.confirmed {
         background: rgba(16,185,129,0.10);
-        border-color: rgba(255,255,255,0.18);
+        border-color: var(--glass-border);
     }
 
     .recovery-checkbox {
         width: 16px;
         height: 16px;
         border-radius: 4px;
-        border: 1.5px solid rgba(255,255,255,0.30);
+        border: 1.5px solid var(--text-disabled);
         background: transparent;
         display: grid;
         place-items: center;
@@ -1640,7 +1640,7 @@
 
     .recovery-checkbox.checked {
         border-color: transparent;
-        background: oklch(0.65 0.16 165);
+        background: var(--accent);
     }
 
     .sessions-header {
@@ -1697,24 +1697,24 @@
         gap: 14px;
         padding: 14px 16px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.04);
-        border: 0.5px solid rgba(255,255,255,0.08);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--bg-active);
     }
 
     .session-row.current {
         background: rgba(52, 211, 153, 0.08);
-        border-color: rgba(255,255,255,0.18);
+        border-color: var(--glass-border);
     }
 
     .session-icon {
         width: 38px;
         height: 38px;
         border-radius: 10px;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.12);
         display: grid;
         place-items: center;
-        color: rgba(255,255,255,0.70);
+        color: var(--text-secondary);
     }
 
     .session-row.current .session-icon {
@@ -1732,7 +1732,7 @@
         gap: 8px;
         font-size: 13px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .session-badge {
@@ -1778,7 +1778,7 @@
         border-radius: 8px;
         font-size: 11.5px;
         font-weight: 600;
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.14);
         color: rgba(255,255,255,0.85);
         cursor: pointer;
@@ -1786,7 +1786,7 @@
     }
 
     .revoke-btn:hover {
-        background: rgba(255,255,255,0.10);
+        background: var(--border);
     }
 
     @@media (max-width: 768px) {
@@ -1811,7 +1811,7 @@
             flex-direction: row;
             flex-wrap: nowrap;
             border-right: none;
-            border-bottom: 0.5px solid rgba(255,255,255,0.10);
+            border-bottom: 0.5px solid var(--border);
             padding: 8px 12px;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
