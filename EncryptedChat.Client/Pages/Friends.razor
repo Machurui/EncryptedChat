@@ -236,14 +236,14 @@
     }
 
     .back-btn:hover {
-        background: rgba(255,255,255,0.08);
-        color: white;
+        background: var(--bg-active);
+        color: var(--text-primary);
     }
 
     .friends-title {
         font-size: 14px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.01em;
     }
 
@@ -270,7 +270,7 @@
         font-size: 11.5px;
         font-weight: 600;
         background: transparent;
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         color: rgba(255,255,255,0.65);
         cursor: pointer;
         font-family: inherit;
@@ -282,13 +282,13 @@
     }
 
     .friends-tab:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .friends-tab.active {
         background: rgba(255,255,255,0.12);
-        border-color: rgba(255,255,255,0.18);
-        color: white;
+        border-color: var(--glass-border);
+        color: var(--text-primary);
     }
 
     .tab-badge {
@@ -297,7 +297,7 @@
         padding: 0 5px;
         border-radius: 999px;
         background: var(--accent);
-        color: white;
+        color: var(--text-primary);
         min-width: 14px;
         text-align: center;
     }
@@ -329,7 +329,7 @@
     }
 
     .friend-row:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .friend-info {
@@ -340,7 +340,7 @@
     .friend-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -358,7 +358,7 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: rgba(255,255,255,0.30);
+        background: var(--text-disabled);
     }
 
     .status-dot.online {
@@ -377,7 +377,7 @@
 
     .status-dot.invisible,
     .status-dot.offline {
-        background: rgba(255,255,255,0.30);
+        background: var(--text-disabled);
     }
 
     .request-card {
@@ -385,7 +385,7 @@
         border-radius: 14px;
         margin-bottom: 6px;
         background: rgba(255,255,255,0.05);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
     }
 
     .request-header {
@@ -403,7 +403,7 @@
     .request-name {
         font-size: 12.5px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .request-meta {
@@ -437,12 +437,12 @@
     .sent-name {
         font-size: 12px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .sent-status {
         font-size: 10px;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
     }
 
     .empty-state {
@@ -469,7 +469,7 @@
     .loading-state {
         text-align: center;
         padding: 40px 20px;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
     }
 
     @@media (max-width: 767px) {

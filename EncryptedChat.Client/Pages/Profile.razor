@@ -22,7 +22,7 @@
                         <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
                     </svg>
                 </a>
-                <div style="font-size: 20px; font-weight: 700; color: white;">Edit Profile</div>
+                <div style="font-size: 20px; font-weight: 700; color: var(--text-primary);">Edit Profile</div>
             </div>
 
             @if (isLoading)
@@ -84,7 +84,7 @@
                         {
                             <div style="width: 80px; height: 80px; border-radius: 50%;
                                         display: grid; place-items: center;
-                                        font-size: 28px; font-weight: 700; color: white;
+                                        font-size: 28px; font-weight: 700; color: var(--text-primary);
                                         background: linear-gradient(135deg, @nameColor, oklch(0.45 0.16 225));
                                         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.40);">
                                 @(name.Length > 0 ? name[0].ToString().ToUpper() : "?")
@@ -150,8 +150,8 @@
                     <div style="display: flex; flex-direction: column; gap: 5px;">
                         <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">Email</label>
                         <div style="padding: 11px 12px; border-radius: 12px;
-                                    background: rgba(255,255,255,0.03); border: 0.5px solid rgba(255,255,255,0.10);
-                                    font-size: 14px; color: rgba(255,255,255,0.50);">
+                                    background: rgba(255,255,255,0.03); border: 0.5px solid var(--border);
+                                    font-size: 14px; color: var(--text-muted);">
                             @profile.Email
                         </div>
                     </div>
