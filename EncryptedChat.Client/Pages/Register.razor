@@ -26,7 +26,7 @@
             <div style="font-size: 22px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">
                 Create your identity
             </div>
-            <div style="font-size: 13px; color: rgba(255,255,255,0.60); margin-top: 6px; line-height: 1.5;">
+            <div style="font-size: 13px; color: rgba(var(--text-rgb), 0.60); margin-top: 6px; line-height: 1.5;">
                 Your private key never leaves this device.
             </div>
         </div>
@@ -49,7 +49,7 @@
 
                 <!-- Handle Field -->
                 <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(var(--text-rgb), 0.75);">
                         Handle
                     </label>
                     <div class="glass-input">
@@ -65,7 +65,7 @@
 
                 <!-- Email Field -->
                 <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(var(--text-rgb), 0.75);">
                         Email
                     </label>
                     <div class="glass-input">
@@ -78,7 +78,7 @@
 
                 <!-- Password Field -->
                 <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(var(--text-rgb), 0.75);">
                         Password
                     </label>
                     <div class="glass-input">
@@ -91,7 +91,7 @@
 
                 <!-- Confirm Password Field -->
                 <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.75);">
+                    <label style="font-size: 11.5px; font-weight: 600; color: rgba(var(--text-rgb), 0.75);">
                         Confirm password
                     </label>
                     <div class="glass-input">
@@ -122,7 +122,7 @@
                 </button>
 
                 <!-- Sign In Link -->
-                <div style="text-align: center; font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 6px;">
+                <div style="text-align: center; font-size: 12px; color: rgba(var(--text-rgb), 0.55); margin-top: 6px;">
                     Already have an account?
                     <NavLink href="/login" class="link-btn" style="font-weight: 600; margin-left: 4px;">
                         Sign in
@@ -170,7 +170,7 @@
                     Copy to clipboard
                 </GlassButton>
 
-                <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: rgba(255,255,255,0.80);">
+                <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: rgba(var(--text-rgb), 0.80);">
                     <input type="checkbox" @bind="signupRecoveryConfirmed" style="margin-top: 2px;" />
                     <span>I've written down my recovery phrase in a safe place.</span>
                 </label>

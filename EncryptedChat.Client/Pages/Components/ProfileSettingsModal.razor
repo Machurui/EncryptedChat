@@ -179,7 +179,7 @@
                                     else
                                     {
                                         <div class="recovery-info-row">
-                                            <div style="font-size: 11.5px; color: rgba(255,255,255,0.65);">Write these 12 words in order. We can't show them again.</div>
+                                            <div style="font-size: 11.5px; color: rgba(var(--text-rgb), 0.65);">Write these 12 words in order. We can't show them again.</div>
                                         </div>
 
                                         <div class="recovery-grid">
@@ -226,7 +226,7 @@
                             {
                                 <div class="profile-section">
                                     <div class="sessions-header">
-                                        <div style="font-size: 11.5px; color: rgba(255,255,255,0.65);">
+                                        <div style="font-size: 11.5px; color: rgba(var(--text-rgb), 0.65);">
                                             You're signed in on @sessions.Count device@(sessions.Count == 1 ? "" : "s"). Revoking a session ends it immediately.
                                         </div>
                                         @if (sessions.Count > 1)
@@ -349,7 +349,7 @@
                                         </label>
                                         @if (!string.IsNullOrEmpty(ProfileImageUrl))
                                         {
-                                            <button class="link-btn" style="font-size: 11px; color: rgba(255,255,255,0.55);" @onclick="RemoveAvatar" disabled="@isUploadingAvatar">Remove</button>
+                                            <button class="link-btn" style="font-size: 11px; color: rgba(var(--text-rgb), 0.55);" @onclick="RemoveAvatar" disabled="@isUploadingAvatar">Remove</button>
                                         }
                                     </div>
                                 </div>
@@ -457,7 +457,7 @@
                                         @foreach (var themeOption in themeOptions)
                                         {
                                             var isSelected = Theme == themeOption.Key;
-                                            <button class="theme-option @(isSelected ? "selected" : "")" @onclick="() => Theme = themeOption.Key">
+                                            <button class="theme-option @(isSelected ? "selected" : "")" @onclick="() => OnThemePicked(themeOption.Key)">
                                                 <span class="theme-icon">@themeOption.Value.Icon</span>
                                                 <span class="theme-label">@themeOption.Value.Label</span>
                                             </button>
@@ -614,7 +614,7 @@
 
     .profile-modal-label {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         text-transform: uppercase;
         letter-spacing: 0.08em;
         font-weight: 600;
@@ -652,7 +652,7 @@
         border-radius: 10px;
         background: transparent;
         border: 0.5px solid transparent;
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         font-size: 12.5px;
         font-weight: 500;
         font-family: inherit;
@@ -666,7 +666,7 @@
 
     .profile-tab.active {
         background: var(--bg-active);
-        border-color: rgba(255,255,255,0.14);
+        border-color: rgba(var(--text-rgb), 0.14);
         color: var(--text-primary);
         font-weight: 600;
     }
@@ -736,7 +736,7 @@
         width: 18px;
         height: 18px;
         border-radius: 50%;
-        border: 3px solid #1a1a1a;
+        border: 3px solid var(--surface-2);
         background: var(--status-invisible);
     }
 
@@ -806,7 +806,7 @@
     .profile-field-label {
         font-size: 11.5px;
         font-weight: 600;
-        color: rgba(255,255,255,0.75);
+        color: rgba(var(--text-rgb), 0.75);
         letter-spacing: 0.01em;
     }
 
@@ -818,14 +818,14 @@
         background: var(--bg-hover);
         border: 0.5px solid var(--border);
         border-radius: 8px;
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 13px;
     }
 
     .handle-locked-icon {
         display: inline-flex;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
     }
 
     .handle-helper-text {
@@ -883,7 +883,7 @@
     }
 
     .color-hex-input::placeholder {
-        color: rgba(255,255,255,0.4);
+        color: rgba(var(--text-rgb), 0.4);
     }
 
     /* Name color — redesigned picker */
@@ -938,7 +938,7 @@
         text-shadow: 0 0 18px color-mix(in srgb, var(--ncc, white) 38%, transparent);
     }
     .name-color-preview-handle {
-        font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 1px;
+        font-size: 11px; color: rgba(var(--text-rgb), 0.55); margin-top: 1px;
     }
 
     .name-color-pick-pill {
@@ -946,7 +946,7 @@
         padding: 4px 9px; border-radius: 999px;
         background: rgba(0,0,0,0.25);
         border: 0.5px solid rgba(255,255,255,0.15);
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         font-size: 10.5px; font-weight: 600;
         letter-spacing: 0.02em;
         backdrop-filter: blur(8px);
@@ -1022,7 +1022,7 @@
     }
     .name-color-recent-label {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         flex: 0 0 auto;
     }
     .name-color-recent-swatches {
@@ -1036,7 +1036,7 @@
     }
     .name-color-recent-swatch:hover {
         transform: scale(1.1);
-        border-color: rgba(255,255,255,0.45);
+        border-color: rgba(var(--text-rgb), 0.45);
     }
 
     .status-options {
@@ -1109,7 +1109,7 @@
         background: var(--bg-hover);
         border: 0.5px solid var(--bg-active);
         font-size: 11.5px;
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         line-height: 1.5;
     }
 
@@ -1136,7 +1136,7 @@
 
     .security-row-value {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: 2px;
         font-family: ui-monospace, SF Mono, Menlo, monospace;
     }
@@ -1230,7 +1230,7 @@
 
     .toggle-row-desc {
         font-size: 11.5px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: 2px;
     }
 
@@ -1289,7 +1289,7 @@
 
     .notification-desc {
         font-size: 11.5px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-bottom: 10px;
     }
 
@@ -1321,7 +1321,7 @@
 
     .notification-option.selected {
         background: var(--bg-active);
-        border-color: rgba(255,255,255,0.16);
+        border-color: rgba(var(--text-rgb), 0.16);
     }
 
     .notification-radio {
@@ -1371,7 +1371,7 @@
 
     .encryption-banner-text {
         font-size: 11.5px;
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         margin-top: 6px;
         line-height: 1.5;
     }
@@ -1400,7 +1400,7 @@
 
     .warning-banner-text {
         font-size: 11.5px;
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         margin-top: 6px;
         line-height: 1.5;
     }
@@ -1430,7 +1430,7 @@
 
     .security-subview-label {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         text-transform: uppercase;
         letter-spacing: 0.08em;
         font-weight: 600;
@@ -1535,7 +1535,7 @@
         border: 0.5px solid rgba(255,255,255,0.15);
         display: grid;
         place-items: center;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
     }
 
     .recovery-hidden-title {
@@ -1546,7 +1546,7 @@
 
     .recovery-hidden-text {
         font-size: 11.5px;
-        color: rgba(255,255,255,0.60);
+        color: rgba(var(--text-rgb), 0.60);
         text-align: center;
         max-width: 360px;
         line-height: 1.5;
@@ -1565,7 +1565,7 @@
         font-weight: 600;
         background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         cursor: pointer;
         font-family: inherit;
     }
@@ -1599,7 +1599,7 @@
 
     .recovery-word-num {
         font-size: 10px;
-        color: rgba(255,255,255,0.40);
+        color: rgba(var(--text-rgb), 0.40);
         min-width: 14px;
     }
 
@@ -1758,7 +1758,7 @@
 
     .session-meta {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: 3px;
         display: flex;
         align-items: center;
@@ -1780,7 +1780,7 @@
         font-weight: 600;
         background: var(--border-subtle);
         border: 0.5px solid rgba(255,255,255,0.14);
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         cursor: pointer;
         font-family: inherit;
     }
@@ -2160,6 +2160,12 @@
     private void ToggleTypingIndicators(bool value)
     {
         localTypingIndicators = value;
+    }
+
+    private async Task OnThemePicked(string key)
+    {
+        Theme = key;
+        await ThemeChanged.InvokeAsync(key);   // live apply via parent (HandleThemeChanged → ApplyTheme)
     }
 
     private void SelectNotificationPreference(string preference)

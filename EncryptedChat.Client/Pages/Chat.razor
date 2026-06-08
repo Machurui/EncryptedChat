@@ -384,7 +384,7 @@
                         </div>
                     </div>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         style="color: rgba(255,255,255,0.45); transform: @(showStatusMenu ? "rotate(180deg)" : "none"); transition: transform 0.15s;">
+                         style="color: rgba(var(--text-rgb), 0.45); transform: @(showStatusMenu ? "rotate(180deg)" : "none"); transition: transform 0.15s;">
                         <polyline points="6 9 12 15 18 9"/>
                     </svg>
                 </button>
@@ -1387,7 +1387,7 @@
 
     .e2ee-indicator {
         font-size: 10px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         display: flex;
         align-items: center;
         gap: 4px;
@@ -1413,7 +1413,7 @@
         border-radius: 9px;
         background: var(--bg-hover);
         border: 0.5px solid rgba(255,255,255,0.08);
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
@@ -1427,12 +1427,12 @@
 
     .nav-tab:hover:not(.active) {
         background: rgba(255,255,255,0.06);
-        border-color: rgba(255,255,255,0.12);
+        border-color: rgba(var(--text-rgb), 0.12);
     }
 
     .nav-tab.active {
         background: rgba(255,255,255,0.12);
-        border-color: rgba(255,255,255,0.20);
+        border-color: rgba(var(--text-rgb), 0.20);
         color: var(--text-primary);
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.20);
     }
@@ -1464,7 +1464,7 @@
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: rgba(255,255,255,0.45);
+        color: rgba(var(--text-rgb), 0.45);
     }
 
     .team-list {
@@ -1507,12 +1507,12 @@
     }
 
     .team-row.unread .team-name {
-        color: rgba(255,255,255,0.95);
+        color: rgba(var(--text-rgb), 0.95);
         font-weight: 600;
     }
 
     .team-row.unread .team-preview {
-        color: rgba(255,255,255,0.78);
+        color: rgba(var(--text-rgb), 0.78);
         font-weight: 500;
     }
 
@@ -1581,7 +1581,7 @@
     }
 
     .team-preview.unread {
-        color: rgba(255,255,255,0.78);
+        color: rgba(var(--text-rgb), 0.78);
         font-weight: 500;
     }
 
@@ -1690,7 +1690,7 @@
 
     .friend-row-status {
         font-size: 10px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1699,7 +1699,7 @@
     .friends-empty {
         text-align: center;
         padding: 30px 14px;
-        color: rgba(255,255,255,0.45);
+        color: rgba(var(--text-rgb), 0.45);
     }
 
     .friends-empty-text {
@@ -1760,7 +1760,7 @@
         align-items: center;
         gap: 5px;
         font-size: 10px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1867,7 +1867,7 @@
 
     .empty-text {
         font-size: 12px;
-        color: rgba(255,255,255,0.45);
+        color: rgba(var(--text-rgb), 0.45);
     }
 
     /* ── Friends Panel ── */
@@ -1887,7 +1887,7 @@
 
     .friends-subtitle {
         font-size: 10.5px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: 2px;
     }
 
@@ -1905,7 +1905,7 @@
         font-weight: 600;
         background: transparent;
         border: 0.5px solid var(--border);
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         cursor: pointer;
         font-family: inherit;
         display: inline-flex;
@@ -1921,7 +1921,7 @@
 
     .friends-tab.active {
         background: rgba(255,255,255,0.12);
-        border-color: rgba(255,255,255,0.18);
+        border-color: rgba(var(--text-rgb), 0.18);
         color: var(--text-primary);
     }
 
@@ -1983,7 +1983,7 @@
 
     .friend-row-meta {
         font-size: 10px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         display: flex;
         align-items: center;
         gap: 5px;
@@ -2042,7 +2042,7 @@
         padding: 8px 10px;
         border: none;
         background: transparent;
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         font-size: 12px;
         border-radius: 6px;
         cursor: pointer;
@@ -2066,7 +2066,7 @@
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: rgba(255,255,255,0.45);
+        color: rgba(var(--text-rgb), 0.45);
         padding: 4px 12px 6px;
     }
 
@@ -2098,7 +2098,7 @@
 
     .request-meta {
         font-size: 10px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         display: flex;
         align-items: center;
         gap: 4px;
@@ -2182,7 +2182,7 @@
 
     .conversation-meta {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: 2px;
     }
 
@@ -2242,7 +2242,7 @@
     .loading-messages, .no-messages {
         text-align: center;
         padding: 40px;
-        color: rgba(255,255,255,0.50);
+        color: rgba(var(--text-rgb), 0.50);
     }
 
     .no-messages-sub {
@@ -2291,7 +2291,7 @@
 
     .message-header {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         display: flex;
         gap: 6px;
         padding: 0 4px;
@@ -2299,7 +2299,7 @@
 
     .message-author {
         font-weight: 600;
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
     }
 
     .message-bubble {
@@ -2340,13 +2340,13 @@
     .chat-bubble-picker-section-label {
         font-size: 11.5px;
         font-weight: 600;
-        color: rgba(255,255,255,0.78);
+        color: rgba(var(--text-rgb), 0.78);
         letterSpacing: 0.01em;
     }
 
     .chat-bubble-picker-sub {
         font-size: 10.5px;
-        color: rgba(255,255,255,0.50);
+        color: rgba(var(--text-rgb), 0.50);
         margin-top: -6px;
         line-height: 1.35;
     }
@@ -2488,7 +2488,7 @@
     .chat-bubble-reset-btn {
         align-self: flex-start;
         background: var(--border-subtle);
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         border: 0.5px solid var(--border);
         padding: 5px 10px;
         border-radius: 6px;
@@ -2500,7 +2500,7 @@
 
     .chat-bubble-helper {
         font-size: 10.5px;
-        color: rgba(255,255,255,0.50);
+        color: rgba(var(--text-rgb), 0.50);
         line-height: 1.4;
     }
 
@@ -2574,7 +2574,7 @@
         background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.12);
         border-radius: 8px;
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         text-decoration: none;
         font-size: 12px;
         transition: background 0.15s;
@@ -2599,7 +2599,7 @@
     }
 
     .attachment-file-size {
-        color: rgba(255,255,255,0.5);
+        color: rgba(var(--text-rgb), 0.5);
         flex-shrink: 0;
     }
 
@@ -2627,7 +2627,7 @@
         gap: 8px;
         padding: 6px 16px;
         font-size: 12px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         /* Isolate the bouncing-dots animation from the surrounding glass
            backdrop so each animation frame doesn't re-rasterize neighbors
            (visible flicker when a modal with its own backdrop opens). */
@@ -2689,7 +2689,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        color: rgba(255,255,255,0.8);
+        color: rgba(var(--text-rgb), 0.8);
         min-width: 0;
     }
 
@@ -2708,7 +2708,7 @@
 
     .attachment-size {
         font-size: 10px;
-        color: rgba(255,255,255,0.5);
+        color: rgba(var(--text-rgb), 0.5);
         flex-shrink: 0;
     }
 
@@ -2721,7 +2721,7 @@
         border-radius: 50%;
         border: none;
         background: var(--bg-active);
-        color: rgba(255,255,255,0.6);
+        color: rgba(var(--text-rgb), 0.6);
         cursor: pointer;
         transition: all 0.15s;
     }
@@ -2769,7 +2769,7 @@
     }
 
     .composer-input::placeholder {
-        color: rgba(255,255,255,0.45);
+        color: rgba(var(--text-rgb), 0.45);
     }
 
     .send-btn {
@@ -2836,7 +2836,7 @@
         max-width: calc(100% - 32px);
         height: 520px;
         max-height: calc(100vh - 120px);
-        background: rgba(18, 20, 26, 0.95);
+        background: var(--popover-bg);
         backdrop-filter: blur(20px);
         border: 0.5px solid rgba(255,255,255,0.15);
         border-radius: 16px;
@@ -2864,7 +2864,7 @@
     }
 
     .emoji-search::placeholder {
-        color: rgba(255,255,255,0.4);
+        color: rgba(var(--text-rgb), 0.4);
     }
 
     .emoji-grid {
@@ -2906,7 +2906,7 @@
         max-width: calc(100% - 32px);
         height: 520px;
         max-height: calc(100vh - 120px);
-        background: rgba(18, 20, 26, 0.95);
+        background: var(--popover-bg);
         backdrop-filter: blur(20px);
         border: 0.5px solid rgba(255,255,255,0.15);
         border-radius: 16px;
@@ -2934,7 +2934,7 @@
     }
 
     .gif-search::placeholder {
-        color: rgba(255,255,255,0.4);
+        color: rgba(var(--text-rgb), 0.4);
     }
 
     .gif-scroll {
@@ -2983,7 +2983,7 @@
     .gif-empty {
         padding: 40px 20px;
         text-align: center;
-        color: rgba(255,255,255,0.5);
+        color: rgba(var(--text-rgb), 0.5);
         font-size: 13px;
     }
 
@@ -3004,7 +3004,7 @@
         border-radius: 999px;
         background: var(--bg-input);
         border: 0.5px solid rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
         font-size: 12px;
         cursor: pointer;
         white-space: nowrap;
@@ -3026,14 +3026,14 @@
         padding: 16px;
         text-align: center;
         font-size: 12px;
-        color: rgba(255,255,255,0.5);
+        color: rgba(var(--text-rgb), 0.5);
     }
 
     .gif-powered {
         padding: 8px;
         text-align: center;
         font-size: 10px;
-        color: rgba(255,255,255,0.35);
+        color: rgba(var(--text-rgb), 0.35);
         border-top: 0.5px solid var(--border);
     }
 
@@ -3047,7 +3047,7 @@
         display: grid;
         place-items: center;
         text-align: center;
-        color: rgba(255,255,255,0.50);
+        color: rgba(var(--text-rgb), 0.50);
     }
 
     .empty-state svg {
@@ -3111,7 +3111,7 @@
 
     .member-status {
         font-size: 10px;
-        color: rgba(255,255,255,0.45);
+        color: rgba(var(--text-rgb), 0.45);
     }
 
     .member-status.admin {
@@ -3259,7 +3259,7 @@
 
     .status-custom-label {
         font-size: 10.5px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-bottom: 6px;
         padding: 0 4px;
     }
@@ -3365,7 +3365,7 @@
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background: rgba(20, 25, 35, 0.92);
+        background: var(--popover-bg);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border: 0.5px solid rgba(255, 255, 255, 0.15);
@@ -3381,7 +3381,7 @@
 
     .jump-to-bottom-btn:hover {
         transform: translateY(-2px);
-        background: rgba(30, 35, 45, 0.95);
+        background: var(--popover-bg);
     }
 
     @@keyframes fade-in-message {

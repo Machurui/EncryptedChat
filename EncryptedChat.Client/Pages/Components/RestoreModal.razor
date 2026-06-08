@@ -17,16 +17,16 @@
                         <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.015em;">
                             Restore from recovery phrase
                         </h3>
-                        <p style="margin: 0 0 16px; font-size: 12px; color: rgba(255,255,255,0.60); line-height: 1.5;">
+                        <p style="margin: 0 0 16px; font-size: 12px; color: rgba(var(--text-rgb), 0.60); line-height: 1.5;">
                             Enter your email, the 12 words you saved at signup, and a new password.
                         </p>
 
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(var(--text-rgb), 0.75); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                             Email
                         </label>
                         <GlassInput @bind-Value="email" Placeholder="you@workspace.app" Type="email" />
 
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(var(--text-rgb), 0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                             Recovery phrase (12 words, space-separated)
                         </label>
                         <textarea class="restore-textarea"
@@ -38,7 +38,7 @@
                                   autocapitalize="none"
                                   rows="3"></textarea>
 
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(var(--text-rgb), 0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                             New password
                         </label>
                         <GlassInput @bind-Value="newPassword" Type="password" Placeholder="Strong password" />
@@ -46,7 +46,7 @@
                             Min 14 characters with at least one uppercase letter, lowercase letter, digit, and symbol.
                         </div>
 
-                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: rgba(var(--text-rgb), 0.75); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                             Confirm new password
                         </label>
                         <GlassInput @bind-Value="confirmPassword" Type="password" Placeholder="Repeat" />
@@ -70,7 +70,7 @@
                         <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.015em;">
                             Save your new recovery phrase
                         </h3>
-                        <p style="margin: 0 0 14px; font-size: 12px; color: rgba(255,255,255,0.60); line-height: 1.5;">
+                        <p style="margin: 0 0 14px; font-size: 12px; color: rgba(var(--text-rgb), 0.60); line-height: 1.5;">
                             Your old phrase has been invalidated. Write this one down now &mdash; we cannot show it again.
                         </p>
 
@@ -96,7 +96,7 @@
                             Copy to clipboard
                         </GlassButton>
 
-                        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: rgba(255,255,255,0.80); margin-bottom: 14px;">
+                        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: rgba(var(--text-rgb), 0.80); margin-bottom: 14px;">
                             <input type="checkbox" @bind="confirmed" style="margin-top: 2px;" />
                             <span>I've written down my new recovery phrase in a safe place.</span>
                         </label>
@@ -131,7 +131,7 @@
     }
 
     .restore-textarea::placeholder {
-        color: rgba(255, 255, 255, 0.40);
+        color: rgba(var(--text-rgb), 0.40);
     }
 
     .restore-textarea:focus {

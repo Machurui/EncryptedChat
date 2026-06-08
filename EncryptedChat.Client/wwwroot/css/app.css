@@ -94,7 +94,9 @@
     --border-subtle: rgba(255, 255, 255, 0.06);
     --text: white;
     --text-faint: rgba(255, 255, 255, 0.5);
+    --text-rgb: 255, 255, 255;
     --glass-bg: rgba(24, 26, 27, 0.15);
+    --popover-bg: rgba(20, 25, 35, 0.95);
 }
 
 :root[data-theme="light"] {
@@ -115,6 +117,7 @@
     --text-secondary: rgba(26, 26, 46, 0.7);
     --text-muted: rgba(26, 26, 46, 0.5);
     --text-faint: rgba(26, 26, 46, 0.5);
+    --text-rgb: 26, 26, 46;
     --text-disabled: rgba(26, 26, 46, 0.35);
 
     --accent: oklch(0.58 0.17 165);
@@ -123,16 +126,32 @@
     --bg-primary: #f5f7fa;
     --bg-secondary: #ffffff;
 
-    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-bg: rgba(255, 255, 255, 0.15);
     --glass-tint: rgba(0, 0, 0, 0.04);
     --glass-border: rgba(0, 0, 0, 0.10);
-    --glass-shine: rgba(255, 255, 255, 0.6);
+    --glass-shine: rgba(255, 255, 255, 0.5);
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
 
     --skeleton-bg: rgba(0, 0, 0, 0.05);
     --skeleton-shimmer: rgba(0, 0, 0, 0.09);
 
     --dark-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+
+    /* "Dark Solid" preset tokens — re-themed for light so modals/dropdowns/menus
+       using var(--dark-*) become light too (these were dark-only before). */
+    --dark-bg-primary: #ffffff;
+    --dark-bg-secondary: #ffffff;
+    --dark-bg-tertiary: #f5f7fa;
+    --dark-bg-elevated: #ffffff;
+    --dark-bg-hover: rgba(0, 0, 0, 0.04);
+    --dark-bg-active: rgba(0, 0, 0, 0.07);
+    --dark-bg-input: rgba(0, 0, 0, 0.04);
+    --dark-border: rgba(0, 0, 0, 0.10);
+    --dark-border-subtle: rgba(0, 0, 0, 0.06);
+    --bg-dark: #f5f7fa;
+
+    /* Popover/menu surface (replaces hardcoded dark dropdown backgrounds) */
+    --popover-bg: rgba(255, 255, 255, 0.95);
 }
 
 body {
@@ -196,8 +215,8 @@ input::-webkit-credentials-auto-fill-button {
 
 /* Light theme glass adjustments */
 :root[data-theme="light"] .glass-panel {
-    background: rgba(255, 255, 255, 0.7);
-    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: var(--glass-shadow);
 }
 
 :root[data-theme="light"] .glass-input {
@@ -237,7 +256,7 @@ textarea:-webkit-autofill {
     display: flex;
     border-radius: var(--glass-radius, 20px);
     overflow: hidden;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--text-rgb), 0.05);
     box-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;
     transition: all 0.3s ease;
 }
@@ -313,12 +332,12 @@ textarea:-webkit-autofill {
 
 .glass-btn:hover {
     background: rgba(255,255,255,0.18);
-    border-color: rgba(255,255,255,0.30);
+    border-color: rgba(var(--text-rgb), 0.30);
 }
 
 .glass-btn:disabled {
     background: rgba(255,255,255,0.06);
-    color: rgba(255,255,255,0.35);
+    color: rgba(var(--text-rgb), 0.35);
     cursor: not-allowed;
     box-shadow: none;
 }
@@ -397,11 +416,11 @@ textarea:-webkit-autofill {
 
 .glass-input input::placeholder,
 .glass-input textarea::placeholder {
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
 }
 
 .glass-input-icon {
-    color: rgba(255,255,255,0.50);
+    color: rgba(var(--text-rgb), 0.50);
     flex-shrink: 0;
 }
 
@@ -458,12 +477,12 @@ textarea:-webkit-autofill {
 
 .dark-btn:hover {
     background: var(--dark-bg-active);
-    border-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(var(--text-rgb), 0.16);
 }
 
 .dark-btn:disabled {
     background: var(--dark-bg-hover);
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
     cursor: not-allowed;
 }
 
@@ -674,7 +693,7 @@ textarea:-webkit-autofill {
     min-width: 8px;
     min-height: 8px;
     border-radius: 50%;
-    border: 2px solid #0a0c12;
+    border: 2px solid var(--bg-secondary);
 }
 
 .avatar-status.online { background: var(--status-online); box-shadow: 0 0 6px var(--status-online); }
@@ -769,7 +788,7 @@ textarea:-webkit-autofill {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
     text-transform: uppercase;
 }
 
@@ -793,7 +812,7 @@ textarea:-webkit-autofill {
     border-radius: 8px;
     font-size: 12px;
     font-weight: 600;
-    color: rgba(255,255,255,0.65);
+    color: rgba(var(--text-rgb), 0.65);
     font-family: inherit;
     transition: all 0.2s ease;
 }
@@ -835,7 +854,7 @@ textarea:-webkit-autofill {
 
 .encryption-banner-text {
     font-size: 10.5px;
-    color: rgba(255,255,255,0.55);
+    color: rgba(var(--text-rgb), 0.55);
     margin-top: 2px;
     line-height: 1.4;
 }
@@ -867,7 +886,7 @@ textarea:-webkit-autofill {
 
 .divider-with-text span {
     font-size: 10.5px;
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -949,6 +968,12 @@ textarea:-webkit-autofill {
     pointer-events: none;
 }
 
+/* Light theme: keep the SAME photo as dark, but swap the dark vignette for a
+   light veil so the wallpaper reads bright (the white-frost glass refracts it). */
+:root[data-theme="light"] .app-background-static::after {
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.45) 100%);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    Animated Background - Mesh Blobs (optional)
    ══════════════════════════════════════════════════════════════════════════ */
@@ -990,6 +1015,15 @@ textarea:-webkit-autofill {
     background: radial-gradient(circle, oklch(0.50 0.20 calc(var(--accent-hue) + 60)) 0%, transparent 60%);
     opacity: 0.45;
     animation: blobMove2 30s ease-in-out infinite;
+}
+
+/* Light theme: light gradient base + much fainter accent blobs */
+:root[data-theme="light"] .app-background {
+    background: linear-gradient(160deg, #eef2f7 0%, #e2e8f1 100%);
+}
+:root[data-theme="light"] .app-background::before,
+:root[data-theme="light"] .app-background::after {
+    opacity: 0.10;
 }
 
 /* Third blob via pseudo on body */
@@ -1151,7 +1185,7 @@ textarea:-webkit-autofill {
     right: 0;
     margin-top: 6px;
     min-width: 180px;
-    background: rgba(20, 25, 35, 0.95);
+    background: var(--popover-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 0.5px solid rgba(255,255,255,0.15);
@@ -1169,7 +1203,7 @@ textarea:-webkit-autofill {
     padding: 10px 12px;
     border: none;
     background: transparent;
-    color: rgba(255,255,255,0.85);
+    color: rgba(var(--text-rgb), 0.85);
     font-size: 13px;
     border-radius: 8px;
     cursor: pointer;
@@ -1221,12 +1255,12 @@ textarea:-webkit-autofill {
 }
 
 .header-search-input::placeholder {
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
 }
 
 .header-search-hint {
     font-size: 11px;
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
     white-space: nowrap;
 }
 
@@ -1257,7 +1291,7 @@ textarea:-webkit-autofill {
 
 .pinned-count {
     font-size: 10.5px;
-    color: rgba(255,255,255,0.55);
+    color: rgba(var(--text-rgb), 0.55);
 }
 
 .pinned-content {
@@ -1269,13 +1303,13 @@ textarea:-webkit-autofill {
 .pinned-empty {
     padding: 28px 16px;
     text-align: center;
-    color: rgba(255,255,255,0.55);
+    color: rgba(var(--text-rgb), 0.55);
     font-size: 12px;
 }
 
 .pinned-hint {
     font-size: 10.5px;
-    color: rgba(255,255,255,0.40);
+    color: rgba(var(--text-rgb), 0.40);
     margin-top: 4px;
 }
 
@@ -1300,7 +1334,7 @@ textarea:-webkit-autofill {
     display: flex;
     gap: 6px;
     font-size: 11.5px;
-    color: rgba(255,255,255,0.65);
+    color: rgba(var(--text-rgb), 0.65);
 }
 
 .pinned-item-author {
@@ -1310,7 +1344,7 @@ textarea:-webkit-autofill {
 
 .pinned-item-text {
     font-size: 12px;
-    color: rgba(255,255,255,0.85);
+    color: rgba(var(--text-rgb), 0.85);
     margin-top: 2px;
     line-height: 1.4;
     display: -webkit-box;
@@ -1348,7 +1382,7 @@ textarea:-webkit-autofill {
     background: var(--border-subtle);
     border: 0.5px solid var(--border);
     border-radius: 6px;
-    color: rgba(255,255,255,0.80);
+    color: rgba(var(--text-rgb), 0.80);
     text-decoration: none;
     font-size: 11px;
     max-width: fit-content;
@@ -1372,7 +1406,7 @@ textarea:-webkit-autofill {
 .pinned-unpin-btn {
     width: 24px;
     height: 24px;
-    color: rgba(255,255,255,0.55);
+    color: rgba(var(--text-rgb), 0.55);
     opacity: 0;
     transition: opacity 0.12s;
 }
@@ -1409,7 +1443,7 @@ textarea:-webkit-autofill {
     border: none;
     padding: 4px;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(var(--text-rgb), 0.55);
     opacity: 0;
     transition: opacity 0.12s, color 0.12s, background 0.12s;
     display: inline-flex;
@@ -1450,7 +1484,7 @@ textarea:-webkit-autofill {
 .no-search-results {
     text-align: center;
     padding: 40px 20px;
-    color: rgba(255,255,255,0.55);
+    color: rgba(var(--text-rgb), 0.55);
     font-size: 13px;
 }
 
@@ -1483,7 +1517,7 @@ textarea:-webkit-autofill {
 
 .message-time {
     font-size: 10.5px;
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
 }
 
 .message-bubble {
@@ -1493,7 +1527,7 @@ textarea:-webkit-autofill {
     background: var(--bg-active);
     font-size: 14px;
     line-height: 1.5;
-    color: rgba(255,255,255,0.90);
+    color: rgba(var(--text-rgb), 0.90);
 }
 
 .message.own .message-content {
@@ -1536,7 +1570,7 @@ textarea:-webkit-autofill {
 }
 
 .composer-input::placeholder {
-    color: rgba(255,255,255,0.45);
+    color: rgba(var(--text-rgb), 0.45);
 }
 
 /* The composer overlay highlight pattern was removed — too many
@@ -1555,7 +1589,7 @@ textarea:-webkit-autofill {
     left: 12px;
     right: 12px;
     margin-bottom: 8px;
-    background: rgba(20, 25, 35, 0.95);
+    background: var(--popover-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 0.5px solid rgba(255,255,255,0.15);
@@ -1618,7 +1652,7 @@ textarea:-webkit-autofill {
 
 .mention-handle {
     font-size: 11px;
-    color: rgba(255,255,255,0.5);
+    color: rgba(var(--text-rgb), 0.5);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1735,7 +1769,7 @@ textarea:-webkit-autofill {
     gap: 10px;
     padding: 30px 20px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(var(--text-rgb), 0.65);
 }
 
 .loading-state-error-icon {
