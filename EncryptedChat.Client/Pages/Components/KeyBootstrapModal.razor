@@ -4,67 +4,32 @@
 
 @if (IsOpen)
 {
-    <div class="kb-overlay" @onclick="OnClose"></div>
-    <div class="kb-card-wrapper" @onclick:stopPropagation="true">
-        <GlassPanel>
-            <div class="kb-card">
-                <h3 class="kb-title">Unlock your messages</h3>
-                <p class="kb-subtitle">
-                    Enter your recovery phrase to decrypt your messages on this device.
-                    This is a one-time step per device (different browsers / cleared cache
-                    each ask once).
-                </p>
+    <Modal IsOpen="IsOpen" OnClose="OnClose" Title="Unlock your messages" Size="sm">
+        <p class="kb-subtitle">
+            Enter your recovery phrase to decrypt your messages on this device.
+            This is a one-time step per device (different browsers / cleared cache
+            each ask once).
+        </p>
 
-                <textarea class="kb-textarea"
-                          @bind="phraseText"
-                          placeholder="anchor beacon cipher dawn ember frost glade helix iron jade knot lumen"
-                          spellcheck="false" autocomplete="off" autocapitalize="none" rows="3"></textarea>
+        <textarea class="kb-textarea"
+                  @bind="phraseText"
+                  placeholder="anchor beacon cipher dawn ember frost glade helix iron jade knot lumen"
+                  spellcheck="false" autocomplete="off" autocapitalize="none" rows="3"></textarea>
 
-                @if (!string.IsNullOrEmpty(error))
-                {
-                    <div class="kb-error">@error</div>
-                }
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div class="kb-error">@error</div>
+        }
 
-                <div class="kb-actions">
-                    <GlassButton Primary="true" OnClick="Submit" Disabled="@isSubmitting" Style="flex: 1;">
-                        @(isSubmitting ? "Unlocking..." : "Unlock")
-                    </GlassButton>
-                </div>
-            </div>
-        </GlassPanel>
-    </div>
+        <div class="kb-actions">
+            <GlassButton Primary="true" OnClick="Submit" Disabled="@isSubmitting" Style="flex: 1;">
+                @(isSubmitting ? "Unlocking..." : "Unlock")
+            </GlassButton>
+        </div>
+    </Modal>
 }
 
 <style>
-    .kb-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        backdrop-filter: blur(6px);
-        z-index: 200;
-    }
-
-    .kb-card-wrapper {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: min(440px, calc(100vw - 24px));
-        z-index: 201;
-    }
-
-    .kb-card {
-        padding: 22px;
-    }
-
-    .kb-title {
-        margin: 0 0 6px;
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--text-primary);
-        letter-spacing: -0.015em;
-    }
-
     .kb-subtitle {
         margin: 0 0 14px;
         font-size: 12px;
@@ -76,8 +41,8 @@
         width: 100%;
         padding: 10px 12px;
         border-radius: 10px;
-        background: rgba(0, 0, 0, 0.20);
-        border: 0.5px solid rgba(255, 255, 255, 0.12);
+        background: var(--dark-bg-input);
+        border: 0.5px solid var(--dark-border);
         color: var(--text-primary);
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
         font-size: 13px;
