@@ -1,27 +1,15 @@
 @namespace EncryptedChat.Client.Pages.Components
 
-@if (IsOpen)
-{
-    <div class="modal-overlay" @onclick="Close">
-        <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Class="modal-responsive new-team-modal" Style="width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
-                <!-- Header with team preview -->
-                <div class="new-team-header modal-header">
-                    <div class="new-team-header-left">
-                        <div class="team-preview-glyph" style="background: linear-gradient(135deg, @selectedColor, @GetSecondaryColor(selectedColor));">
-                            @selectedGlyph
-                        </div>
-                        <div>
-                            <div class="new-team-label">New team</div>
-                            <div class="new-team-title">@(string.IsNullOrWhiteSpace(teamName) ? "Untitled team" : teamName)</div>
-                        </div>
-                    </div>
-                    <IconButton Title="Close" OnClick="Close">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </IconButton>
-                </div>
+<Modal IsOpen="IsOpen" OnClose="Close"
+       Eyebrow="New team"
+       Title="@(string.IsNullOrWhiteSpace(teamName) ? "Untitled team" : teamName)"
+       Size="md" BodyFlush="true">
+    <Leading>
+        <div class="team-preview-glyph" style="background: linear-gradient(135deg, @selectedColor, @GetSecondaryColor(selectedColor));">
+            @selectedGlyph
+        </div>
+    </Leading>
+    <ChildContent>
 
                 <!-- Step pills -->
                 <div class="step-pills">
@@ -46,7 +34,7 @@
                 </div>
 
                 <!-- Content -->
-                <div class="new-team-content modal-body">
+                <div class="new-team-content">
                     @if (step == 1)
                     {
                         <!-- Step 1: Identity -->
@@ -196,29 +184,25 @@
                         </div>
                     }
                 </div>
-
-                <!-- Footer -->
-                <div class="new-team-footer modal-footer">
-                    @if (step > 1)
-                    {
-                        <GlassButton OnClick="PrevStep">Back</GlassButton>
-                    }
-                    <div style="flex: 1;"></div>
-                    @if (step < 3)
-                    {
-                        <GlassButton Primary="true" OnClick="NextStep" Disabled="@(!CanProceed)">Continue</GlassButton>
-                    }
-                    else
-                    {
-                        <GlassButton Primary="true" OnClick="CreateTeam" Disabled="@isCreating">
-                            @(isCreating ? "Creating..." : "Create team")
-                        </GlassButton>
-                    }
-                </div>
-            </GlassPanel>
-        </div>
-    </div>
-}
+    </ChildContent>
+    <Footer>
+        @if (step > 1)
+        {
+            <GlassButton OnClick="PrevStep">Back</GlassButton>
+        }
+        <div style="flex: 1;"></div>
+        @if (step < 3)
+        {
+            <GlassButton Primary="true" OnClick="NextStep" Disabled="@(!CanProceed)">Continue</GlassButton>
+        }
+        else
+        {
+            <GlassButton Primary="true" OnClick="CreateTeam" Disabled="@isCreating">
+                @(isCreating ? "Creating..." : "Create team")
+            </GlassButton>
+        }
+    </Footer>
+</Modal>
 
 <style>
     .new-team-header {
