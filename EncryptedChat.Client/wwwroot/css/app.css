@@ -954,6 +954,8 @@ textarea:-webkit-autofill {
     border-top: 0.5px solid var(--border);
     flex-shrink: 0;
 }
+/* Pre-padded bodies (complex modals manage their own inner padding) */
+.modal-shell .modal-body.modal-body-flush { padding: 0; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Link Button

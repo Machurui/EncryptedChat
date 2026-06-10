@@ -31,7 +31,7 @@
                     }
                 </div>
             }
-            <div class="modal-body">@ChildContent</div>
+            <div class="modal-body@(BodyFlush ? " modal-body-flush" : "")">@ChildContent</div>
             @if (Footer is not null)
             {
                 <div class="modal-footer">@Footer</div>
@@ -52,6 +52,7 @@
     [Parameter] public bool ShowClose { get; set; } = true;
     [Parameter] public bool CloseOnOverlayClick { get; set; } = true;
     [Parameter] public bool Nested { get; set; }
+    [Parameter] public bool BodyFlush { get; set; }
     [Parameter] public string? Class { get; set; }
 
     private bool HasHeader =>
