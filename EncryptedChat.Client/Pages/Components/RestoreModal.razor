@@ -6,17 +6,10 @@
 @inject BootstrapKeyService BootstrapKeys
 @inject IJSRuntime JS
 
-@if (IsOpen)
-{
-    <div class="modal-overlay" @onclick="Close">
-        <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="22" Class="modal-responsive restore-modal" Style="width: 100%; max-width: 460px; max-height: calc(100vh - 40px); overflow-y: auto;">
-                <div style="padding: 22px 24px;">
-                    @if (newRecoveryWords == null)
-                    {
-                        <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.015em;">
-                            Restore from recovery phrase
-                        </h3>
+<Modal IsOpen="IsOpen" OnClose="Close" Size="sm"
+       Title="@(newRecoveryWords == null ? "Restore from recovery phrase" : "Save your new recovery phrase")">
+    @if (newRecoveryWords == null)
+    {
                         <p style="margin: 0 0 16px; font-size: 12px; color: rgba(var(--text-rgb), 0.60); line-height: 1.5;">
                             Enter your email, the 12 words you saved at signup, and a new password.
                         </p>
@@ -67,9 +60,6 @@
                     }
                     else
                     {
-                        <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.015em;">
-                            Save your new recovery phrase
-                        </h3>
                         <p style="margin: 0 0 14px; font-size: 12px; color: rgba(var(--text-rgb), 0.60); line-height: 1.5;">
                             Your old phrase has been invalidated. Write this one down now &mdash; we cannot show it again.
                         </p>
@@ -105,11 +95,7 @@
                             Done &mdash; go to login
                         </GlassButton>
                     }
-                </div>
-            </GlassPanel>
-        </div>
-    </div>
-}
+</Modal>
 
 <style>
     .restore-textarea {
@@ -118,7 +104,7 @@
         padding: 11px 12px;
         border-radius: 12px;
         background: var(--bg-input);
-        border: 0.5px solid rgba(255, 255, 255, 0.20);
+        border: 0.5px solid var(--border);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.20), inset -1px -1px 1px rgba(0, 0, 0, 0.10);
