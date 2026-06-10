@@ -3,24 +3,14 @@
 
 @if (IsOpen && Team != null)
 {
-    <div class="modal-overlay" @onclick="Close">
-        <div class="team-manage-wrapper" @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Class="modal-responsive team-manage-modal">
-                <!-- Header -->
-                <div class="tm-header">
-                    <div class="tm-header-left">
-                        <div class="tm-glyph">@GetTeamInitials(Team.Name)</div>
-                        <div>
-                            <div class="tm-eyebrow">Team settings</div>
-                            <div class="tm-title">@Team.Name</div>
-                        </div>
-                    </div>
-                    <IconButton Title="Close" OnClick="Close">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </IconButton>
-                </div>
+    <Modal IsOpen="true" OnClose="Close"
+           Eyebrow="Team settings"
+           Title="@Team.Name"
+           Size="md" BodyFlush="true">
+        <Leading>
+            <div class="tm-glyph">@GetTeamInitials(Team.Name)</div>
+        </Leading>
+        <ChildContent>
 
                 <!-- Tabs -->
                 <div class="tm-tabs">
@@ -213,10 +203,8 @@
                         }
                     }
                 </div>
-
-            </GlassPanel>
-        </div>
-    </div>
+    </ChildContent>
+</Modal>
 
     @* Transfer ownership confirmation sub-modal *@
     @if (transferTargetId != null && Team != null)
