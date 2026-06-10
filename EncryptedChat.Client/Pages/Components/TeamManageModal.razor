@@ -211,55 +211,47 @@
     {
         var targetMember = Members?.FirstOrDefault(m => m.User?.Id == transferTargetId);
         var targetName = targetMember?.User?.Name ?? "this admin";
-        <div class="modal-overlay tm-delete-overlay" @onclick="CancelTransfer">
-            <div class="tm-delete-wrapper" @onclick:stopPropagation="true">
-                <GlassPanel Radius="20" Class="tm-delete-panel">
-                    <div class="tm-delete-body">
-                        <div class="tm-delete-title">Make @targetName the owner?</div>
-                        <div class="tm-delete-desc">
-                            You'll keep Admin access but lose ownership rights (delete team,
-                            promote/demote admins, transfer ownership). @targetName takes over.
-                        </div>
-                        <div class="tm-delete-actions">
-                            <button class="glass-btn" @onclick="CancelTransfer">Cancel</button>
-                            <GlassButton Primary="true" Disabled="@isTransferring" OnClick="ConfirmTransfer">
-                                @(isTransferring ? "Transferring…" : "Make owner")
-                            </GlassButton>
-                        </div>
-                    </div>
-                </GlassPanel>
-            </div>
-        </div>
+        var transferTitle = $"Make {targetName} the owner?";
+        <Modal IsOpen="true" OnClose="CancelTransfer" Nested="true" Size="sm" Title="@transferTitle">
+            <ChildContent>
+                <div class="tm-delete-desc">
+                    You'll keep Admin access but lose ownership rights (delete team,
+                    promote/demote admins, transfer ownership). @targetName takes over.
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="glass-btn" @onclick="CancelTransfer">Cancel</button>
+                <GlassButton Primary="true" Disabled="@isTransferring" OnClick="ConfirmTransfer">
+                    @(isTransferring ? "Transferring…" : "Make owner")
+                </GlassButton>
+            </Footer>
+        </Modal>
     }
 
     @* Delete confirmation sub-modal — type team name to confirm *@
     @if (showDeleteConfirm && Team != null)
     {
-        <div class="modal-overlay tm-delete-overlay" @onclick="CancelDelete">
-            <div class="tm-delete-wrapper" @onclick:stopPropagation="true">
-                <GlassPanel Radius="20" Class="tm-delete-panel">
-                    <div class="tm-delete-body">
-                        <div class="tm-delete-title">Delete "@Team.Name"?</div>
-                        <div class="tm-delete-desc">
-                            This destroys the team key permanently. Every member loses access to past
-                            messages — they cannot be recovered, even by you. Type
-                            <strong>@Team.Name</strong> below to confirm.
-                        </div>
-                        <div class="glass-input" style="margin-top: 12px;">
-                            <input type="text" @bind="deleteConfirmText" @bind:event="oninput" placeholder="@Team.Name" />
-                        </div>
-                        <div class="tm-delete-actions">
-                            <button class="glass-btn" @onclick="CancelDelete">Cancel</button>
-                            <button class="tm-danger-btn"
-                                    disabled="@(deleteConfirmText != Team.Name || isDeleting)"
-                                    @onclick="DoDelete">
-                                @(isDeleting ? "Deleting…" : "Delete team")
-                            </button>
-                        </div>
-                    </div>
-                </GlassPanel>
-            </div>
-        </div>
+        var deleteTitle = $"Delete \"{Team.Name}\"?";
+        <Modal IsOpen="true" OnClose="CancelDelete" Nested="true" Size="sm" Title="@deleteTitle">
+            <ChildContent>
+                <div class="tm-delete-desc">
+                    This destroys the team key permanently. Every member loses access to past
+                    messages — they cannot be recovered, even by you. Type
+                    <strong>@Team.Name</strong> below to confirm.
+                </div>
+                <div class="glass-input" style="margin-top: 12px;">
+                    <input type="text" @bind="deleteConfirmText" @bind:event="oninput" placeholder="@Team.Name" />
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="glass-btn" @onclick="CancelDelete">Cancel</button>
+                <button class="tm-danger-btn"
+                        disabled="@(deleteConfirmText != Team.Name || isDeleting)"
+                        @onclick="DoDelete">
+                    @(isDeleting ? "Deleting…" : "Delete team")
+                </button>
+            </Footer>
+        </Modal>
     }
 }
 
