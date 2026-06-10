@@ -956,6 +956,11 @@ textarea:-webkit-autofill {
 }
 /* Pre-padded bodies (complex modals manage their own inner padding) */
 .modal-shell .modal-body.modal-body-flush { padding: 0; }
+/* Sidebar/flex bodies (e.g. settings with a tab rail) fill height; columns scroll */
+.modal-body.modal-body-fill { display: flex; overflow: hidden; }
+/* Conditional leading/footer fragments render empty → don't show their chrome */
+.modal-leading:empty,
+.modal-footer:empty { display: none; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Link Button
