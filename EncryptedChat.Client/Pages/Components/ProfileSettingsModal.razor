@@ -10,36 +10,22 @@
     string? GetFullImageUrl(string? url) => string.IsNullOrEmpty(url) ? null : (url.StartsWith("http") ? url : $"{ApiBaseUrl}{url}");
 }
 
-@if (IsOpen)
-{
-    <div class="modal-overlay" @onclick="Close">
-        <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Class="modal-responsive profile-settings-modal" Style="width: 760px; max-height: 90vh; display: flex; flex-direction: column;">
-                <!-- Header -->
-                <div class="profile-modal-header modal-header">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        @if (securityView != null)
-                        {
-                            <button class="back-btn" @onclick='() => { securityView = null; ResetRecoveryViewState(); }'>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="15 18 9 12 15 6"/>
-                                </svg>
-                            </button>
-                        }
-                        <div>
-                            <div class="profile-modal-label">@(securityView != null ? "Security & keys" : "Account")</div>
-                            <div class="profile-modal-title">@GetModalTitle()</div>
-                        </div>
-                    </div>
-                    <IconButton Title="Close" OnClick="Close">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </IconButton>
-                </div>
-
-                <!-- Body -->
-                <div class="profile-modal-body modal-body">
+<Modal IsOpen="IsOpen" OnClose="Close"
+       Eyebrow="@(securityView != null ? "Security & keys" : "Account")"
+       Title="@GetModalTitle()"
+       Size="lg" BodyFlush="true" BodyClass="modal-body-fill">
+    <Leading>
+        @if (securityView != null)
+        {
+            <button class="back-btn" @onclick='() => { securityView = null; ResetRecoveryViewState(); }'>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </button>
+        }
+    </Leading>
+    <ChildContent>
+                <div class="profile-modal-body">
                     @if (securityView != null)
                     {
                         <!-- Full-width security subview (no tabs) -->
@@ -589,19 +575,15 @@
                         </div>
                     }
                 </div>
-
-                <!-- Footer -->
-                @if (securityView == null)
-                {
-                    <div class="profile-modal-footer modal-footer">
-                        <GlassButton OnClick="Close">Cancel</GlassButton>
-                        <GlassButton Primary="true" OnClick="Save">Save changes</GlassButton>
-                    </div>
-                }
-            </GlassPanel>
-        </div>
-    </div>
-}
+    </ChildContent>
+    <Footer>
+        @if (securityView == null)
+        {
+            <GlassButton OnClick="Close">Cancel</GlassButton>
+            <GlassButton Primary="true" OnClick="Save">Save changes</GlassButton>
+        }
+    </Footer>
+</Modal>
 
 <style>
     .profile-modal-header {
