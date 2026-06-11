@@ -1273,7 +1273,7 @@
 {
     <div class="modal-overlay status-menu-overlay" @onclick="() => showStatusMenu = false">
         <div class="status-menu-anchor popup-container" @onclick:stopPropagation="true">
-            <GlassPanel Radius="16" Class="status-menu-panel">
+            <div class="status-menu-panel">
                 <div class="status-menu-header">Set status</div>
 
                 <div class="status-presets">
@@ -1329,7 +1329,7 @@
                     </svg>
                     <span>Sign out</span>
                 </button>
-            </GlassPanel>
+            </div>
         </div>
     </div>
 }
@@ -3166,10 +3166,11 @@
         max-height: calc(100vh - 120px);
         overflow-y: auto;
         overflow-x: hidden;
-    }
-
-    .status-menu-panel > .glass-content {
         padding: 12px;
+        background: var(--popover-bg);
+        border: 0.5px solid var(--dark-border);
+        border-radius: 16px;
+        box-shadow: var(--dark-shadow);
     }
 
     .status-menu-header {
@@ -3249,7 +3250,7 @@
 
     .status-menu-divider {
         height: 1px;
-        background: rgba(255,255,255,0.08);
+        background: var(--border);
         margin: 10px 4px;
     }
 
