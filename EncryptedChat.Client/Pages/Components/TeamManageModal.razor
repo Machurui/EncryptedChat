@@ -256,34 +256,6 @@
 }
 
 <style>
-    .team-manage-wrapper {
-        width: 100%;
-        max-width: 560px;
-        max-height: 80vh;
-        display: flex;
-    }
-
-    .team-manage-modal {
-        display: flex;
-        flex-direction: column;
-        max-height: 80vh;
-        width: 100%;
-    }
-
-    .tm-header {
-        padding: 18px 22px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 0.5px solid var(--border);
-    }
-
-    .tm-header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
     .tm-glyph {
         width: 42px;
         height: 42px;
@@ -296,21 +268,6 @@
         color: var(--text-primary);
         letter-spacing: -0.02em;
         box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.30), 0 6px 18px var(--accent-glow);
-    }
-
-    .tm-eyebrow {
-        font-size: 11px;
-        color: rgba(var(--text-rgb), 0.55);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-weight: 600;
-    }
-
-    .tm-title {
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--text-primary);
-        letter-spacing: -0.015em;
     }
 
     .tm-tabs {
@@ -723,40 +680,11 @@
         color: var(--text-primary);
     }
 
-    /* Delete confirmation sub-modal — sits above the manage modal */
-    .tm-delete-overlay {
-        z-index: 300;
-    }
-
-    .tm-delete-wrapper {
-        width: 100%;
-        max-width: 440px;
-        display: flex;
-    }
-
-    .tm-delete-body {
-        padding: 20px 22px;
-    }
-
-    .tm-delete-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text-primary);
-        letter-spacing: -0.015em;
-    }
-
     .tm-delete-desc {
         margin-top: 8px;
         font-size: 12.5px;
         color: rgba(var(--text-rgb), 0.65);
         line-height: 1.5;
-    }
-
-    .tm-delete-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        margin-top: 14px;
     }
 
     /* Mobile: full-screen sheets for both the modal and the delete confirm */

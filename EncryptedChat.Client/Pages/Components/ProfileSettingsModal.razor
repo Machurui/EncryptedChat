@@ -586,29 +586,6 @@
 </Modal>
 
 <style>
-    .profile-modal-header {
-        padding: 20px 26px 18px;
-        border-bottom: 0.5px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .profile-modal-label {
-        font-size: 11px;
-        color: rgba(var(--text-rgb), 0.55);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-weight: 600;
-    }
-
-    .profile-modal-title {
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--text-primary);
-        letter-spacing: -0.015em;
-        margin-top: 2px;
-    }
 
     .profile-modal-body {
         display: flex;
@@ -1143,14 +1120,6 @@
         color: var(--text-muted);
     }
 
-    .profile-modal-footer {
-        padding: 14px 22px;
-        border-top: 0.5px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-    }
-
     .theme-options {
         display: flex;
         gap: 8px;
@@ -1399,7 +1368,7 @@
         height: 32px;
         border-radius: 10px;
         background: var(--border-subtle);
-        border: 0.5px solid rgba(255,255,255,0.12);
+        border: 0.5px solid var(--border);
         color: var(--text-primary);
         display: grid;
         place-items: center;
@@ -1782,9 +1751,8 @@
     }
 
     @@media (max-width: 767px) {
-        .profile-settings-modal .modal-body {
+        .profile-modal-body {
             flex-direction: column;
-            min-height: 0;
         }
 
         .profile-modal-tabs {
