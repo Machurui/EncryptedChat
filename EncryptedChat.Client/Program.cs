@@ -4,9 +4,22 @@ using EncryptedChat.Client.Auth;
 using EncryptedChat.Client.Services;
 using tailwind_4_blazor_starter;
 using tailwind_4_blazor_starter.Services;
+using Sentry.AspNetCore.Blazor.WebAssembly;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<EncryptedChat.Client.App>("#app");
+
+// ---------- Observability (Sentry) ----------
+// DSN from wwwroot/appsettings.json (empty ⇒ SDK disabled). Aggressive scrubbing (E2E app).
+builder.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? string.Empty;
+    options.SendDefaultPii = false;
+    options.SetBeforeSend((sentryEvent, _) =>
+        EncryptedChat.Client.Observability.ClientSentryScrubbing.ScrubEvent(sentryEvent));
+    options.SetBeforeBreadcrumb((breadcrumb, _) =>
+        EncryptedChat.Client.Observability.ClientSentryScrubbing.ScrubBreadcrumb(breadcrumb));
+});
 
 // API Endpoint
 const string ApiBase = "https://localhost:7294/";
