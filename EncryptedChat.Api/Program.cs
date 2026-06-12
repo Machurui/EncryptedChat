@@ -13,8 +13,37 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Features;
+using Sentry.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------- Observability (Sentry) ----------
+// DSN read from config (empty ⇒ SDK disabled / no-op). Real DSN goes in user-secrets/env.
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? string.Empty;
+    options.Environment = builder.Environment.EnvironmentName;
+    options.SendDefaultPii = false;
+    options.SetBeforeSend((sentryEvent, _) =>
+        EncryptedChat.Observability.SentryScrubbing.ScrubEvent(sentryEvent));
+
+    // Tracing (perf) + logs. Sample rate from config (0 ⇒ tracing off).
+    options.TracesSampleRate = builder.Configuration.GetValue<double?>("Sentry:TracesSampleRate") ?? 0.0;
+    options.MinimumEventLevel = Microsoft.Extensions.Logging.LogLevel.Error;
+    options.MinimumBreadcrumbLevel = Microsoft.Extensions.Logging.LogLevel.Information;
+    // Scrub access_token from any URL/query captured on transactions.
+    options.SetBeforeSendTransaction(transaction =>
+    {
+        if (transaction.Request is { } req)
+        {
+            if (req.QueryString is { Length: > 0 } qs)
+                req.QueryString = EncryptedChat.Observability.SentryScrubbing.StripToken(qs);
+            if (req.Url is { Length: > 0 } url)
+                req.Url = EncryptedChat.Observability.SentryScrubbing.StripToken(url);
+        }
+        return transaction;
+    });
+});
 
 // File upload limits
 builder.Services.Configure<FormOptions>(options =>
