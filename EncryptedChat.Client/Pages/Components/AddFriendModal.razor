@@ -3,131 +3,100 @@
 
 @inject FriendClient FriendClient
 
-@if (IsOpen)
-{
-    <div class="modal-overlay" @onclick="Close">
-        <div @onclick:stopPropagation="true">
-            <GlassPanel Radius="22" Class="modal-responsive add-friend-modal" Style="width: 100%; max-width: 480px;">
-                <!-- Header -->
-                <div class="add-friend-header modal-header">
-                    <div class="add-friend-title">Add a friend</div>
-                    <IconButton Title="Close" OnClick="Close">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </IconButton>
-                </div>
-
-                <!-- Tabs -->
-                <div class="add-friend-tabs">
-                    <button class="add-friend-tab @(activeTab == "handle" ? "active" : "")" @onclick='() => activeTab = "handle"'>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
-                        </svg>
-                        By handle
-                    </button>
-                    <button class="add-friend-tab @(activeTab == "qr" ? "active" : "")" @onclick='() => activeTab = "qr"'>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                        </svg>
-                        Scan QR
-                    </button>
-                    <button class="add-friend-tab @(activeTab == "link" ? "active" : "")" @onclick='() => activeTab = "link"'>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-                            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-                        </svg>
-                        Invite link
-                    </button>
-                </div>
-
-                <!-- Content -->
-                <div class="add-friend-content modal-body">
-                    @if (activeTab == "handle")
-                    {
-                        <GlassInput @bind-Value="handleInput" Placeholder="Search by name or email..." OnInput="HandleSearch">
-                            <Icon>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                                </svg>
-                            </Icon>
-                        </GlassInput>
-
-                        @if (searchResults.Any())
-                        {
-                            <div class="search-results">
-                                @foreach (var user in searchResults)
-                                {
-                                    <button class="search-result-item" @onclick="() => SendRequestToUser(user.Id)">
-                                        <span class="search-result-name">@user.Name</span>
-                                        <span class="search-result-action">+ Send request</span>
-                                    </button>
-                                }
-                            </div>
-                        }
-
-                        @if (!string.IsNullOrEmpty(errorMessage))
-                        {
-                            <div class="error-message">@errorMessage</div>
-                        }
-
-                        @if (!string.IsNullOrEmpty(successMessage))
-                        {
-                            <div class="success-message">@successMessage</div>
-                        }
-
-                        <div class="add-friend-hint">
-                            Your friend will receive a request to verify safety numbers before any messages can be exchanged.
-                        </div>
-                    }
-                    else if (activeTab == "qr")
-                    {
-                        <div class="qr-container">
-                            <div class="qr-code">
-                                <div class="qr-pattern"></div>
-                            </div>
-                            <div class="qr-text">
-                                Have your friend scan this from their device.
-                                <span class="qr-expiry">Code expires in 5:00</span>
-                            </div>
-                        </div>
-                    }
-                    else if (activeTab == "link")
-                    {
-                        <div class="invite-link-box">
-                            <span class="invite-link-text">https://encryptedchat.app/i/@inviteCode</span>
-                            <GlassButton Size="sm" OnClick="CopyLink">@(linkCopied ? "Copied!" : "Copy")</GlassButton>
-                        </div>
-                        <div class="add-friend-hint">
-                            Anyone with this link can send you a friend request. Expires in 24 hours.
-                        </div>
-                    }
-                </div>
-            </GlassPanel>
-        </div>
+<Modal IsOpen="IsOpen" OnClose="Close" Title="Add a friend" Size="sm">
+    <!-- Tabs -->
+    <div class="add-friend-tabs">
+        <button class="add-friend-tab @(activeTab == "handle" ? "active" : "")" @onclick='() => activeTab = "handle"'>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
+            </svg>
+            By handle
+        </button>
+        <button class="add-friend-tab @(activeTab == "qr" ? "active" : "")" @onclick='() => activeTab = "qr"'>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            Scan QR
+        </button>
+        <button class="add-friend-tab @(activeTab == "link" ? "active" : "")" @onclick='() => activeTab = "link"'>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+            </svg>
+            Invite link
+        </button>
     </div>
-}
+
+    <!-- Content -->
+    <div class="add-friend-content">
+        @if (activeTab == "handle")
+        {
+            <GlassInput @bind-Value="handleInput" Placeholder="Search by name or email..." OnInput="HandleSearch">
+                <Icon>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                </Icon>
+            </GlassInput>
+
+            @if (searchResults.Any())
+            {
+                <div class="search-results">
+                    @foreach (var user in searchResults)
+                    {
+                        <button class="search-result-item" @onclick="() => SendRequestToUser(user.Id)">
+                            <span class="search-result-name">@user.Name</span>
+                            <span class="search-result-action">+ Send request</span>
+                        </button>
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-message">@errorMessage</div>
+            }
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="success-message">@successMessage</div>
+            }
+
+            <div class="add-friend-hint">
+                Your friend will receive a request to verify safety numbers before any messages can be exchanged.
+            </div>
+        }
+        else if (activeTab == "qr")
+        {
+            <div class="qr-container">
+                <div class="qr-code">
+                    <div class="qr-pattern"></div>
+                </div>
+                <div class="qr-text">
+                    Have your friend scan this from their device.
+                    <span class="qr-expiry">Code expires in 5:00</span>
+                </div>
+            </div>
+        }
+        else if (activeTab == "link")
+        {
+            <div class="invite-link-box">
+                <span class="invite-link-text">https://encryptedchat.app/i/@inviteCode</span>
+                <GlassButton Size="sm" OnClick="CopyLink">@(linkCopied ? "Copied!" : "Copy")</GlassButton>
+            </div>
+            <div class="add-friend-hint">
+                Anyone with this link can send you a friend request. Expires in 24 hours.
+            </div>
+        }
+    </div>
+</Modal>
 
 <style>
-    .add-friend-header {
-        padding: 18px 22px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 0.5px solid rgba(255,255,255,0.10);
-    }
-
-    .add-friend-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: white;
-    }
-
     .add-friend-tabs {
         display: flex;
         gap: 4px;
-        padding: 12px 22px 0;
+        padding: 0;
     }
 
     .add-friend-tab {
@@ -141,22 +110,22 @@
         border-radius: 8px;
         font-size: 11.5px;
         font-weight: 600;
-        color: rgba(255,255,255,0.65);
+        color: rgba(var(--text-rgb), 0.65);
         font-family: inherit;
         transition: all 0.2s;
     }
 
     .add-friend-tab:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .add-friend-tab.active {
-        background: rgba(255,255,255,0.10);
-        color: white;
+        background: var(--border);
+        color: var(--text-primary);
     }
 
     .add-friend-content {
-        padding: 16px 22px 22px;
+        padding: 16px 0 0;
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -164,7 +133,7 @@
 
     .add-friend-hint {
         font-size: 11px;
-        color: rgba(255,255,255,0.55);
+        color: rgba(var(--text-rgb), 0.55);
         line-height: 1.5;
     }
 
@@ -214,7 +183,7 @@
 
     .qr-text {
         font-size: 12.5px;
-        color: rgba(255,255,255,0.80);
+        color: rgba(var(--text-rgb), 0.80);
         text-align: center;
         line-height: 1.5;
     }
@@ -222,7 +191,7 @@
     .qr-expiry {
         display: block;
         font-size: 10.5px;
-        color: rgba(255,255,255,0.50);
+        color: var(--text-muted);
         margin-top: 4px;
     }
 
@@ -230,7 +199,7 @@
         padding: 11px 14px;
         border-radius: 10px;
         background: rgba(0,0,0,0.30);
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
         display: flex;
         align-items: center;
         gap: 10px;
@@ -243,7 +212,7 @@
         white-space: nowrap;
         font-family: ui-monospace, SF Mono, Menlo, monospace;
         font-size: 12px;
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
     }
 
     .search-results {
@@ -251,7 +220,7 @@
         overflow-y: auto;
         background: rgba(0,0,0,0.20);
         border-radius: 10px;
-        border: 0.5px solid rgba(255,255,255,0.10);
+        border: 0.5px solid var(--border);
     }
 
     .search-result-item {
@@ -270,7 +239,7 @@
     }
 
     .search-result-item:hover {
-        background: rgba(255,255,255,0.06);
+        background: var(--border-subtle);
     }
 
     .search-result-item:last-child {
@@ -279,7 +248,7 @@
 
     .search-result-name {
         font-size: 13px;
-        color: rgba(255,255,255,0.85);
+        color: rgba(var(--text-rgb), 0.85);
     }
 
     .search-result-action {

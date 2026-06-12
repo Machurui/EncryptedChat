@@ -3,24 +3,14 @@
 
 @if (IsOpen && Team != null)
 {
-    <div class="modal-overlay" @onclick="Close">
-        <div class="team-manage-wrapper" @onclick:stopPropagation="true">
-            <GlassPanel Radius="24" Class="modal-responsive team-manage-modal">
-                <!-- Header -->
-                <div class="tm-header">
-                    <div class="tm-header-left">
-                        <div class="tm-glyph">@GetTeamInitials(Team.Name)</div>
-                        <div>
-                            <div class="tm-eyebrow">Team settings</div>
-                            <div class="tm-title">@Team.Name</div>
-                        </div>
-                    </div>
-                    <IconButton Title="Close" OnClick="Close">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </IconButton>
-                </div>
+    <Modal IsOpen="true" OnClose="Close"
+           Eyebrow="Team settings"
+           Title="@Team.Name"
+           Size="md" BodyFlush="true">
+        <Leading>
+            <div class="tm-glyph">@GetTeamInitials(Team.Name)</div>
+        </Leading>
+        <ChildContent>
 
                 <!-- Tabs -->
                 <div class="tm-tabs">
@@ -213,97 +203,59 @@
                         }
                     }
                 </div>
-
-            </GlassPanel>
-        </div>
-    </div>
+    </ChildContent>
+</Modal>
 
     @* Transfer ownership confirmation sub-modal *@
     @if (transferTargetId != null && Team != null)
     {
         var targetMember = Members?.FirstOrDefault(m => m.User?.Id == transferTargetId);
         var targetName = targetMember?.User?.Name ?? "this admin";
-        <div class="modal-overlay tm-delete-overlay" @onclick="CancelTransfer">
-            <div class="tm-delete-wrapper" @onclick:stopPropagation="true">
-                <GlassPanel Radius="20" Class="tm-delete-panel">
-                    <div class="tm-delete-body">
-                        <div class="tm-delete-title">Make @targetName the owner?</div>
-                        <div class="tm-delete-desc">
-                            You'll keep Admin access but lose ownership rights (delete team,
-                            promote/demote admins, transfer ownership). @targetName takes over.
-                        </div>
-                        <div class="tm-delete-actions">
-                            <button class="glass-btn" @onclick="CancelTransfer">Cancel</button>
-                            <GlassButton Primary="true" Disabled="@isTransferring" OnClick="ConfirmTransfer">
-                                @(isTransferring ? "Transferring…" : "Make owner")
-                            </GlassButton>
-                        </div>
-                    </div>
-                </GlassPanel>
-            </div>
-        </div>
+        var transferTitle = $"Make {targetName} the owner?";
+        <Modal IsOpen="true" OnClose="CancelTransfer" Nested="true" Size="sm" Title="@transferTitle">
+            <ChildContent>
+                <div class="tm-delete-desc">
+                    You'll keep Admin access but lose ownership rights (delete team,
+                    promote/demote admins, transfer ownership). @targetName takes over.
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="glass-btn" @onclick="CancelTransfer">Cancel</button>
+                <GlassButton Primary="true" Disabled="@isTransferring" OnClick="ConfirmTransfer">
+                    @(isTransferring ? "Transferring…" : "Make owner")
+                </GlassButton>
+            </Footer>
+        </Modal>
     }
 
     @* Delete confirmation sub-modal — type team name to confirm *@
     @if (showDeleteConfirm && Team != null)
     {
-        <div class="modal-overlay tm-delete-overlay" @onclick="CancelDelete">
-            <div class="tm-delete-wrapper" @onclick:stopPropagation="true">
-                <GlassPanel Radius="20" Class="tm-delete-panel">
-                    <div class="tm-delete-body">
-                        <div class="tm-delete-title">Delete "@Team.Name"?</div>
-                        <div class="tm-delete-desc">
-                            This destroys the team key permanently. Every member loses access to past
-                            messages — they cannot be recovered, even by you. Type
-                            <strong>@Team.Name</strong> below to confirm.
-                        </div>
-                        <div class="glass-input" style="margin-top: 12px;">
-                            <input type="text" @bind="deleteConfirmText" @bind:event="oninput" placeholder="@Team.Name" />
-                        </div>
-                        <div class="tm-delete-actions">
-                            <button class="glass-btn" @onclick="CancelDelete">Cancel</button>
-                            <button class="tm-danger-btn"
-                                    disabled="@(deleteConfirmText != Team.Name || isDeleting)"
-                                    @onclick="DoDelete">
-                                @(isDeleting ? "Deleting…" : "Delete team")
-                            </button>
-                        </div>
-                    </div>
-                </GlassPanel>
-            </div>
-        </div>
+        var deleteTitle = $"Delete \"{Team.Name}\"?";
+        <Modal IsOpen="true" OnClose="CancelDelete" Nested="true" Size="sm" Title="@deleteTitle">
+            <ChildContent>
+                <div class="tm-delete-desc">
+                    This destroys the team key permanently. Every member loses access to past
+                    messages — they cannot be recovered, even by you. Type
+                    <strong>@Team.Name</strong> below to confirm.
+                </div>
+                <div class="glass-input" style="margin-top: 12px;">
+                    <input type="text" @bind="deleteConfirmText" @bind:event="oninput" placeholder="@Team.Name" />
+                </div>
+            </ChildContent>
+            <Footer>
+                <button class="glass-btn" @onclick="CancelDelete">Cancel</button>
+                <button class="tm-danger-btn"
+                        disabled="@(deleteConfirmText != Team.Name || isDeleting)"
+                        @onclick="DoDelete">
+                    @(isDeleting ? "Deleting…" : "Delete team")
+                </button>
+            </Footer>
+        </Modal>
     }
 }
 
 <style>
-    .team-manage-wrapper {
-        width: 100%;
-        max-width: 560px;
-        max-height: 80vh;
-        display: flex;
-    }
-
-    .team-manage-modal {
-        display: flex;
-        flex-direction: column;
-        max-height: 80vh;
-        width: 100%;
-    }
-
-    .tm-header {
-        padding: 18px 22px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 0.5px solid rgba(255, 255, 255, 0.10);
-    }
-
-    .tm-header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
     .tm-glyph {
         width: 42px;
         height: 42px;
@@ -313,24 +265,9 @@
         place-items: center;
         font-size: 16px;
         font-weight: 700;
-        color: white;
+        color: var(--text-primary);
         letter-spacing: -0.02em;
         box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.30), 0 6px 18px var(--accent-glow);
-    }
-
-    .tm-eyebrow {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.55);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-weight: 600;
-    }
-
-    .tm-title {
-        font-size: 17px;
-        font-weight: 700;
-        color: white;
-        letter-spacing: -0.015em;
     }
 
     .tm-tabs {
@@ -349,7 +286,7 @@
         border-radius: 8px;
         font-size: 12px;
         font-weight: 600;
-        color: rgba(255, 255, 255, 0.65);
+        color: rgba(var(--text-rgb), 0.65);
         cursor: pointer;
         font-family: inherit;
         transition: background 0.15s, color 0.15s;
@@ -360,8 +297,8 @@
     }
 
     .tm-tab.active {
-        background: rgba(255, 255, 255, 0.10);
-        color: white;
+        background: var(--border);
+        color: var(--text-primary);
     }
 
     .tm-body {
@@ -392,7 +329,7 @@
     .tm-field-label {
         font-size: 11.5px;
         font-weight: 600;
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(var(--text-rgb), 0.75);
     }
 
     .tm-row {
@@ -405,7 +342,7 @@
     .tm-section-label {
         font-size: 11px;
         font-weight: 600;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
         text-transform: uppercase;
         letter-spacing: 0.06em;
         margin-top: 4px;
@@ -417,8 +354,8 @@
         gap: 12px;
         padding: 8px 10px;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 0.5px solid rgba(255, 255, 255, 0.08);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--bg-active);
         margin-bottom: 4px;
     }
 
@@ -430,27 +367,27 @@
     .tm-member-name {
         font-size: 13px;
         font-weight: 600;
-        color: white;
+        color: var(--text-primary);
     }
 
     .tm-member-you {
         font-size: 10px;
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.50);
+        color: var(--text-muted);
         margin-left: 4px;
     }
 
     .tm-member-handle {
         font-size: 10.5px;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
     }
 
     .tm-role-select {
         appearance: none;
         -webkit-appearance: none;
-        background: rgba(255, 255, 255, 0.06);
-        border: 0.5px solid rgba(255, 255, 255, 0.18);
-        color: white;
+        background: var(--border-subtle);
+        border: 0.5px solid var(--glass-border);
+        color: var(--text-primary);
         padding: 5px 28px 5px 10px;
         border-radius: 8px;
         font-size: 11.5px;
@@ -466,13 +403,13 @@
     }
 
     .tm-role-select:hover {
-        background-color: rgba(255, 255, 255, 0.10);
-        border-color: rgba(255, 255, 255, 0.25);
+        background-color: var(--border);
+        border-color: rgba(var(--text-rgb), 0.25);
     }
 
     .tm-role-select option {
-        background: #131820;
-        color: white;
+        background: var(--surface-2);
+        color: var(--text-primary);
     }
 
     .tm-owner-badge {
@@ -496,7 +433,7 @@
         border-radius: 8px;
         background: transparent;
         border: none;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -505,8 +442,8 @@
     }
 
     .tm-transfer-btn:hover {
-        background: rgba(255, 255, 255, 0.10);
-        color: oklch(0.78 0.14 75);
+        background: var(--border);
+        color: var(--status-away);
     }
 
     .tm-row-x {
@@ -515,7 +452,7 @@
         border-radius: 8px;
         background: transparent;
         border: none;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -538,13 +475,13 @@
     }
 
     .tm-suggest-row:hover {
-        background: rgba(255, 255, 255, 0.04);
+        background: var(--bg-hover);
     }
 
     .tm-suggest-name {
         flex: 1;
         font-size: 12.5px;
-        color: rgba(255, 255, 255, 0.85);
+        color: rgba(var(--text-rgb), 0.85);
     }
 
     .tm-danger {
@@ -567,7 +504,7 @@
 
     .tm-danger-sub {
         font-size: 10.5px;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: 2px;
     }
 
@@ -596,7 +533,7 @@
     /* Bubble color picker (mirrors the chat-header version, same dimensions) */
     .tm-bubble-sub {
         font-size: 10.5px;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
         margin-top: -2px;
         margin-bottom: 6px;
     }
@@ -606,9 +543,9 @@
         display: block;
         padding: 14px 16px;
         border-radius: 14px;
-        background: linear-gradient(135deg, color-mix(in oklch, var(--bc) 12%, transparent), rgba(255, 255, 255, 0.04) 60%);
+        background: linear-gradient(135deg, color-mix(in oklch, var(--bc) 12%, transparent), var(--bg-hover) 60%);
         border: 0.5px solid rgba(255, 255, 255, 0.12);
-        box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.10);
+        box-shadow: inset 1px 1px 1px var(--border);
         overflow: hidden;
         margin-bottom: 12px;
         cursor: pointer;
@@ -647,11 +584,11 @@
     .tm-bubble-sample {
         padding: 9px 14px;
         border-radius: 16px;
-        color: white;
+        color: var(--text-primary);
         font-size: 13px;
         font-weight: 500;
         letter-spacing: -0.005em;
-        border: 0.5px solid rgba(255, 255, 255, 0.18);
+        border: 0.5px solid var(--glass-border);
         max-width: 70%;
     }
 
@@ -661,8 +598,8 @@
         gap: 10px;
         padding: 8px 10px;
         border-radius: 12px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 0.5px solid rgba(255, 255, 255, 0.10);
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
     }
 
     .tm-bubble-slider-track {
@@ -677,7 +614,7 @@
         inset: 6px 2px;
         border-radius: 999px;
         background: linear-gradient(90deg, #ff0040 0%, #ffae00 14%, #d4ff00 28%, #2cff5b 42%, #00f4ff 56%, #2c8bff 70%, #b25bff 84%, #ff34c2 100%);
-        border: 0.5px solid rgba(255, 255, 255, 0.18);
+        border: 0.5px solid var(--glass-border);
         box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.30);
     }
 
@@ -698,7 +635,7 @@
         width: 16px;
         height: 16px;
         border-radius: 50%;
-        background: white;
+        background: var(--text-primary);
         border: 2px solid rgba(0, 0, 0, 0.35);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
         cursor: pointer;
@@ -708,7 +645,7 @@
         width: 16px;
         height: 16px;
         border-radius: 50%;
-        background: white;
+        background: var(--text-primary);
         border: 2px solid rgba(0, 0, 0, 0.35);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
         cursor: pointer;
@@ -718,10 +655,10 @@
         width: 140px;
         flex: 0 0 140px;
         background: rgba(0, 0, 0, 0.18);
-        border: 0.5px solid rgba(255, 255, 255, 0.10);
+        border: 0.5px solid var(--border);
         border-radius: 8px;
         outline: none;
-        color: white;
+        color: var(--text-primary);
         font-size: 12px;
         padding: 6px 10px;
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -732,7 +669,7 @@
         align-self: flex-start;
         background: transparent;
         border: none;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(var(--text-rgb), 0.55);
         font-size: 11px;
         cursor: pointer;
         padding: 4px 6px;
@@ -740,43 +677,14 @@
     }
 
     .tm-bubble-reset:hover {
-        color: white;
-    }
-
-    /* Delete confirmation sub-modal — sits above the manage modal */
-    .tm-delete-overlay {
-        z-index: 300;
-    }
-
-    .tm-delete-wrapper {
-        width: 100%;
-        max-width: 440px;
-        display: flex;
-    }
-
-    .tm-delete-body {
-        padding: 20px 22px;
-    }
-
-    .tm-delete-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: white;
-        letter-spacing: -0.015em;
+        color: var(--text-primary);
     }
 
     .tm-delete-desc {
         margin-top: 8px;
         font-size: 12.5px;
-        color: rgba(255, 255, 255, 0.65);
+        color: rgba(var(--text-rgb), 0.65);
         line-height: 1.5;
-    }
-
-    .tm-delete-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        margin-top: 14px;
     }
 
     /* Mobile: full-screen sheets for both the modal and the delete confirm */

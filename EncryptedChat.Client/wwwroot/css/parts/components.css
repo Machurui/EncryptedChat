@@ -1,0 +1,356 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Avatar
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.avatar {
+    position: relative;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.45em;
+}
+
+.avatar-status {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 25%;
+    height: 25%;
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-secondary);
+}
+
+.avatar-status.online { background: var(--status-online); box-shadow: 0 0 6px var(--status-online); }
+.avatar-status.away { background: var(--status-away); }
+.avatar-status.busy { background: var(--status-busy); }
+.avatar-status.offline { background: var(--text-disabled); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Team Glyph
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.team-glyph {
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-weight: 700;
+    box-shadow:
+        inset 1px 1px 1px rgba(255,255,255,0.30),
+        0 6px 18px rgba(0,0,0,0.20);
+}
+
+.dm-glyph {
+    background: linear-gradient(135deg, oklch(0.55 0.12 250), oklch(0.45 0.14 280)) !important;
+}
+
+.dm-list {
+    margin-bottom: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Icon Button
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.icon-btn:hover {
+    background: var(--bg-active);
+    color: var(--text-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Glass Chip / Badge
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.glass-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 0.5px solid rgba(255,255,255,0.22);
+    background: rgba(255,255,255,0.10);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    font-weight: 500;
+    backdrop-filter: blur(12px) saturate(160%);
+    box-shadow: inset 1px 1px 1px rgba(255,255,255,0.35);
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--text-primary);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Section Label
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: rgba(var(--text-rgb), 0.45);
+    text-transform: uppercase;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Tabs
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.tabs {
+    display: flex;
+    gap: 2px;
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(var(--text-rgb), 0.65);
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.tab:hover {
+    background: rgba(255,255,255,0.06);
+}
+
+.tab.active {
+    background: rgba(255,255,255,0.10);
+    color: var(--text-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Encryption Banner
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.encryption-banner {
+    padding: 10px 12px;
+    background: rgba(16,185,129,0.10);
+    border: 0.5px solid rgba(16,185,129,0.25);
+    border-radius: 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.encryption-banner-icon {
+    color: oklch(0.78 0.14 165);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.encryption-banner-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: oklch(0.85 0.10 165);
+}
+
+.encryption-banner-text {
+    font-size: 10.5px;
+    color: rgba(var(--text-rgb), 0.55);
+    margin-top: 2px;
+    line-height: 1.4;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Divider
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+}
+
+.divider-with-text {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+}
+
+.divider-with-text::before,
+.divider-with-text::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.12);
+}
+
+.divider-with-text span {
+    font-size: 10.5px;
+    color: rgba(var(--text-rgb), 0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Modal Overlay
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ Modal — coquille solide unifiée (dark + light) ═══ */
+:root { --modal-radius: 16px; --z-modal: 1000; --z-modal-nested: 1010; }
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+.modal-overlay-nested { z-index: var(--z-modal-nested); }
+
+.modal-shell {
+    display: flex;
+    flex-direction: column;
+    width: min(600px, calc(100vw - 40px));
+    max-height: 90vh;
+    overflow: hidden;
+    background: var(--dark-bg-primary);
+    border: 0.5px solid var(--dark-border);
+    border-radius: var(--modal-radius);
+    box-shadow: var(--dark-shadow);
+}
+.modal-shell.modal-sm { width: min(480px, calc(100vw - 40px)); }
+.modal-shell.modal-md { width: min(600px, calc(100vw - 40px)); }
+.modal-shell.modal-lg { width: min(760px, calc(100vw - 40px)); }
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 22px;
+    border-bottom: 0.5px solid var(--border);
+    flex-shrink: 0;
+}
+.modal-leading { display: flex; align-items: center; }
+.modal-heading { flex: 1; min-width: 0; }
+.modal-eyebrow {
+    font-size: 11px;
+    color: rgba(var(--text-rgb), 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+.modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.015em;
+}
+.modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 22px;
+}
+.modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 22px;
+    border-top: 0.5px solid var(--border);
+    flex-shrink: 0;
+}
+/* Pre-padded bodies (complex modals manage their own inner padding) */
+.modal-shell .modal-body.modal-body-flush { padding: 0; }
+/* Sidebar/flex bodies (e.g. settings with a tab rail) fill height; columns scroll */
+.modal-body.modal-body-fill { display: flex; overflow: hidden; }
+/* Conditional leading/footer fragments render empty → don't show their chrome */
+.modal-leading:empty,
+.modal-footer:empty { display: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Link Button
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.link-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: oklch(0.78 0.14 165);
+    font-size: inherit;
+    padding: 0;
+    font-family: inherit;
+}
+
+.link-btn:hover {
+    text-decoration: underline;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Scrollbar
+   ══════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.25);
+}
+

@@ -1,0 +1,75 @@
+@namespace EncryptedChat.Client.Pages.Components
+
+@if (IsOpen)
+{
+    <div class="modal-overlay@(Nested ? " modal-overlay-nested" : "")" @onclick="HandleOverlayClick">
+        <div class="modal-shell modal-@SizeClass @Class" @onclick:stopPropagation="true">
+            @if (HasHeader)
+            {
+                <div class="modal-header">
+                    @if (Leading is not null)
+                    {
+                        <div class="modal-leading">@Leading</div>
+                    }
+                    <div class="modal-heading">
+                        @if (!string.IsNullOrEmpty(Eyebrow))
+                        {
+                            <div class="modal-eyebrow">@Eyebrow</div>
+                        }
+                        @if (!string.IsNullOrEmpty(Title))
+                        {
+                            <div class="modal-title">@Title</div>
+                        }
+                    </div>
+                    @if (ShowClose)
+                    {
+                        <IconButton Title="Close" OnClick="OnClose">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </IconButton>
+                    }
+                </div>
+            }
+            <div class="modal-body@(BodyFlush ? " modal-body-flush" : "") @BodyClass">@ChildContent</div>
+            @if (Footer is not null)
+            {
+                <div class="modal-footer">@Footer</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Eyebrow { get; set; }
+    [Parameter] public RenderFragment? Leading { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public string Size { get; set; } = "md";
+    [Parameter] public bool ShowClose { get; set; } = true;
+    [Parameter] public bool CloseOnOverlayClick { get; set; } = true;
+    [Parameter] public bool Nested { get; set; }
+    [Parameter] public bool BodyFlush { get; set; }
+    [Parameter] public string? BodyClass { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool HasHeader =>
+        Leading is not null || !string.IsNullOrEmpty(Eyebrow)
+        || !string.IsNullOrEmpty(Title) || ShowClose;
+
+    private string SizeClass => Size?.ToLowerInvariant() switch
+    {
+        "sm" => "sm",
+        "lg" => "lg",
+        _ => "md"
+    };
+
+    private async Task HandleOverlayClick()
+    {
+        if (CloseOnOverlayClick)
+            await OnClose.InvokeAsync();
+    }
+}

@@ -1,0 +1,249 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   EncryptedChat - Design System
+   ══════════════════════════════════════════════════════════════════════════
+
+   TWO PRESETS:
+
+   1. LIQUID GLASS (preset-glass)
+      - Glassmorphism with blur, saturation, tint, shine layers
+      - Used for: Chat panels, sidebar, message areas, floating UI
+      - Components: .glass-panel, .glass-input, .glass-btn, .glass-chip
+      - Background: Animated blobs or image with blur effect
+
+   2. DARK SOLID (preset-dark)
+      - Solid dark backgrounds with subtle transparency
+      - Used for: Modals, settings, dropdowns, overlays, forms
+      - Components: .dark-panel, .dark-input, .dark-btn, .dark-card
+      - Background: Solid #0d0f14 or rgba variants
+
+   Usage: Add .preset-glass or .preset-dark to containers to scope styles,
+          or use component classes directly (.glass-panel vs .dark-panel)
+
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+:root.theme-dark {
+    /* ── Accent palette ── */
+    --accent: oklch(0.65 0.16 165);
+    --accent-glow: oklch(0.65 0.16 165 / 0.30);
+    --accent-hue: 165;
+
+    /* ── Status colors ── */
+    --status-online: oklch(0.74 0.15 145);
+    --status-online-dim: oklch(0.74 0.15 145 / 0.18);
+    --status-away: oklch(0.78 0.14 75);
+    --status-away-dim: oklch(0.78 0.14 75 / 0.18);
+    --status-busy: oklch(0.68 0.18 28);
+    --status-busy-dim: oklch(0.68 0.18 28 / 0.18);
+    --status-invisible: #9ca3af;
+    --status-invisible-dim: rgba(156, 163, 175, 0.18);
+
+    /* ── LIQUID GLASS preset variables ── */
+    --glass-blur: 20px;
+    --glass-blur-subtle: 14px;
+    --glass-blur-max: 28px;
+    --glass-saturation: 165%;
+    --glass-saturation-subtle: 130%;
+    --glass-saturation-max: 200%;
+    --glass-tint: rgba(24, 26, 27, 0.15);
+    --glass-tint-light: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.18);
+    --glass-shine: rgba(24, 26, 27, 0.5);
+    --glass-shadow: rgba(0, 0, 0, 0.2) 0px 6px 6px, rgba(0, 0, 0, 0.1) 0px 0px 20px;
+
+    /* ── DARK SOLID preset variables ── */
+    --dark-bg-primary: #0d0f14;
+    --dark-bg-secondary: #12141a;
+    --dark-bg-tertiary: #1a1c24;
+    --dark-bg-elevated: #1e2028;
+    --dark-bg-hover: rgba(255, 255, 255, 0.04);
+    --dark-bg-active: rgba(255, 255, 255, 0.08);
+    --dark-bg-input: rgba(255, 255, 255, 0.07);
+    --dark-border: rgba(255, 255, 255, 0.10);
+    --dark-border-subtle: rgba(255, 255, 255, 0.06);
+    --dark-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+    /* ── Shared text colors ── */
+    --text-primary: white;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-muted: rgba(255, 255, 255, 0.5);
+    --text-disabled: rgba(255, 255, 255, 0.3);
+
+    /* ── Legacy (deprecated, use preset-specific vars) ── */
+    --bg-dark: #080b11;
+    --bg-primary: #080b11;
+    --bg-secondary: #0a0c12;
+
+    /* ── Skeleton loaders ── */
+    --skeleton-bg: rgba(255, 255, 255, 0.06);
+    --skeleton-shimmer: rgba(255, 255, 255, 0.10);
+
+    /* ── Responsive ── */
+    --touch-target-min: 44px;
+
+    /* ── Semantic tokens (theme-agnostic; Tailwind V2 will map these) ── */
+    --surface: #080b11;            /* app background */
+    --surface-2: #12141a;          /* panels / secondary */
+    --surface-3: #1a1c24;          /* tertiary */
+    --surface-raised: #0d0f14;
+    --surface-elevated: #1e2028;
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --bg-active: rgba(255, 255, 255, 0.08);
+    --bg-input: rgba(255, 255, 255, 0.07);
+    --border: rgba(255, 255, 255, 0.10);
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --text: white;
+    --text-faint: rgba(255, 255, 255, 0.5);
+    --text-rgb: 255, 255, 255;
+    --glass-bg: rgba(24, 26, 27, 0.15);
+    --popover-bg: rgba(20, 25, 35, 0.95);
+}
+
+:root[data-theme="light"] {
+    /* Light theme — cool/clean */
+    --surface: #f5f7fa;
+    --surface-2: #ffffff;
+    --surface-3: #eef1f5;
+    --surface-raised: #ffffff;
+    --surface-elevated: #ffffff;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(0, 0, 0, 0.07);
+    --bg-input: rgba(0, 0, 0, 0.04);
+    --border: rgba(0, 0, 0, 0.10);
+    --border-subtle: rgba(0, 0, 0, 0.06);
+
+    --text: #1a1a2e;
+    --text-primary: #1a1a2e;
+    --text-secondary: rgba(26, 26, 46, 0.7);
+    --text-muted: rgba(26, 26, 46, 0.5);
+    --text-faint: rgba(26, 26, 46, 0.5);
+    --text-rgb: 26, 26, 46;
+    --text-disabled: rgba(26, 26, 46, 0.35);
+
+    --accent: oklch(0.58 0.17 165);
+    --accent-glow: oklch(0.58 0.17 165 / 0.25);
+
+    --bg-primary: #f5f7fa;
+    --bg-secondary: #ffffff;
+
+    --glass-bg: rgba(255, 255, 255, 0.15);
+    --glass-tint: rgba(0, 0, 0, 0.04);
+    --glass-border: rgba(0, 0, 0, 0.10);
+    --glass-shine: rgba(255, 255, 255, 0.5);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+
+    --skeleton-bg: rgba(0, 0, 0, 0.05);
+    --skeleton-shimmer: rgba(0, 0, 0, 0.09);
+
+    --dark-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+
+    /* "Dark Solid" preset tokens — re-themed for light so modals/dropdowns/menus
+       using var(--dark-*) become light too (these were dark-only before). */
+    --dark-bg-primary: #ffffff;
+    --dark-bg-secondary: #ffffff;
+    --dark-bg-tertiary: #f5f7fa;
+    --dark-bg-elevated: #ffffff;
+    --dark-bg-hover: rgba(0, 0, 0, 0.04);
+    --dark-bg-active: rgba(0, 0, 0, 0.07);
+    --dark-bg-input: rgba(0, 0, 0, 0.04);
+    --dark-border: rgba(0, 0, 0, 0.10);
+    --dark-border-subtle: rgba(0, 0, 0, 0.06);
+    --bg-dark: #f5f7fa;
+
+    /* Popover/menu surface (replaces hardcoded dark dropdown backgrounds) */
+    --popover-bg: rgba(255, 255, 255, 0.95);
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+/* Remove default focus outlines (including Safari/macOS) */
+*:focus,
+*:focus-visible,
+*:focus-within {
+    outline: none !important;
+    outline-width: 0 !important;
+    outline-style: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+input,
+textarea,
+select,
+button {
+    outline: none !important;
+    outline-width: 0 !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+button:focus,
+input:focus-visible,
+textarea:focus-visible {
+    outline: none !important;
+    outline-width: 0 !important;
+    outline-color: transparent !important;
+    border-color: inherit;
+}
+
+/* Safari/WebKit specific focus ring removal */
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+    visibility: hidden;
+}
+
+::-webkit-input-placeholder {
+    color: inherit;
+    opacity: 0.5;
+}
+
+/* Ensure no ring from Tailwind */
+.ring-0,
+[class*="focus:ring"] {
+    --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+/* Light theme glass adjustments */
+:root[data-theme="light"] .glass-panel {
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: var(--glass-shadow);
+}
+
+:root[data-theme="light"] .glass-input {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: var(--text-primary);
+}
+
+:root[data-theme="light"] .glass-input input,
+:root[data-theme="light"] .glass-input input::placeholder {
+    color: var(--text-secondary);
+}
+
+:root[data-theme="light"] .glass-btn:not(.primary) {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: var(--text-primary);
+}
+
+/* ── Autofill fix ────────────────────────────────────────────────────────── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill {
+    -webkit-text-fill-color: white !important;
+    -webkit-box-shadow: 0 0 0 1000px rgba(255,255,255,0.05) inset !important;
+    caret-color: white;
+    transition: background-color 5000s ease-in-out 0s;
+}
+

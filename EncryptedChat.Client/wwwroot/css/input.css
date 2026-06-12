@@ -1,7 +1,29 @@
 @import "tailwindcss";
-@import "flowbite/src/themes/default";
-@plugin "flowbite/plugin";
-@source "../../node_modules/flowbite";
+
+/* ── Pont vers les tokens sémantiques de app.css (theme-aware via indirection var()) ──
+   @theme standard (PAS @theme inline) : les utilitaires pointent vers var(--surface)…
+   qui sont override en light → bg-surface/text-foreground/etc. suivent le thème. */
+@theme {
+    --color-surface: var(--surface);
+    --color-surface-2: var(--surface-2);
+    --color-surface-3: var(--surface-3);
+    --color-elevated: var(--surface-elevated);
+    --color-popover: var(--popover-bg);
+
+    --color-border: var(--border);
+    --color-border-subtle: var(--border-subtle);
+
+    --color-foreground: var(--text);
+    --color-muted: var(--text-muted);
+
+    --color-accent: var(--accent);
+    --color-status-online: var(--status-online);
+    --color-status-away: var(--status-away);
+    --color-status-busy: var(--status-busy);
+
+    --radius-modal: var(--modal-radius);
+    --shadow-panel: var(--dark-shadow);
+}
 
 /* Disable focus rings globally */
 @layer base {
