@@ -20,27 +20,41 @@ public class GifCacheDecoratorTests
     public async Task TrendingAsync_HitsInnerOnceForSameParams()
     {
         var (decorator, inner) = Create();
-        inner.Setup(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()))
+        inner.Setup(s => s.TrendingAsync(20, 0, false, It.IsAny<CancellationToken>()))
              .ReturnsAsync(new List<GifResultDTO> { new("a", "b", 100, 100) });
 
-        await decorator.TrendingAsync(20, 0, CancellationToken.None);
-        await decorator.TrendingAsync(20, 0, CancellationToken.None);
+        await decorator.TrendingAsync(20, 0, false, CancellationToken.None);
+        await decorator.TrendingAsync(20, 0, false, CancellationToken.None);
 
-        inner.Verify(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()), Times.Once);
+        inner.Verify(s => s.TrendingAsync(20, 0, false, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task TrendingAsync_DifferentOffsetHitsInner()
     {
         var (decorator, inner) = Create();
-        inner.Setup(s => s.TrendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        inner.Setup(s => s.TrendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
              .ReturnsAsync(new List<GifResultDTO>());
 
-        await decorator.TrendingAsync(20, 0, CancellationToken.None);
-        await decorator.TrendingAsync(20, 20, CancellationToken.None);
+        await decorator.TrendingAsync(20, 0, false, CancellationToken.None);
+        await decorator.TrendingAsync(20, 20, false, CancellationToken.None);
 
-        inner.Verify(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()), Times.Once);
-        inner.Verify(s => s.TrendingAsync(20, 20, It.IsAny<CancellationToken>()), Times.Once);
+        inner.Verify(s => s.TrendingAsync(20, 0, false, It.IsAny<CancellationToken>()), Times.Once);
+        inner.Verify(s => s.TrendingAsync(20, 20, false, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task TrendingAsync_StickersAndGifsUseSeparateCacheKeys()
+    {
+        var (decorator, inner) = Create();
+        inner.Setup(s => s.TrendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+             .ReturnsAsync(new List<GifResultDTO>());
+
+        await decorator.TrendingAsync(20, 0, false, CancellationToken.None);
+        await decorator.TrendingAsync(20, 0, true, CancellationToken.None);
+
+        inner.Verify(s => s.TrendingAsync(20, 0, false, It.IsAny<CancellationToken>()), Times.Once);
+        inner.Verify(s => s.TrendingAsync(20, 0, true, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -60,12 +74,25 @@ public class GifCacheDecoratorTests
     public async Task SearchAsync_AlwaysHitsInner()
     {
         var (decorator, inner) = Create();
-        inner.Setup(s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()))
+        inner.Setup(s => s.SearchAsync("cat", 20, 0, false, It.IsAny<CancellationToken>()))
              .ReturnsAsync(new List<GifResultDTO>());
 
-        await decorator.SearchAsync("cat", 20, 0, CancellationToken.None);
-        await decorator.SearchAsync("cat", 20, 0, CancellationToken.None);
+        await decorator.SearchAsync("cat", 20, 0, false, CancellationToken.None);
+        await decorator.SearchAsync("cat", 20, 0, false, CancellationToken.None);
 
-        inner.Verify(s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        inner.Verify(s => s.SearchAsync("cat", 20, 0, false, It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task RandomAsync_AlwaysHitsInner_NeverCached()
+    {
+        var (decorator, inner) = Create();
+        inner.Setup(s => s.RandomAsync(null, false, It.IsAny<CancellationToken>()))
+             .ReturnsAsync(new GifResultDTO("a", "b", 100, 100));
+
+        await decorator.RandomAsync(null, false, CancellationToken.None);
+        await decorator.RandomAsync(null, false, CancellationToken.None);
+
+        inner.Verify(s => s.RandomAsync(null, false, It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 }

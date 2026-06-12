@@ -5,8 +5,6 @@ namespace EncryptedChat.Services;
 
 public sealed class GiphyGifService : IGifService
 {
-    private const string GiphySearchUrl = "https://api.giphy.com/v1/gifs/search";
-    private const string GiphyTrendingUrl = "https://api.giphy.com/v1/gifs/trending";
     private const string GiphyCategoriesUrl = "https://api.giphy.com/v1/gifs/categories";
     private readonly HttpClient _http;
     private readonly string _apiKey;
@@ -17,10 +15,13 @@ public sealed class GiphyGifService : IGifService
         _apiKey = config["Giphy:ServiceApiKey"] ?? string.Empty;
     }
 
-    public async Task<List<GifResultDTO>> SearchAsync(string query, int limit, int offset, CancellationToken ct)
+    private static string Base(bool stickers, string kind) =>
+        $"https://api.giphy.com/v1/{(stickers ? "stickers" : "gifs")}/{kind}";
+
+    public async Task<List<GifResultDTO>> SearchAsync(string query, int limit, int offset, bool stickers, CancellationToken ct)
     {
         EnsureApiKey();
-        var url = $"{GiphySearchUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
+        var url = $"{Base(stickers, "search")}?api_key={Uri.EscapeDataString(_apiKey)}" +
                   $"&q={Uri.EscapeDataString(query)}" +
                   $"&limit={limit}" +
                   $"&offset={offset}" +
@@ -29,14 +30,30 @@ public sealed class GiphyGifService : IGifService
         return await FetchAndParseGifsAsync(url, ct);
     }
 
-    public async Task<List<GifResultDTO>> TrendingAsync(int limit, int offset, CancellationToken ct)
+    public async Task<List<GifResultDTO>> TrendingAsync(int limit, int offset, bool stickers, CancellationToken ct)
     {
         EnsureApiKey();
-        var url = $"{GiphyTrendingUrl}?api_key={Uri.EscapeDataString(_apiKey)}" +
+        var url = $"{Base(stickers, "trending")}?api_key={Uri.EscapeDataString(_apiKey)}" +
                   $"&limit={limit}" +
                   $"&offset={offset}" +
                   $"&rating=pg-13";
         return await FetchAndParseGifsAsync(url, ct);
+    }
+
+    public async Task<GifResultDTO?> RandomAsync(string? tag, bool stickers, CancellationToken ct)
+    {
+        EnsureApiKey();
+        var url = $"{Base(stickers, "random")}?api_key={Uri.EscapeDataString(_apiKey)}&rating=pg-13";
+        if (!string.IsNullOrWhiteSpace(tag))
+            url += $"&tag={Uri.EscapeDataString(tag.Trim())}";
+
+        using var response = await _http.GetAsync(url, ct);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            return null;
+        return ParseGifItem(data);
     }
 
     public async Task<List<GifCategoryDTO>> CategoriesAsync(CancellationToken ct)
@@ -93,20 +110,27 @@ public sealed class GiphyGifService : IGifService
 
         foreach (var item in dataArray.EnumerateArray())
         {
-            if (!item.TryGetProperty("images", out var images)) continue;
-            if (!images.TryGetProperty("original", out var original)) continue;
-            if (!images.TryGetProperty("fixed_width", out var preview)) continue;
-
-            var gifUrl = original.TryGetProperty("url", out var ou) ? ou.GetString() : null;
-            var previewUrl = preview.TryGetProperty("url", out var pu) ? pu.GetString() : null;
-            int width = ParseDimension(preview, "width");
-            int height = ParseDimension(preview, "height");
-
-            if (!string.IsNullOrEmpty(gifUrl) && !string.IsNullOrEmpty(previewUrl))
-                results.Add(new GifResultDTO(gifUrl, previewUrl, width, height));
+            var dto = ParseGifItem(item);
+            if (dto is not null)
+                results.Add(dto);
         }
 
         return results;
+    }
+
+    private static GifResultDTO? ParseGifItem(JsonElement item)
+    {
+        if (!item.TryGetProperty("images", out var images)) return null;
+        if (!images.TryGetProperty("original", out var original)) return null;
+        if (!images.TryGetProperty("fixed_width", out var preview)) return null;
+
+        var gifUrl = original.TryGetProperty("url", out var ou) ? ou.GetString() : null;
+        var previewUrl = preview.TryGetProperty("url", out var pu) ? pu.GetString() : null;
+        int width = ParseDimension(preview, "width");
+        int height = ParseDimension(preview, "height");
+
+        if (string.IsNullOrEmpty(gifUrl) || string.IsNullOrEmpty(previewUrl)) return null;
+        return new GifResultDTO(gifUrl, previewUrl, width, height);
     }
 
     private static int ParseDimension(JsonElement parent, string propertyName)

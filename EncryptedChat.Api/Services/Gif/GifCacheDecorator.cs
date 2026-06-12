@@ -11,16 +11,20 @@ public sealed class GifCacheDecorator(IGifService inner, IMemoryCache cache) : I
     private readonly IGifService _inner = inner;
     private readonly IMemoryCache _cache = cache;
 
-    public Task<List<GifResultDTO>> SearchAsync(string query, int limit, int offset, CancellationToken ct)
-        => _inner.SearchAsync(query, limit, offset, ct);
+    public Task<List<GifResultDTO>> SearchAsync(string query, int limit, int offset, bool stickers, CancellationToken ct)
+        => _inner.SearchAsync(query, limit, offset, stickers, ct);
 
-    public async Task<List<GifResultDTO>> TrendingAsync(int limit, int offset, CancellationToken ct)
+    // Random is non-deterministic → never cached.
+    public Task<GifResultDTO?> RandomAsync(string? tag, bool stickers, CancellationToken ct)
+        => _inner.RandomAsync(tag, stickers, ct);
+
+    public async Task<List<GifResultDTO>> TrendingAsync(int limit, int offset, bool stickers, CancellationToken ct)
     {
-        var key = $"gif:trending:{limit}:{offset}";
+        var key = $"gif:trending:{(stickers ? "s" : "g")}:{limit}:{offset}";
         if (_cache.TryGetValue(key, out List<GifResultDTO>? cached) && cached is not null)
             return cached;
 
-        var result = await _inner.TrendingAsync(limit, offset, ct);
+        var result = await _inner.TrendingAsync(limit, offset, stickers, ct);
         _cache.Set(key, result, TrendingTtl);
         return result;
     }

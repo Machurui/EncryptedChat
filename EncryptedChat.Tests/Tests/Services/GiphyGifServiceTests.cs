@@ -44,7 +44,7 @@ public class GiphyGifServiceTests
     {
         var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
 
-        await service.SearchAsync("cat", 20, 0, CancellationToken.None);
+        await service.SearchAsync("cat", 20, 0, false, CancellationToken.None);
 
         handlerMock.Protected().Verify(
             "SendAsync",
@@ -58,6 +58,22 @@ public class GiphyGifServiceTests
                 req.RequestUri.Query.Contains("limit=20") &&
                 req.RequestUri.Query.Contains("rating=pg-13") &&
                 req.RequestUri.Query.Contains("lang=fr")
+            ),
+            ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SearchAsync_BuildsStickersUrl_WhenStickersTrue()
+    {
+        var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
+
+        await service.SearchAsync("cat", 20, 0, true, CancellationToken.None);
+
+        handlerMock.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(req =>
+                req.RequestUri!.AbsolutePath == "/v1/stickers/search"
             ),
             ItExpr.IsAny<CancellationToken>());
     }
@@ -88,7 +104,7 @@ public class GiphyGifServiceTests
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         });
 
-        var results = await service.SearchAsync("cat", 20, 0, CancellationToken.None);
+        var results = await service.SearchAsync("cat", 20, 0, false, CancellationToken.None);
 
         results.Should().HaveCount(2);
         results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/full.gif", "https://media.giphy.com/tiny.gif", 200, 150));
@@ -103,7 +119,7 @@ public class GiphyGifServiceTests
             Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json")
         });
 
-        var results = await service.SearchAsync("zzzznoresult", 20, 0, CancellationToken.None);
+        var results = await service.SearchAsync("zzzznoresult", 20, 0, false, CancellationToken.None);
 
         results.Should().BeEmpty();
     }
@@ -113,7 +129,7 @@ public class GiphyGifServiceTests
     {
         var (service, _) = CreateService(apiKey: "");
 
-        var act = async () => await service.SearchAsync("cat", 20, 0, CancellationToken.None);
+        var act = async () => await service.SearchAsync("cat", 20, 0, false, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Giphy API key*");
@@ -124,7 +140,7 @@ public class GiphyGifServiceTests
     {
         var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
 
-        await service.SearchAsync("cat", 20, 40, CancellationToken.None);
+        await service.SearchAsync("cat", 20, 40, false, CancellationToken.None);
 
         handlerMock.Protected().Verify(
             "SendAsync",
@@ -140,7 +156,7 @@ public class GiphyGifServiceTests
     {
         var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
 
-        await service.TrendingAsync(20, 0, CancellationToken.None);
+        await service.TrendingAsync(20, 0, false, CancellationToken.None);
 
         handlerMock.Protected().Verify(
             "SendAsync",
@@ -153,6 +169,22 @@ public class GiphyGifServiceTests
                 req.RequestUri.Query.Contains("limit=20") &&
                 req.RequestUri.Query.Contains("offset=0") &&
                 req.RequestUri.Query.Contains("rating=pg-13")
+            ),
+            ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TrendingAsync_BuildsStickersUrl_WhenStickersTrue()
+    {
+        var (service, handlerMock) = CreateService(apiKey: "my-secret-key");
+
+        await service.TrendingAsync(20, 0, true, CancellationToken.None);
+
+        handlerMock.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(req =>
+                req.RequestUri!.AbsolutePath == "/v1/stickers/trending"
             ),
             ItExpr.IsAny<CancellationToken>());
     }
@@ -177,10 +209,69 @@ public class GiphyGifServiceTests
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         });
 
-        var results = await service.TrendingAsync(20, 0, CancellationToken.None);
+        var results = await service.TrendingAsync(20, 0, false, CancellationToken.None);
 
         results.Should().HaveCount(1);
         results[0].Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/t1.gif", "https://media.giphy.com/t1-tiny.gif", 200, 200));
+    }
+
+    [Fact]
+    public async Task RandomAsync_BuildsCorrectGiphyUrl()
+    {
+        var (service, handlerMock) = CreateService(apiKey: "my-secret-key", response: new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"data\":{}}", Encoding.UTF8, "application/json")
+        });
+
+        await service.RandomAsync("cat", false, CancellationToken.None);
+
+        handlerMock.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(req =>
+                req.Method == HttpMethod.Get &&
+                req.RequestUri!.AbsolutePath == "/v1/gifs/random" &&
+                req.RequestUri.Query.Contains("api_key=my-secret-key") &&
+                req.RequestUri.Query.Contains("tag=cat") &&
+                req.RequestUri.Query.Contains("rating=pg-13")
+            ),
+            ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RandomAsync_ParsesSingleDataObject()
+    {
+        var json = """
+            {
+              "data": {
+                "images": {
+                  "original": { "url": "https://media.giphy.com/r.gif" },
+                  "fixed_width": { "url": "https://media.giphy.com/r-tiny.gif", "width": "200", "height": "120" }
+                }
+              }
+            }
+            """;
+        var (service, _) = CreateService(response: new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        });
+
+        var result = await service.RandomAsync(null, false, CancellationToken.None);
+
+        result.Should().BeEquivalentTo(new GifResultDTO("https://media.giphy.com/r.gif", "https://media.giphy.com/r-tiny.gif", 200, 120));
+    }
+
+    [Fact]
+    public async Task RandomAsync_ReturnsNull_WhenDataEmpty()
+    {
+        var (service, _) = CreateService(response: new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"data\":{}}", Encoding.UTF8, "application/json")
+        });
+
+        var result = await service.RandomAsync(null, false, CancellationToken.None);
+
+        result.Should().BeNull();
     }
 
     [Fact]

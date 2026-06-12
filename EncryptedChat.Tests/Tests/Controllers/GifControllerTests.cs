@@ -37,11 +37,11 @@ public class GifControllerTests
             new("https://x/b.gif", "https://x/b-tiny.gif", 200, 200),
         };
         _mockGifService
-            .Setup(s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()))
+            .Setup(s => s.SearchAsync("cat", 20, 0, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(fakeResults);
 
         var controller = CreateController(_userId);
-        var result = await controller.Search("cat", 20, 0, CancellationToken.None);
+        var result = await controller.Search("cat", 20, 0, ct: CancellationToken.None);
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeEquivalentTo(fakeResults);
@@ -52,11 +52,11 @@ public class GifControllerTests
     {
         var controller = CreateController(_userId);
 
-        var result = await controller.Search("", 20, 0, CancellationToken.None);
+        var result = await controller.Search("", 20, 0, ct: CancellationToken.None);
 
         result.Result.Should().BeOfType<BadRequestObjectResult>();
         _mockGifService.Verify(
-            s => s.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            s => s.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -64,9 +64,7 @@ public class GifControllerTests
     public async Task Search_Returns400_WhenQueryWhitespace()
     {
         var controller = CreateController(_userId);
-
-        var result = await controller.Search("   ", 20, 0, CancellationToken.None);
-
+        var result = await controller.Search("   ", 20, 0, ct: CancellationToken.None);
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
@@ -74,9 +72,7 @@ public class GifControllerTests
     public async Task Search_Returns400_WhenLimitTooLow()
     {
         var controller = CreateController(_userId);
-
-        var result = await controller.Search("cat", 0, 0, CancellationToken.None);
-
+        var result = await controller.Search("cat", 0, 0, ct: CancellationToken.None);
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
@@ -84,9 +80,15 @@ public class GifControllerTests
     public async Task Search_Returns400_WhenLimitTooHigh()
     {
         var controller = CreateController(_userId);
+        var result = await controller.Search("cat", 51, 0, ct: CancellationToken.None);
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
 
-        var result = await controller.Search("cat", 51, 0, CancellationToken.None);
-
+    [Fact]
+    public async Task Search_Returns400_WhenOffsetNegative()
+    {
+        var controller = CreateController(_userId);
+        var result = await controller.Search("cat", 20, -1, ct: CancellationToken.None);
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
@@ -94,16 +96,37 @@ public class GifControllerTests
     public async Task Search_TrimsQueryBeforePassingToService()
     {
         _mockGifService
-            .Setup(s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()))
+            .Setup(s => s.SearchAsync("cat", 20, 0, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<GifResultDTO>());
 
         var controller = CreateController(_userId);
-
-        await controller.Search("  cat  ", 20, 0, CancellationToken.None);
+        await controller.Search("  cat  ", 20, 0, ct: CancellationToken.None);
 
         _mockGifService.Verify(
-            s => s.SearchAsync("cat", 20, 0, It.IsAny<CancellationToken>()),
+            s => s.SearchAsync("cat", 20, 0, false, It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Search_PassesStickersTrue_WhenTypeStickers()
+    {
+        _mockGifService
+            .Setup(s => s.SearchAsync("cat", 20, 0, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<GifResultDTO>());
+
+        var controller = CreateController(_userId);
+        var result = await controller.Search("cat", 20, 0, "stickers", CancellationToken.None);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _mockGifService.Verify(s => s.SearchAsync("cat", 20, 0, true, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Search_Returns400_WhenTypeInvalid()
+    {
+        var controller = CreateController(_userId);
+        var result = await controller.Search("cat", 20, 0, "memes", CancellationToken.None);
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
@@ -114,11 +137,11 @@ public class GifControllerTests
             new("https://x/t1.gif", "https://x/t1-tiny.gif", 200, 200),
         };
         _mockGifService
-            .Setup(s => s.TrendingAsync(20, 0, It.IsAny<CancellationToken>()))
+            .Setup(s => s.TrendingAsync(20, 0, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(fakeResults);
 
         var controller = CreateController(_userId);
-        var result = await controller.Trending(20, 0, CancellationToken.None);
+        var result = await controller.Trending(20, 0, ct: CancellationToken.None);
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeEquivalentTo(fakeResults);
@@ -128,7 +151,7 @@ public class GifControllerTests
     public async Task Trending_Returns400_WhenLimitTooHigh()
     {
         var controller = CreateController(_userId);
-        var result = await controller.Trending(51, 0, CancellationToken.None);
+        var result = await controller.Trending(51, 0, ct: CancellationToken.None);
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
@@ -136,7 +159,7 @@ public class GifControllerTests
     public async Task Trending_Returns400_WhenOffsetNegative()
     {
         var controller = CreateController(_userId);
-        var result = await controller.Trending(20, -1, CancellationToken.None);
+        var result = await controller.Trending(20, -1, ct: CancellationToken.None);
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
@@ -160,10 +183,41 @@ public class GifControllerTests
     }
 
     [Fact]
-    public async Task Search_Returns400_WhenOffsetNegative()
+    public async Task Random_ReturnsOk_WithResult()
+    {
+        var dto = new GifResultDTO("https://x/r.gif", "https://x/r-tiny.gif", 200, 200);
+        _mockGifService.Setup(s => s.RandomAsync(null, false, It.IsAny<CancellationToken>())).ReturnsAsync(dto);
+
+        var controller = CreateController(_userId);
+        var result = await controller.Random(null, "gifs", CancellationToken.None);
+
+        result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().Be(dto);
+    }
+
+    [Fact]
+    public async Task Random_Returns404_WhenServiceReturnsNull()
+    {
+        _mockGifService.Setup(s => s.RandomAsync("cat", true, It.IsAny<CancellationToken>())).ReturnsAsync((GifResultDTO?)null);
+
+        var controller = CreateController(_userId);
+        var result = await controller.Random("cat", "stickers", CancellationToken.None);
+
+        result.Result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task Random_Returns400_WhenTypeInvalid()
     {
         var controller = CreateController(_userId);
-        var result = await controller.Search("cat", 20, -1, CancellationToken.None);
+        var result = await controller.Random(null, "memes", CancellationToken.None);
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Random_Returns400_WhenTagTooLong()
+    {
+        var controller = CreateController(_userId);
+        var result = await controller.Random(new string('x', 101), "gifs", CancellationToken.None);
         result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 }

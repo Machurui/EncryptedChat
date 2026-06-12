@@ -18,6 +18,7 @@ namespace EncryptedChat.Controllers
             [FromQuery] string q,
             [FromQuery] int limit = 20,
             [FromQuery] int offset = 0,
+            [FromQuery] string type = "gifs",
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(q))
@@ -26,8 +27,10 @@ namespace EncryptedChat.Controllers
                 return BadRequest(new { Message = "Limit must be between 1 and 50." });
             if (offset < 0)
                 return BadRequest(new { Message = "Offset must be >= 0." });
+            if (!TryStickers(type, out var stickers))
+                return BadRequest(new { Message = "Type must be 'gifs' or 'stickers'." });
 
-            var results = await _gifService.SearchAsync(q.Trim(), limit, offset, ct);
+            var results = await _gifService.SearchAsync(q.Trim(), limit, offset, stickers, ct);
             return Ok(results);
         }
 
@@ -35,14 +38,17 @@ namespace EncryptedChat.Controllers
         public async Task<ActionResult<List<GifResultDTO>>> Trending(
             [FromQuery] int limit = 20,
             [FromQuery] int offset = 0,
+            [FromQuery] string type = "gifs",
             CancellationToken ct = default)
         {
             if (limit is < 1 or > 50)
                 return BadRequest(new { Message = "Limit must be between 1 and 50." });
             if (offset < 0)
                 return BadRequest(new { Message = "Offset must be >= 0." });
+            if (!TryStickers(type, out var stickers))
+                return BadRequest(new { Message = "Type must be 'gifs' or 'stickers'." });
 
-            var results = await _gifService.TrendingAsync(limit, offset, ct);
+            var results = await _gifService.TrendingAsync(limit, offset, stickers, ct);
             return Ok(results);
         }
 
@@ -51,6 +57,27 @@ namespace EncryptedChat.Controllers
         {
             var results = await _gifService.CategoriesAsync(ct);
             return Ok(results);
+        }
+
+        [HttpGet("random")]
+        public async Task<ActionResult<GifResultDTO>> Random(
+            [FromQuery] string? tag = null,
+            [FromQuery] string type = "gifs",
+            CancellationToken ct = default)
+        {
+            if (tag is { Length: > 100 })
+                return BadRequest(new { Message = "Tag too long." });
+            if (!TryStickers(type, out var stickers))
+                return BadRequest(new { Message = "Type must be 'gifs' or 'stickers'." });
+
+            var result = await _gifService.RandomAsync(tag, stickers, ct);
+            return result is null ? NotFound(new { Message = "No GIF found." }) : Ok(result);
+        }
+
+        private static bool TryStickers(string type, out bool stickers)
+        {
+            stickers = type == "stickers";
+            return type is "gifs" or "stickers";
         }
     }
 }
