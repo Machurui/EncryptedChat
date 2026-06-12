@@ -1,4 +1,4 @@
-using EncryptedChat.Api.Observability;
+using EncryptedChat.Observability;
 using FluentAssertions;
 using Sentry;
 

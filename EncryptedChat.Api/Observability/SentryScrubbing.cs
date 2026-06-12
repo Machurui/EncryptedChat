@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Sentry;
 
-namespace EncryptedChat.Api.Observability;
+namespace EncryptedChat.Observability;
 
 /// <summary>
 /// Removes auth secrets, request bodies and PII from a Sentry event before it leaves the server.

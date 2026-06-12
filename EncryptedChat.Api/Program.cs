@@ -13,8 +13,20 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Features;
+using Sentry.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------- Observability (Sentry) ----------
+// DSN read from config (empty ⇒ SDK disabled / no-op). Real DSN goes in user-secrets/env.
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? string.Empty;
+    options.Environment = builder.Environment.EnvironmentName;
+    options.SendDefaultPii = false;
+    options.SetBeforeSend((sentryEvent, _) =>
+        EncryptedChat.Observability.SentryScrubbing.ScrubEvent(sentryEvent));
+});
 
 // File upload limits
 builder.Services.Configure<FormOptions>(options =>
