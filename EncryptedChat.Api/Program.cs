@@ -26,6 +26,23 @@ builder.WebHost.UseSentry(options =>
     options.SendDefaultPii = false;
     options.SetBeforeSend((sentryEvent, _) =>
         EncryptedChat.Observability.SentryScrubbing.ScrubEvent(sentryEvent));
+
+    // Tracing (perf) + logs. Sample rate from config (0 ⇒ tracing off).
+    options.TracesSampleRate = builder.Configuration.GetValue<double?>("Sentry:TracesSampleRate") ?? 0.0;
+    options.MinimumEventLevel = Microsoft.Extensions.Logging.LogLevel.Error;
+    options.MinimumBreadcrumbLevel = Microsoft.Extensions.Logging.LogLevel.Information;
+    // Scrub access_token from any URL/query captured on transactions.
+    options.SetBeforeSendTransaction(transaction =>
+    {
+        if (transaction.Request is { } req)
+        {
+            if (req.QueryString is { Length: > 0 } qs)
+                req.QueryString = EncryptedChat.Observability.SentryScrubbing.StripToken(qs);
+            if (req.Url is { Length: > 0 } url)
+                req.Url = EncryptedChat.Observability.SentryScrubbing.StripToken(url);
+        }
+        return transaction;
+    });
 });
 
 // File upload limits
