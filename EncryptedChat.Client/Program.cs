@@ -14,6 +14,7 @@ builder.RootComponents.Add<EncryptedChat.Client.App>("#app");
 builder.UseSentry(options =>
 {
     options.Dsn = builder.Configuration["Sentry:Dsn"] ?? string.Empty;
+    options.Environment = builder.HostEnvironment.Environment;
     options.SendDefaultPii = false;
     options.SetBeforeSend((sentryEvent, _) =>
         EncryptedChat.Client.Observability.ClientSentryScrubbing.ScrubEvent(sentryEvent));
