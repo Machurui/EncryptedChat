@@ -19,6 +19,12 @@ builder.UseSentry(options =>
         EncryptedChat.Client.Observability.ClientSentryScrubbing.ScrubEvent(sentryEvent));
     options.SetBeforeBreadcrumb((breadcrumb, _) =>
         EncryptedChat.Client.Observability.ClientSentryScrubbing.ScrubBreadcrumb(breadcrumb));
+    // Tracing (perf). Sample rate from config (0 ⇒ tracing off). Invariant parse (no extra using).
+    options.TracesSampleRate =
+        double.TryParse(builder.Configuration["Sentry:TracesSampleRate"],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var rate)
+            ? rate : 0.0;
 });
 
 // API Endpoint
