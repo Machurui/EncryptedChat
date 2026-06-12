@@ -1,0 +1,222 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK SOLID PRESET
+   Used for: Modals, settings panels, dropdowns, forms, overlays
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Dark Panel - Solid background container */
+.dark-panel {
+    background: var(--dark-bg-primary);
+    border: 0.5px solid var(--dark-border);
+    border-radius: 24px;
+    box-shadow: var(--dark-shadow);
+}
+
+.dark-panel-secondary {
+    background: var(--dark-bg-secondary);
+}
+
+.dark-panel-elevated {
+    background: var(--dark-bg-elevated);
+}
+
+/* Dark Card - Content block within panels */
+.dark-card {
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--dark-bg-hover);
+    border: 0.5px solid var(--dark-border-subtle);
+}
+
+.dark-card:hover {
+    background: var(--dark-bg-active);
+}
+
+/* Dark Button */
+.dark-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 0.5px solid var(--dark-border);
+    background: var(--dark-bg-hover);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dark-btn:hover {
+    background: var(--dark-bg-active);
+    border-color: rgba(var(--text-rgb), 0.16);
+}
+
+.dark-btn:disabled {
+    background: var(--dark-bg-hover);
+    color: rgba(var(--text-rgb), 0.45);
+    cursor: not-allowed;
+}
+
+.dark-btn-primary {
+    background: linear-gradient(135deg, var(--accent), oklch(0.50 0.16 225));
+    border-color: transparent;
+    box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.dark-btn-primary:hover {
+    box-shadow: 0 6px 20px var(--accent-glow);
+    transform: translateY(-1px);
+}
+
+.dark-btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+}
+
+.dark-btn-danger {
+    background: rgba(220, 40, 40, 0.12);
+    border-color: rgba(220, 40, 40, 0.30);
+    color: oklch(0.75 0.18 28);
+}
+
+.dark-btn-danger:hover {
+    background: rgba(220, 40, 40, 0.18);
+}
+
+/* Dark Input */
+.dark-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 0.5px solid var(--dark-border);
+    background: var(--dark-bg-input);
+    transition: all 0.15s ease;
+}
+
+.dark-input:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.dark-input input,
+.dark-input textarea {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    padding: 12px 0;
+    font-family: inherit;
+}
+
+.dark-input input::placeholder,
+.dark-input textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.dark-input-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+/* Dark Divider */
+.dark-divider {
+    height: 1px;
+    background: var(--dark-border-subtle);
+    margin: 12px 0;
+}
+
+/* Dark Toggle */
+.dark-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.dark-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.dark-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 22px;
+    transition: background 0.2s;
+}
+
+.dark-toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: var(--text-primary);
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.dark-toggle input:checked + .dark-toggle-slider {
+    background: var(--accent);
+}
+
+.dark-toggle input:checked + .dark-toggle-slider::before {
+    transform: translateX(18px);
+}
+
+/* Dark Banner - Info/Warning/Error boxes */
+.dark-banner {
+    padding: 14px 16px;
+    border-radius: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.dark-banner-info {
+    background: rgba(16, 185, 129, 0.08);
+    border: 0.5px solid rgba(16, 185, 129, 0.25);
+}
+
+.dark-banner-warning {
+    background: rgba(220, 140, 40, 0.08);
+    border: 0.5px solid rgba(220, 140, 40, 0.30);
+}
+
+.dark-banner-error {
+    background: rgba(220, 40, 40, 0.10);
+    border: 0.5px solid rgba(220, 40, 40, 0.30);
+}
+
+.dark-banner-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.dark-banner-info .dark-banner-icon {
+    color: oklch(0.78 0.14 165);
+}
+
+.dark-banner-warning .dark-banner-icon {
+    color: oklch(0.78 0.16 75);
+}
+
+.dark-banner-error .dark-banner-icon {
+    color: oklch(0.78 0.16 28);
+}
+
+/* .modal-overlay is consolidated in the unified Modal section below */
+
