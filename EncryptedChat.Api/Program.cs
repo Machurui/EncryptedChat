@@ -261,6 +261,7 @@ builder.Services.AddScoped<IUserKeysService, UserKeysService>();
 builder.Services.AddScoped<ITeamKeyShareService, TeamKeyShareService>();
 builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddScoped<IGifVaultService, GifVaultService>();
 builder.Services.AddScoped<IPinnedMessageService, PinnedMessageService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
