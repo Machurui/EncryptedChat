@@ -20,6 +20,7 @@
 @inject BubbleColorClient BubbleColorClient
 @inject FriendClient FriendClient
 @inject GifClient GifClient
+@inject GifVaultService GifVault
 @inject RecentGifsService RecentGifs
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -1044,6 +1045,11 @@
                                             <button class="gif-chip @(currentGifMode == GifPickerMode.Recent ? "active" : "")"
                                                     @onclick="SelectChipRecents">🕒 Récents</button>
                                         }
+                                        @if (GifVault.Available)
+                                        {
+                                            <button class="gif-chip @(currentGifMode == GifPickerMode.Favorites ? "active" : "")"
+                                                    @onclick="SelectChipFavorites">⭐ Favoris</button>
+                                        }
 
                                         @if (!Stickers)
                                         {
@@ -1079,22 +1085,40 @@
                                                     @for (var i = 0; i < gifResults.Count; i += 2)
                                                     {
                                                         var gif = gifResults[i];
-                                                        <button class="gif-item" @onclick="() => InsertGif(gif)">
-                                                            <img src="@gif.PreviewUrl" alt="GIF"
-                                                                 width="@gif.Width" height="@gif.Height"
-                                                                 loading="lazy" />
-                                                        </button>
+                                                        <div class="gif-cell">
+                                                            <button class="gif-item" @onclick="() => InsertGif(gif)">
+                                                                <img src="@gif.PreviewUrl" alt="GIF"
+                                                                     width="@gif.Width" height="@gif.Height"
+                                                                     loading="lazy" />
+                                                            </button>
+                                                            @if (GifVault.Available)
+                                                            {
+                                                                <button class="gif-fav-btn @(GifVault.IsFavorite(gif.Url) ? "active" : "")"
+                                                                        title="Favori"
+                                                                        @onclick="() => ToggleFavoriteGif(gif)"
+                                                                        @onclick:stopPropagation="true">@(GifVault.IsFavorite(gif.Url) ? "★" : "☆")</button>
+                                                            }
+                                                        </div>
                                                     }
                                                 </div>
                                                 <div class="gif-col">
                                                     @for (var i = 1; i < gifResults.Count; i += 2)
                                                     {
                                                         var gif = gifResults[i];
-                                                        <button class="gif-item" @onclick="() => InsertGif(gif)">
-                                                            <img src="@gif.PreviewUrl" alt="GIF"
-                                                                 width="@gif.Width" height="@gif.Height"
-                                                                 loading="lazy" />
-                                                        </button>
+                                                        <div class="gif-cell">
+                                                            <button class="gif-item" @onclick="() => InsertGif(gif)">
+                                                                <img src="@gif.PreviewUrl" alt="GIF"
+                                                                     width="@gif.Width" height="@gif.Height"
+                                                                     loading="lazy" />
+                                                            </button>
+                                                            @if (GifVault.Available)
+                                                            {
+                                                                <button class="gif-fav-btn @(GifVault.IsFavorite(gif.Url) ? "active" : "")"
+                                                                        title="Favori"
+                                                                        @onclick="() => ToggleFavoriteGif(gif)"
+                                                                        @onclick:stopPropagation="true">@(GifVault.IsFavorite(gif.Url) ? "★" : "☆")</button>
+                                                            }
+                                                        </div>
                                                     }
                                                 </div>
                                             </div>
@@ -3004,6 +3028,34 @@
     .gif-item:hover {
         transform: scale(1.02);
     }
+    .gif-cell {
+        position: relative;
+    }
+    .gif-fav-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 999px;
+        background: rgba(0,0,0,0.45);
+        color: #fff;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.12s, background 0.12s;
+    }
+    .gif-cell:hover .gif-fav-btn { opacity: 1; }
+    .gif-fav-btn.active {
+        opacity: 1;
+        color: var(--accent);
+    }
+    .gif-fav-btn:hover { background: rgba(0,0,0,0.65); }
 
     .gif-loading,
     .gif-empty {
@@ -3832,7 +3884,7 @@
 
     // GIF picker
     private bool showGifPicker;
-    private enum GifPickerMode { Trending, Category, Search, Recent }
+    private enum GifPickerMode { Trending, Category, Search, Recent, Favorites }
     private GifPickerMode currentGifMode = GifPickerMode.Trending;
     private enum GifType { Gifs, Stickers }
     private GifType currentGifType = GifType.Gifs;
@@ -5871,8 +5923,13 @@ private async Task SelectStatus(string status)
 
         if (showGifPicker)
         {
+            if (!string.IsNullOrEmpty(_userId))
+                await GifVault.EnsureLoadedAsync(_userId);
+
             // Refresh recents count so the chip appears/hides correctly
-            recentGifsCount = (await RecentGifs.GetAllAsync()).Count;
+            recentGifsCount = GifVault.Available
+                ? GifVault.Recents.Count
+                : (await RecentGifs.GetAllAsync()).Count;
 
             // Open: switch to trending if no active search, load if empty
             if (string.IsNullOrWhiteSpace(gifSearch))
@@ -6029,8 +6086,16 @@ private async Task SelectStatus(string status)
 
         try
         {
-            var list = await RecentGifs.GetAllAsync();
-            gifResults = list.Select(r => new GifResult(r.Url, r.PreviewUrl, r.Width, r.Height)).ToList();
+            if (GifVault.Available)
+            {
+                gifResults = GifVault.Recents
+                    .Select(r => new GifResult(r.Url, r.PreviewUrl, r.Width, r.Height)).ToList();
+            }
+            else
+            {
+                var list = await RecentGifs.GetAllAsync();
+                gifResults = list.Select(r => new GifResult(r.Url, r.PreviewUrl, r.Width, r.Height)).ToList();
+            }
         }
         finally
         {
@@ -6092,6 +6157,33 @@ private async Task SelectStatus(string status)
         await LoadRecents();
     }
 
+    private Task SelectChipFavorites()
+    {
+        currentGifMode = GifPickerMode.Favorites;
+        gifSearch = "";
+        selectedCategoryName = "";
+        randomPreviewGif = null;
+        gifHasMore = false;
+        gifResults = GifVault.Favorites
+            .Select(f => new GifResult(f.Url, f.PreviewUrl, f.Width, f.Height))
+            .ToList();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task ToggleFavoriteGif(GifResult gif)
+    {
+        var item = new GifItem(gif.Url, gif.PreviewUrl, gif.Width, gif.Height,
+                               Stickers ? "stickers" : "gifs", 0);
+        await GifVault.ToggleFavoriteAsync(item);
+        // If the favorites grid is showing, drop the unstarred item immediately.
+        if (currentGifMode == GifPickerMode.Favorites)
+            gifResults = GifVault.Favorites
+                .Select(f => new GifResult(f.Url, f.PreviewUrl, f.Width, f.Height))
+                .ToList();
+        StateHasChanged();
+    }
+
     private async Task SelectChipCategory(string categoryName)
     {
         currentGifMode = GifPickerMode.Category;
@@ -6128,6 +6220,10 @@ private async Task SelectStatus(string status)
                 break;
             case GifPickerMode.Recent:
                 await LoadRecents();
+                break;
+            case GifPickerMode.Favorites:
+                // Favorites are type-agnostic — keep showing them across a GIFs/Stickers switch.
+                await SelectChipFavorites();
                 break;
             default:
                 await LoadTrendingPage(0);
@@ -6198,9 +6294,12 @@ private async Task SelectStatus(string status)
         if (string.IsNullOrEmpty(newMessageText))
             newMessageText = pending;
 
-        // Record in recent GIFs (LocalStorage). Done after send so a failed send doesn't pollute history.
-        await RecentGifs.AddAsync(new RecentGifsService.RecentGif(gif.Url, gif.PreviewUrl, gif.Width, gif.Height));
-        recentGifsCount = (await RecentGifs.GetAllAsync()).Count;
+        // Record in the synced vault (falls back to LocalStorage when the vault is unavailable).
+        await GifVault.AddRecentAsync(new GifItem(gif.Url, gif.PreviewUrl, gif.Width, gif.Height,
+                                                  Stickers ? "stickers" : "gifs", 0));
+        recentGifsCount = GifVault.Available
+            ? GifVault.Recents.Count
+            : (await RecentGifs.GetAllAsync()).Count;
     }
 
     private async Task FocusComposerInput()
