@@ -1020,10 +1020,18 @@
                             {
                                 <div class="gif-picker" @onclick:stopPropagation="true">
                                     <div class="gif-picker-header">
-                                        <input type="text" class="gif-search" placeholder="Search GIFs..."
+                                        <div class="gif-type-toggle">
+                                            <button class="gif-type-seg @(currentGifType == GifType.Gifs ? "active" : "")"
+                                                    @onclick="() => SetGifType(GifType.Gifs)">GIFs</button>
+                                            <button class="gif-type-seg @(currentGifType == GifType.Stickers ? "active" : "")"
+                                                    @onclick="() => SetGifType(GifType.Stickers)">Stickers</button>
+                                        </div>
+                                        <input type="text" class="gif-search" placeholder="@(Stickers ? "Search stickers..." : "Search GIFs...")"
                                                value="@gifSearch"
                                                @oninput="HandleGifSearchInput"
                                                @onkeydown="HandleGifSearchKeydown" />
+                                        <button class="gif-random-btn @(isRollingRandom ? "rolling" : "")" title="Random"
+                                                @onclick="RollRandom" disabled="@isRollingRandom">🎲</button>
                                     </div>
 
                                     @* Chips bar: Trending / Recents / Category list *@
@@ -1037,15 +1045,29 @@
                                                     @onclick="SelectChipRecents">🕒 Récents</button>
                                         }
 
-                                        @foreach (var cat in gifCategories)
+                                        @if (!Stickers)
                                         {
-                                            var name = cat.Name;
-                                            <button class="gif-chip @(currentGifMode == GifPickerMode.Category && selectedCategoryName == name ? "active" : "")"
-                                                    @onclick="() => SelectChipCategory(name)">@name</button>
+                                            @foreach (var cat in gifCategories)
+                                            {
+                                                var name = cat.Name;
+                                                <button class="gif-chip @(currentGifMode == GifPickerMode.Category && selectedCategoryName == name ? "active" : "")"
+                                                        @onclick="() => SelectChipCategory(name)">@name</button>
+                                            }
                                         }
                                     </div>
 
-                                    @if (isLoadingGifs && gifResults.Count == 0)
+                                    @if (randomPreviewGif is not null)
+                                    {
+                                        <div class="gif-random-preview">
+                                            <img src="@randomPreviewGif.PreviewUrl" alt="Random GIF" loading="lazy" />
+                                            <div class="gif-random-actions">
+                                                <button class="gif-random-action reroll" @onclick="RollRandom" disabled="@isRollingRandom">🎲 Re-roll</button>
+                                                <button class="gif-random-action send" @onclick="SendRandom">Send</button>
+                                                <button class="gif-random-action cancel" @onclick="CloseRandom">Cancel</button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else if (isLoadingGifs && gifResults.Count == 0)
                                     {
                                         <div class="gif-loading">Loading...</div>
                                     }
@@ -2918,12 +2940,16 @@
     }
 
     .gif-picker-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         padding: 10px;
         border-bottom: 0.5px solid var(--border);
     }
 
     .gif-search {
-        width: 100%;
+        flex: 1 1 0;
+        min-width: 0;
         padding: 8px 12px;
         background: var(--bg-active);
         border: 0.5px solid rgba(255,255,255,0.12);
@@ -3036,6 +3062,96 @@
         color: rgba(var(--text-rgb), 0.35);
         border-top: 0.5px solid var(--border);
     }
+
+    /* GIFs / Stickers segmented toggle */
+    .gif-type-toggle {
+        display: flex;
+        flex: 0 0 auto;
+        gap: 2px;
+        padding: 2px;
+        background: var(--bg-input);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+    }
+    .gif-type-seg {
+        padding: 6px 10px;
+        border: none;
+        background: transparent;
+        color: rgba(var(--text-rgb), 0.7);
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, color 0.15s;
+    }
+    .gif-type-seg:hover { color: var(--text-primary); }
+    .gif-type-seg.active {
+        background: var(--accent-glow);
+        color: var(--text-primary);
+    }
+
+    /* Random dice button */
+    .gif-random-btn {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-input);
+        border: 0.5px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .gif-random-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+    .gif-random-btn:disabled { cursor: default; opacity: 0.7; }
+    .gif-random-btn.rolling { animation: gif-dice-spin 0.6s linear infinite; }
+    @@keyframes gif-dice-spin { to { transform: rotate(360deg); } }
+
+    /* Random GIF preview (aperçu + re-roll) */
+    .gif-random-preview {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 16px;
+        overflow-y: auto;
+    }
+    .gif-random-preview img {
+        max-width: 100%;
+        max-height: 320px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .gif-random-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .gif-random-action {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: 0.5px solid rgba(255,255,255,0.12);
+        background: var(--bg-input);
+        color: var(--text-primary);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s, opacity 0.15s;
+    }
+    .gif-random-action:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+    .gif-random-action:disabled { cursor: default; opacity: 0.6; }
+    .gif-random-action.send {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+    }
+    .gif-random-action.send:hover:not(:disabled) { opacity: 0.9; }
 
     .empty-state-panel {
         flex: 1;
@@ -3718,6 +3834,11 @@
     private bool showGifPicker;
     private enum GifPickerMode { Trending, Category, Search, Recent }
     private GifPickerMode currentGifMode = GifPickerMode.Trending;
+    private enum GifType { Gifs, Stickers }
+    private GifType currentGifType = GifType.Gifs;
+    private bool Stickers => currentGifType == GifType.Stickers;
+    private GifResult? randomPreviewGif;
+    private bool isRollingRandom;
     private string gifSearch = "";
     private string selectedCategoryName = "";
     private bool isLoadingGifs;
@@ -5766,6 +5887,7 @@ private async Task SelectStatus(string status)
         else
         {
             gifSearch = "";
+            randomPreviewGif = null;
         }
     }
 
@@ -5786,6 +5908,7 @@ private async Task SelectStatus(string status)
             isLoadingGifs = true;
             gifOffset = 0;
             gifHasMore = true;
+            randomPreviewGif = null;
         }
         else
         {
@@ -5795,7 +5918,7 @@ private async Task SelectStatus(string status)
 
         try
         {
-            var page = await GifClient.TrendingAsync(20, offset);
+            var page = await GifClient.TrendingAsync(20, offset, stickers: Stickers);
             if (offset == 0)
                 gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)).ToList();
             else
@@ -5826,6 +5949,7 @@ private async Task SelectStatus(string status)
             isLoadingGifs = true;
             gifOffset = 0;
             gifHasMore = true;
+            randomPreviewGif = null;
         }
         else
         {
@@ -5835,7 +5959,7 @@ private async Task SelectStatus(string status)
 
         try
         {
-            var page = await GifClient.SearchAsync(gifSearch, 20, offset);
+            var page = await GifClient.SearchAsync(gifSearch, 20, offset, stickers: Stickers);
             if (offset == 0)
                 gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)).ToList();
             else
@@ -5864,6 +5988,7 @@ private async Task SelectStatus(string status)
             isLoadingGifs = true;
             gifOffset = 0;
             gifHasMore = true;
+            randomPreviewGif = null;
         }
         else
         {
@@ -5873,7 +5998,7 @@ private async Task SelectStatus(string status)
 
         try
         {
-            var page = await GifClient.SearchAsync(categoryName, 20, offset);
+            var page = await GifClient.SearchAsync(categoryName, 20, offset, stickers: Stickers);
             if (offset == 0)
                 gifResults = page.Select(p => new GifResult(p.Url, p.PreviewUrl, p.Width, p.Height)).ToList();
             else
@@ -5899,6 +6024,7 @@ private async Task SelectStatus(string status)
     {
         isLoadingGifs = true;
         gifHasMore = false;
+        randomPreviewGif = null;
         StateHasChanged();
 
         try
@@ -5972,6 +6098,76 @@ private async Task SelectStatus(string status)
         gifSearch = "";
         selectedCategoryName = categoryName;
         await LoadCategoryPage(categoryName, 0);
+    }
+
+    private async Task SetGifType(GifType type)
+    {
+        if (currentGifType == type) return;
+        currentGifType = type;
+        randomPreviewGif = null;
+
+        // Giphy categories are a GIF-only surface — fall back to Trending for stickers.
+        if (Stickers && currentGifMode == GifPickerMode.Category)
+        {
+            currentGifMode = GifPickerMode.Trending;
+            selectedCategoryName = "";
+        }
+
+        await ReloadCurrentGifMode();
+    }
+
+    private async Task ReloadCurrentGifMode()
+    {
+        switch (currentGifMode)
+        {
+            case GifPickerMode.Search:
+                await LoadSearchPage(0);
+                break;
+            case GifPickerMode.Category:
+                await LoadCategoryPage(selectedCategoryName, 0);
+                break;
+            case GifPickerMode.Recent:
+                await LoadRecents();
+                break;
+            default:
+                await LoadTrendingPage(0);
+                break;
+        }
+    }
+
+    private async Task RollRandom()
+    {
+        isRollingRandom = true;
+        StateHasChanged();
+        try
+        {
+            var tag = string.IsNullOrWhiteSpace(gifSearch) ? null : gifSearch.Trim();
+            var r = await GifClient.RandomAsync(tag, stickers: Stickers);
+            if (r is not null)
+                randomPreviewGif = new GifResult(r.Url, r.PreviewUrl, r.Width, r.Height);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Random GIF error: {ex.Message}");
+        }
+        finally
+        {
+            isRollingRandom = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendRandom()
+    {
+        if (randomPreviewGif is null) return;
+        var gif = randomPreviewGif;
+        randomPreviewGif = null;
+        await InsertGif(gif);
+    }
+
+    private void CloseRandom()
+    {
+        randomPreviewGif = null;
     }
 
     private async Task HandleGifSearchInput(ChangeEventArgs e)
