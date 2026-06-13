@@ -14,6 +14,7 @@ public sealed class GifVaultState
 public static class GifVaultMerge
 {
     public const int MaxRecents = 30;
+    public const int MaxFavorites = 500;
     public const int MaxTombstones = 100;
     public const long TombstoneTtlMs = 90L * 24 * 60 * 60 * 1000;
 
@@ -42,7 +43,7 @@ public static class GifVaultMerge
                 tombs.Remove(url); // add won → tombstone obsolete
             }
         }
-        favorites = favorites.OrderByDescending(f => f.Ts).ToList();
+        favorites = favorites.OrderByDescending(f => f.Ts).Take(MaxFavorites).ToList();
 
         // 4) Recents: newest Ts per Url, keep MaxRecents most recent.
         var recentMap = new Dictionary<string, GifItem>();

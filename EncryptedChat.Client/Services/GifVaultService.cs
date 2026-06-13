@@ -115,6 +115,8 @@ public sealed class GifVaultService(
             _state.Favorites.RemoveAll(f => f.Url == gif.Url);
             _state.Favorites.Insert(0, gif with { Ts = now });
             _state.Tombstones.RemoveAll(t => t.Url == gif.Url);
+            if (_state.Favorites.Count > GifVaultMerge.MaxFavorites)
+                _state.Favorites.RemoveRange(GifVaultMerge.MaxFavorites, _state.Favorites.Count - GifVaultMerge.MaxFavorites);
         }
         ScheduleSync();
         return Task.CompletedTask;

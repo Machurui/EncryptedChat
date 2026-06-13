@@ -70,6 +70,20 @@ public class GifVaultMergeTests
     }
 
     [Fact]
+    public void Merge_Favorites_CapsAtMaxFavorites_KeepingNewest()
+    {
+        var local = new GifVaultState();
+        for (int i = 0; i < GifVaultMerge.MaxFavorites + 10; i++)
+            local.Favorites.Add(Fav($"F{i}", i));
+
+        var merged = GifVaultMerge.Merge(local, new GifVaultState(), Now);
+
+        merged.Favorites.Should().HaveCount(GifVaultMerge.MaxFavorites);
+        merged.Favorites.First().Ts.Should().Be(GifVaultMerge.MaxFavorites + 9); // newest kept
+        merged.Favorites.Should().NotContain(f => f.Url == "F0");                 // oldest dropped
+    }
+
+    [Fact]
     public void Merge_PrunesTombstones_OlderThanTtl()
     {
         var old = Now - GifVaultMerge.TombstoneTtlMs - 1;
