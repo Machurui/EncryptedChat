@@ -17,6 +17,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<UserTeamPreference> UserTeamPreferences => Set<UserTeamPreference>();
     public DbSet<PasswordHistoryEntry> PasswordHistory => Set<PasswordHistoryEntry>();
     public DbSet<TeamKeyShare> TeamKeyShares => Set<TeamKeyShare>();
+    public DbSet<UserGifVault> UserGifVaults => Set<UserGifVault>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +45,15 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             // UserTeamPreferences when a Team is removed via the in-memory
             // change tracker rather than via DB-level cascade.
             .OnDelete(DeleteBehavior.ClientCascade);
+
+        modelBuilder.Entity<UserGifVault>()
+            .HasKey(v => v.UserId);
+
+        modelBuilder.Entity<UserGifVault>()
+            .HasOne(v => v.User)
+            .WithMany()
+            .HasForeignKey(v => v.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Team>()
             .HasMany(t => t.Members)
