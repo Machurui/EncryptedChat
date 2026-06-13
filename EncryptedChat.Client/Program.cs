@@ -63,6 +63,7 @@ builder.Services.AddScoped(sp => new PinnedMessageClient(sp.GetRequiredService<H
 builder.Services.AddScoped<BubbleColorClient>();
 builder.Services.AddScoped<GifClient>();
 builder.Services.AddScoped<RecentGifsService>();
+builder.Services.AddScoped<GifVaultService>();
 builder.Services.AddScoped<RecentNameColorsService>();
 
 // E2E crypto foundation
