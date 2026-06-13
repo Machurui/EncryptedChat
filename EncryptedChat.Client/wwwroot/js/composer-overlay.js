@@ -20,13 +20,23 @@ window.composerOverlay = {
     },
 
     // Called from C# after the textarea value is reset programmatically
-    // (clearing after send). The input event listener only runs on user
-    // input, so this re-runs the autogrow to collapse the box back down.
+    // (clearing after send) or set programmatically (inserting a GIF URL).
+    // The input event listener only runs on user input, so this re-runs the
+    // autogrow to resize the box to its real content height.
     resize(inputId) {
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        input.style.height = 'auto';
-        input.style.height = input.scrollHeight + 'px';
+        const apply = () => {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            input.style.height = 'auto';
+            input.style.height = input.scrollHeight + 'px';
+        };
+        // Defer the scrollHeight read so Blazor's pending DOM mutation (e.g. the
+        // cleared value="" after a send) is applied first. Reading synchronously
+        // can measure the just-sent content — a long GIF URL wraps to two rows —
+        // and leaves the textarea stuck at that taller height. Same rAF pattern
+        // as focusAndSetCursor below; setTimeout covers late renders on mobile WebKit.
+        requestAnimationFrame(apply);
+        setTimeout(apply, 30);
     },
 
     getCursorPos(inputId) {

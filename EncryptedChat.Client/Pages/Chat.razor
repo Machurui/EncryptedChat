@@ -6294,6 +6294,10 @@ private async Task SelectStatus(string status)
         if (string.IsNullOrEmpty(newMessageText))
             newMessageText = pending;
 
+        // Re-size the composer to the restored draft (or collapse to one row when
+        // there was none). resize() defers internally, so it measures the post-render DOM.
+        try { await JS.InvokeVoidAsync("composerOverlay.resize", "composer-input"); } catch { }
+
         // Record in the synced vault (falls back to LocalStorage when the vault is unavailable).
         await GifVault.AddRecentAsync(new GifItem(gif.Url, gif.PreviewUrl, gif.Width, gif.Height,
                                                   Stickers ? "stickers" : "gifs", 0));
