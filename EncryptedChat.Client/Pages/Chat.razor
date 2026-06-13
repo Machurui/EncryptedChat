@@ -2812,6 +2812,9 @@
         overflow-y: auto;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
+        /* border-box so JS autogrow (height = scrollHeight) is exact — content-box
+           would inflate by the 8px+8px padding and render inconsistently per device. */
+        box-sizing: border-box;
     }
 
     .composer-input::placeholder {
@@ -3818,6 +3821,7 @@
     private Dictionary<Guid, List<ChatClient.MessageDTOPublic>> teamMessages = new();
     private List<ChatClient.MessageDTOPublic> messages = new();
     private string newMessageText = string.Empty;
+    private bool _composerWired;
     private bool isSending;
 
     // Skeleton loader states
@@ -4184,11 +4188,25 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        // The composer textarea is gated by `@if (selectedTeam != null)`, so it is
+        // NOT in the DOM at firstRender — wiring there silently no-ops (getElementById
+        // returns null) and the autogrow listener never attaches. Wire it the first
+        // render after the composer mounts, and reset on unmount so a later
+        // conversation re-wires. (No @key on the pane → switching conversations reuses
+        // the same element, keeping the listener; composerOverlay.sync is idempotent.)
+        if (selectedTeam != null && !_composerWired)
         {
+            _composerWired = true;
             await JS.InvokeVoidAsync("setupMobileComposerScroll", "composer-input", "messages-container");
             await JS.InvokeVoidAsync("composerOverlay.sync", "composer-input", "composer-highlight");
+        }
+        else if (selectedTeam == null && _composerWired)
+        {
+            _composerWired = false;
+        }
 
+        if (firstRender)
+        {
             _dotNetRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("popupRegistry.register",
                 "chat-popups", _dotNetRef, nameof(CloseAllPopups), ".popup-container");
