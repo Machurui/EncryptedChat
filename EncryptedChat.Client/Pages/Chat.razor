@@ -3821,7 +3821,7 @@
     private Dictionary<Guid, List<ChatClient.MessageDTOPublic>> teamMessages = new();
     private List<ChatClient.MessageDTOPublic> messages = new();
     private string newMessageText = string.Empty;
-    private bool _composerWired;
+    private bool _chatPaneWired;
     private bool isSending;
 
     // Skeleton loader states
@@ -4188,35 +4188,36 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // The composer textarea is gated by `@if (selectedTeam != null)`, so it is
-        // NOT in the DOM at firstRender — wiring there silently no-ops (getElementById
-        // returns null) and the autogrow listener never attaches. Wire it the first
-        // render after the composer mounts, and reset on unmount so a later
-        // conversation re-wires. (No @key on the pane → switching conversations reuses
-        // the same element, keeping the listener; composerOverlay.sync is idempotent.)
-        if (selectedTeam != null && !_composerWired)
+        // The composer textarea AND the messages-container are gated by
+        // `@if (selectedTeam != null)`, so neither is in the DOM at firstRender —
+        // wiring there silently no-ops (getElementById returns null) and the listeners
+        // never attach. Wire them the first render after the chat pane mounts, and
+        // reset on unmount so a later conversation re-wires. (No @key on the pane →
+        // switching conversations reuses the same elements; these JS helpers are all
+        // idempotent.)
+        if (selectedTeam != null && !_chatPaneWired)
         {
-            _composerWired = true;
+            _chatPaneWired = true;
+            _dotNetRef ??= DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("setupMobileComposerScroll", "composer-input", "messages-container");
             await JS.InvokeVoidAsync("composerOverlay.sync", "composer-input", "composer-highlight");
-        }
-        else if (selectedTeam == null && _composerWired)
-        {
-            _composerWired = false;
-        }
-
-        if (firstRender)
-        {
-            _dotNetRef = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("popupRegistry.register",
-                "chat-popups", _dotNetRef, nameof(CloseAllPopups), ".popup-container");
-            _popupListenerRegistered = true;
-
             await JS.InvokeVoidAsync("setupMessagesScrollListener",
                 "messages-container",
                 _dotNetRef,
                 nameof(LoadOlderMessagesJs),
                 nameof(SetJumpToBottomVisible));
+        }
+        else if (selectedTeam == null && _chatPaneWired)
+        {
+            _chatPaneWired = false;
+        }
+
+        if (firstRender)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("popupRegistry.register",
+                "chat-popups", _dotNetRef, nameof(CloseAllPopups), ".popup-container");
+            _popupListenerRegistered = true;
         }
 
         // Attach the auto-scroll observer once the messages container is in the DOM.
