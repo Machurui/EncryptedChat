@@ -17,6 +17,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     public DbSet<UserTeamPreference> UserTeamPreferences => Set<UserTeamPreference>();
     public DbSet<PasswordHistoryEntry> PasswordHistory => Set<PasswordHistoryEntry>();
     public DbSet<TeamKeyShare> TeamKeyShares => Set<TeamKeyShare>();
+    public DbSet<TeamInvite> TeamInvites => Set<TeamInvite>();
     public DbSet<UserGifVault> UserGifVaults => Set<UserGifVault>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -188,6 +189,16 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
 
         modelBuilder.Entity<TeamKeyShare>()
             .HasIndex(k => k.MemberId);
+
+        modelBuilder.Entity<TeamInvite>()
+            .HasIndex(i => i.Token)
+            .IsUnique();
+
+        modelBuilder.Entity<TeamInvite>()
+            .HasOne(i => i.Team)
+            .WithMany()
+            .HasForeignKey(i => i.TeamId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<IdentityRole>().HasData(
             new IdentityRole
