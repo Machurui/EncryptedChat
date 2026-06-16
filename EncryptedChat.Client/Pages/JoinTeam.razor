@@ -1,0 +1,129 @@
+@page "/join/{Token}"
+@layout EmptyLayout
+@attribute [Authorize]
+
+@using Microsoft.AspNetCore.Authorization
+
+@inject InviteClient InviteClient
+@inject NavigationManager Nav
+
+<div class="app-background"></div>
+
+<div style="min-height: 100vh; display: grid; place-items: center; padding: 24px;">
+    <GlassPanel Radius="28" Style="width: 100%; max-width: 420px;">
+        <div style="padding: 34px 36px 28px; display: flex; flex-direction: column; gap: 20px; text-align: center;">
+
+            @if (_loading)
+            {
+                <div style="color: rgba(var(--text-rgb), 0.60); font-size: 14px;">Chargement…</div>
+            }
+            else if (_error != null)
+            {
+                <!-- Error icon -->
+                <div style="width: 56px; height: 56px; margin: 0 auto; border-radius: 16px;
+                            background: rgba(220,60,60,0.15); border: 0.5px solid rgba(220,60,60,0.30);
+                            display: grid; place-items: center;">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="oklch(0.78 0.14 25)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                </div>
+
+                <div>
+                    <div style="font-size: 20px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">
+                        Invitation
+                    </div>
+                    <div style="font-size: 13px; color: oklch(0.78 0.14 25); margin-top: 8px; line-height: 1.5;">
+                        @_error
+                    </div>
+                </div>
+
+                <button class="glass-btn" style="width: 100%;" @onclick="@(() => Nav.NavigateTo("/chat"))">
+                    Retour
+                </button>
+            }
+            else if (_preview != null)
+            {
+                <!-- Team icon -->
+                <div style="width: 56px; height: 56px; margin: 0 auto; border-radius: 16px;
+                            background: linear-gradient(135deg, var(--accent), oklch(0.45 0.16 225));
+                            display: grid; place-items: center;
+                            box-shadow: inset 1px 1px 1px rgba(255,255,255,0.40), 0 12px 36px var(--accent-glow);">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 010 7.75"/>
+                    </svg>
+                </div>
+
+                <div>
+                    <div style="font-size: 13px; color: rgba(var(--text-rgb), 0.60); margin-bottom: 4px;">
+                        Vous avez été invité à rejoindre
+                    </div>
+                    <div style="font-size: 22px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">
+                        @_preview.TeamName
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button class="glass-btn glass-btn-primary glass-btn-lg" style="width: 100%;"
+                            disabled="@_joining" @onclick="DoJoin">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="8.5" cy="7" r="4"/>
+                            <line x1="20" y1="8" x2="20" y2="14"/>
+                            <line x1="23" y1="11" x2="17" y2="11"/>
+                        </svg>
+                        @(_joining ? "Connexion…" : "Rejoindre")
+                    </button>
+
+                    <button class="glass-btn" style="width: 100%;" disabled="@_joining"
+                            @onclick="@(() => Nav.NavigateTo("/chat"))">
+                        Annuler
+                    </button>
+                </div>
+            }
+
+        </div>
+    </GlassPanel>
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _joining;
+    private string? _error;
+    private InviteClient.InvitePreview? _preview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _preview = await InviteClient.GetPreviewAsync(Token);
+        if (_preview is null)
+            _error = "Invitation invalide ou expirée.";
+        _loading = false;
+    }
+
+    private async Task DoJoin()
+    {
+        _joining = true;
+        var (result, _) = await InviteClient.JoinAsync(Token);
+        _joining = false;
+
+        switch (result)
+        {
+            case InviteClient.JoinResult.Ok:
+                Nav.NavigateTo("/chat", forceLoad: true);
+                break;
+            case InviteClient.JoinResult.NoPublicKey:
+                _error = "Configure d'abord le chiffrement (clés) sur ton compte, puis réessaie.";
+                break;
+            case InviteClient.JoinResult.Invalid:
+                _error = "Invitation invalide ou expirée.";
+                break;
+            default:
+                _error = "Une erreur est survenue. Réessaie.";
+                break;
+        }
+    }
+}
