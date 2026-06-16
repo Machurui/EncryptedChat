@@ -189,6 +189,26 @@ public class TeamClient
         return res.IsSuccessStatusCode;
     }
 
+    // Admin-side reconciliation: wrap the team key for any member missing a share
+    // at the current generation. Safe no-op for non-admins (endpoint returns 403)
+    // and idempotent (AddMemberKeyShareAsync skips members already covered).
+    public async Task ProvisionMissingKeySharesAsync(Guid teamId, int generation)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"api/Team/{teamId}/members/missing-key-share");
+            if (!res.IsSuccessStatusCode) return; // 403 (not admin) / error → nothing to do
+            var missing = await res.Content.ReadFromJsonAsync<List<string>>();
+            if (missing is null) return;
+            foreach (var userId in missing)
+            {
+                try { await AddMemberKeyShareAsync(teamId, generation, userId); }
+                catch (Exception ex) { Console.WriteLine($"[invite] provision {userId} failed: {ex.Message}"); }
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"[invite] provision failed: {ex.Message}"); }
+    }
+
     // Admin-only: generate a fresh Team.Secret, wrap for every remaining member,
     // post the bundle so the server can atomically delete + rotate + reinsert.
     public async Task<bool> RemoveMemberWithRotationAsync(Guid teamId, int currentGeneration, string removedMemberId, IReadOnlyList<string> remainingMemberIds)

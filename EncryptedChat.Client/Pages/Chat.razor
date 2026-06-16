@@ -4806,6 +4806,14 @@ private async Task SelectStatus(string status)
 
             await LoadTeamDetails();
 
+            // Admin reconciliation: wrap the team key for any invited member
+            // who doesn't have a key-share yet at this generation. Fire-and-forget;
+            // idempotent; safe no-op for non-admins (server returns 403 → skipped).
+            if (selectedTeam != null && IsCurrentUserAdmin)
+            {
+                _ = TeamClient.ProvisionMissingKeySharesAsync(selectedTeam.Id, selectedTeam.KeyGeneration);
+            }
+
             // Scroll to bottom on first visit, first load, or if unread
             // Otherwise restore previous scroll position (or scroll to bottom if user was there)
             var shouldScrollToBottom = _isFirstLoad || isFirstVisit || hadUnread;
