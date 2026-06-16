@@ -1,5 +1,9 @@
 @namespace EncryptedChat.Client.Pages.Components
 @using EncryptedChat.Client.Services
+@using QRCoder
+@inject InviteClient InviteClient
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 @if (IsOpen && Team != null)
 {
@@ -28,6 +32,16 @@
                         </svg>
                         Members
                     </button>
+                    @if (IsAdmin)
+                    {
+                        <button class="tm-tab @(activeTab == "invite" ? "active" : "")" @onclick='() => activeTab = "invite"'>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+                            </svg>
+                            Inviter
+                        </button>
+                    }
                 </div>
 
                 <!-- Body + footer wrap so the footer pins to the bottom while the body scrolls -->
@@ -201,6 +215,38 @@
                                 </div>
                             }
                         }
+                    }
+                    else if (activeTab == "invite" && IsAdmin)
+                    {
+                        <section class="invite-section">
+                            <div class="tm-section-label">Liens d'invitation actifs · @_invites.Count</div>
+                            <button class="invite-create-btn" @onclick="CreateInvite" disabled="@_creatingInvite">
+                                @(_creatingInvite ? "Création…" : "Créer un lien d'invitation")
+                            </button>
+
+                            @foreach (var inv in _invites)
+                            {
+                                var url = InviteUrl(inv.Token);
+                                <div class="invite-row">
+                                    <div class="invite-row-top">
+                                        <input class="invite-link" readonly value="@url" @onclick:stopPropagation="true" />
+                                        <button class="invite-action" title="Copier" @onclick="() => CopyAsync(url)">📋</button>
+                                        <button class="invite-action tm-row-x" title="Révoquer" @onclick="() => RevokeInvite(inv.Id)">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <span class="invite-expiry">expire @inv.ExpiresAt.ToLocalTime().ToString("g")</span>
+                                    <div class="invite-qr">@((MarkupString)QrSvg(url))</div>
+                                </div>
+                            }
+
+                            @if (_invites.Count == 0 && !_creatingInvite)
+                            {
+                                <div class="invite-empty">Aucun lien actif. Créez-en un pour partager l'accès à cette équipe.</div>
+                            }
+                        </section>
                     }
                 </div>
     </ChildContent>
@@ -687,6 +733,121 @@
         line-height: 1.5;
     }
 
+    /* Invite section */
+    .invite-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .invite-create-btn {
+        align-self: flex-start;
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--accent-subtle, rgba(var(--accent-rgb, 16 185 129), 0.12));
+        border: 0.5px solid var(--accent-border, rgba(var(--accent-rgb, 16 185 129), 0.35));
+        color: var(--accent);
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+    .invite-create-btn:hover:not(:disabled) {
+        background: var(--accent-subtle-hover, rgba(var(--accent-rgb, 16 185 129), 0.20));
+    }
+
+    .invite-create-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .invite-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
+    }
+
+    .invite-row-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .invite-link {
+        flex: 1;
+        min-width: 0;
+        background: var(--bg-hover);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        outline: none;
+        color: var(--text-primary);
+        font-size: 11px;
+        padding: 6px 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .invite-action {
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        color: rgba(var(--text-rgb), 0.55);
+        transition: background 0.15s, color 0.15s;
+    }
+
+    .invite-action:hover {
+        background: var(--border);
+        color: var(--text-primary);
+    }
+
+    .invite-action.tm-row-x:hover {
+        background: rgba(220, 60, 60, 0.15);
+        color: oklch(0.78 0.14 25);
+    }
+
+    .invite-expiry {
+        font-size: 10.5px;
+        color: rgba(var(--text-rgb), 0.50);
+    }
+
+    .invite-qr {
+        align-self: flex-start;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+        padding: 6px;
+        line-height: 0;
+    }
+
+    .invite-qr svg {
+        width: 128px;
+        height: 128px;
+        display: block;
+    }
+
+    .invite-empty {
+        font-size: 12px;
+        color: rgba(var(--text-rgb), 0.50);
+        padding: 8px 2px;
+        line-height: 1.5;
+    }
+
     /* Mobile: full-screen sheets for both the modal and the delete confirm */
     @@media (max-width: 767px) {
         .team-manage-wrapper,
@@ -743,7 +904,11 @@
 
     private Guid? _lastTeamId;
 
-    protected override void OnParametersSet()
+    // ---------- Invite state ----------
+    private List<InviteClient.InviteListItem> _invites = new();
+    private bool _creatingInvite;
+
+    protected override async Task OnParametersSetAsync()
     {
         if (Team == null) return;
 
@@ -752,6 +917,9 @@
         {
             _lastTeamId = Team.Id;
             editTeamName = Team.Name;
+            // Load invites for admins when the team changes (modal opens or team switches).
+            if (IsAdmin)
+                await LoadInvitesAsync();
             return;
         }
 
@@ -930,6 +1098,49 @@
     private async Task DoBubbleReset()
     {
         await OnBubbleColorReset.InvokeAsync();
+    }
+
+    // ---------- Invite helpers ----------
+
+    private async Task LoadInvitesAsync()
+    {
+        if (Team == null) return;
+        _invites = await InviteClient.ListAsync(Team.Id);
+    }
+
+    private async Task CreateInvite()
+    {
+        if (Team == null) return;
+        _creatingInvite = true;
+        try
+        {
+            var created = await InviteClient.CreateAsync(Team.Id);
+            if (created != null) await LoadInvitesAsync();
+        }
+        finally { _creatingInvite = false; }
+    }
+
+    private async Task RevokeInvite(Guid id)
+    {
+        if (Team == null) return;
+        if (await InviteClient.RevokeAsync(Team.Id, id))
+            await LoadInvitesAsync();
+    }
+
+    private string InviteUrl(string token) => $"{Nav.BaseUri}join/{token}";
+
+    private static string QrSvg(string url)
+    {
+        using var gen = new QRCodeGenerator();
+        using var data = gen.CreateQrCode(url, QRCodeGenerator.ECCLevel.M);
+        var svg = new SvgQRCode(data);
+        return svg.GetGraphic(4);
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); }
+        catch { /* clipboard unavailable or denied */ }
     }
 
     // ---------- Image URL ----------
