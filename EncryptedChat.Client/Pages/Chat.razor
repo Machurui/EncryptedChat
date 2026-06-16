@@ -25,6 +25,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject EncryptedChat.Client.Services.Crypto.KeyVaultService KeyVault
+@inject EncryptedChat.Client.Services.Crypto.TeamKeyCacheService TeamKeyCache
 
 @implements IAsyncDisposable
 
@@ -742,6 +743,15 @@
                         }
                     </div>
 
+                    @if (AwaitingTeamKey)
+                    {
+                        <div class="awaiting-key">
+                            ⏳ En attente d'accès — un administrateur doit te donner la clé de cette conversation.
+                            Les messages apparaîtront automatiquement dès que c'est fait.
+                        </div>
+                    }
+                    else
+                    {
                     <LoadingState Status="@messagesState" ErrorMessage="@messagesError" OnRetry="() => LoadMessages(true)">
                         <SkeletonTemplate>
                             <SkeletonMessage IsOwn="false" BubbleWidth="240px" />
@@ -880,6 +890,7 @@
                             }
                         </SuccessTemplate>
                     </LoadingState>
+                    } @* end @if (!AwaitingTeamKey) *@
                     <div id="messages-end"></div>
                 </div>
 
@@ -2294,6 +2305,16 @@
     .no-messages-sub {
         font-size: 12px;
         margin-top: 4px;
+    }
+
+    .awaiting-key {
+        margin: auto;
+        max-width: 420px;
+        padding: 32px 24px;
+        text-align: center;
+        color: rgba(var(--text-rgb), 0.6);
+        font-size: 14px;
+        line-height: 1.5;
     }
 
     .message {
@@ -3981,6 +4002,22 @@
     private IEnumerable<TeamClient.TeamDTOPublic> DirectMessages =>
         teams.Where(t => t.IsDirect).OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue);
 
+    /// <summary>
+    /// True when the selected team is a group chat and the current user has no
+    /// wrapped key for its current generation yet (joined via invite; admin
+    /// hasn't provisioned the key-share yet).
+    /// </summary>
+    // False until this team's key-shares have been loaded into cache, so the
+    // "awaiting access" banner never flashes for a normal member during the brief
+    // window between selecting a team and the key-share load completing.
+    private bool _keyLoadComplete;
+
+    private bool AwaitingTeamKey =>
+        _keyLoadComplete
+        && selectedTeam != null
+        && !selectedTeam.IsDirect
+        && !TeamKeyCache.Has(selectedTeam.Id, selectedTeam.KeyGeneration);
+
     private IEnumerable<TeamClient.TeamDTOPublic> FilteredTeams
     {
         get
@@ -4782,6 +4819,7 @@ private async Task SelectStatus(string status)
 
             selectedTeamId = teamId;
             selectedTeam = teams.FirstOrDefault(t => t.Id == teamId);
+            _keyLoadComplete = false; // suppress the awaiting-key banner until key-shares load
             newMessageText = "";
             mobileShowConversation = true;
             showPinnedDropdown = false;
@@ -4796,6 +4834,7 @@ private async Task SelectStatus(string status)
             {
                 await TeamClient.LoadKeySharesIntoCacheAsync(teamId, _userId);
             }
+            _keyLoadComplete = true; // key-shares loaded (or no user) → banner may now evaluate
 
             // Check for unread BEFORE marking as read
             var hadUnread = GetUnreadCount(teamId) > 0;

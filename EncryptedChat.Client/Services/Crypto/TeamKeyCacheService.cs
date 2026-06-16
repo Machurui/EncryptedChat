@@ -12,6 +12,8 @@ public class TeamKeyCacheService
         return _cache.TryGetValue((teamId, generation), out var secret) ? secret : null;
     }
 
+    public bool Has(Guid teamId, int generation) => Get(teamId, generation) != null;
+
     public void Put(Guid teamId, int generation, byte[] teamSecret)
     {
         _cache[(teamId, generation)] = teamSecret;
