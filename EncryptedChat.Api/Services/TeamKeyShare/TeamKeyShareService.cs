@@ -144,4 +144,23 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
             transaction?.Dispose();
         }
     }
+
+    public async Task<List<string>?> GetMembersMissingKeyShareAsync(Guid teamId, string actorUserId)
+    {
+        var team = await _context.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == teamId);
+        if (team is null) return null;
+
+        var actorRole = await _context.Members.AsNoTracking()
+            .Where(m => m.TeamId == teamId && m.UserId == actorUserId)
+            .Select(m => m.Role).FirstOrDefaultAsync();
+        if (actorRole != Member.AdminRole && actorRole != Member.OwnerRole) return null;
+
+        int gen = team.KeyGeneration;
+        var memberIds = await _context.Members.AsNoTracking()
+            .Where(m => m.TeamId == teamId).Select(m => m.UserId).ToListAsync();
+        var withShare = await _context.TeamKeyShares.AsNoTracking()
+            .Where(k => k.TeamId == teamId && k.Generation == gen).Select(k => k.MemberId).ToListAsync();
+        var have = withShare.ToHashSet();
+        return memberIds.Where(id => !have.Contains(id)).ToList();
+    }
 }

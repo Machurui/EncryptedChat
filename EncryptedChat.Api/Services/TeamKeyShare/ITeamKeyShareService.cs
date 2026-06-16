@@ -22,6 +22,10 @@ public interface ITeamKeyShareService
     Task<RemoveAndRotateResult> RemoveMemberAndRotateAsync(
         string adminUserId, Guid teamId, string removedMemberId,
         IReadOnlyList<KeyShareEntryDTO> newKeyShares);
+
+    // UserIds of team members lacking a key-share at the team's current generation.
+    // null if the actor is not an admin of the team.
+    Task<List<string>?> GetMembersMissingKeyShareAsync(Guid teamId, string actorUserId);
 }
 
 public enum KeyShareInsertResult { Ok, Forbidden, AlreadyExists, NotFound }
