@@ -31,7 +31,8 @@ public class TeamControllerTests
     private TeamController CreateController(string? userId = null)
     {
         Mock<ITeamKeyShareService> mockTeamKeyShares = new();
-        TeamController controller = new(_mockTeamService.Object, _mockHubContext.Object, mockTeamKeyShares.Object);
+        Mock<ITeamInviteService> mockTeamInviteService = new();
+        TeamController controller = new(_mockTeamService.Object, _mockHubContext.Object, mockTeamKeyShares.Object, mockTeamInviteService.Object);
         List<Claim> claims = [];
 
         if (userId != null)

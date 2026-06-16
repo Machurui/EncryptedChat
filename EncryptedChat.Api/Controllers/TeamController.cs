@@ -15,11 +15,13 @@ namespace EncryptedChat.Controllers
     public class TeamController(
         ITeamService teamService,
         IHubContext<ChatHub> hubContext,
-        ITeamKeyShareService teamKeyShares) : ControllerBase
+        ITeamKeyShareService teamKeyShares,
+        ITeamInviteService teamInviteService) : ControllerBase
     {
         private readonly ITeamService _teamService = teamService;
         private readonly IHubContext<ChatHub> _hubContext = hubContext;
         private readonly ITeamKeyShareService _teamKeyShares = teamKeyShares;
+        private readonly ITeamInviteService _inviteService = teamInviteService;
 
         private string? GetCurrentUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -394,6 +396,66 @@ namespace EncryptedChat.Controllers
                 new { TeamId = teamId, Muted = dto.Muted });
 
             return NoContent();
+        }
+
+        // ==================== INVITE MANAGEMENT ====================
+
+        [HttpPost("{teamId}/invites")]
+        public async Task<ActionResult<TeamInviteDTO>> CreateInvite(Guid teamId, CancellationToken ct)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var dto = await _inviteService.CreateAsync(teamId, userId, ct);
+            return dto is null ? Forbid() : Ok(dto);
+        }
+
+        [HttpGet("{teamId}/invites")]
+        public async Task<ActionResult<List<TeamInviteListItemDTO>>> ListInvites(Guid teamId, CancellationToken ct)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var list = await _inviteService.ListAsync(teamId, userId, ct);
+            return list is null ? Forbid() : Ok(list);
+        }
+
+        [HttpDelete("{teamId}/invites/{inviteId}")]
+        public async Task<IActionResult> RevokeInvite(Guid teamId, Guid inviteId, CancellationToken ct)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            return await _inviteService.RevokeAsync(teamId, inviteId, userId, ct) ? NoContent() : Forbid();
+        }
+
+        [HttpGet("invite/{token}")]
+        public async Task<ActionResult<InvitePreviewDTO>> PreviewInvite(string token, CancellationToken ct)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var preview = await _inviteService.PreviewAsync(token, ct);
+            return preview is null ? NotFound() : Ok(preview);
+        }
+
+        [HttpPost("invite/{token}/join")]
+        public async Task<ActionResult<TeamDTOPublic>> JoinByInvite(string token, CancellationToken ct)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var result = await _inviteService.JoinAsync(token, userId, ct);
+            return result.Outcome switch
+            {
+                InviteJoinOutcome.Ok or InviteJoinOutcome.AlreadyMember => Ok(result.Team),
+                InviteJoinOutcome.NoPublicKey => Conflict(new { Message = "Configure encryption first." }),
+                _ => NotFound(new { Message = "Invitation invalid or expired." })
+            };
+        }
+
+        [HttpGet("{teamId}/members/missing-key-share")]
+        public async Task<ActionResult<List<string>>> MissingKeyShare(Guid teamId, CancellationToken ct)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var missing = await _teamKeyShares.GetMembersMissingKeyShareAsync(teamId, userId);
+            return missing is null ? Forbid() : Ok(missing);
         }
     }
 
