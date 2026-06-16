@@ -53,6 +53,7 @@ builder.Services.AddScoped<AuthClient>();
 builder.Services.AddScoped<UserClient>();
 
 builder.Services.AddScoped<TeamClient>();
+builder.Services.AddScoped<InviteClient>();
 
 builder.Services.AddScoped<ChatClient>();
 
