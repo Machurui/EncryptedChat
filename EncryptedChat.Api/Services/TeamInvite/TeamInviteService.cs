@@ -9,13 +9,23 @@ namespace EncryptedChat.Services;
 public sealed class TeamInviteService(EncryptedChatContext db, IUserKeysService userKeys) : ITeamInviteService
 {
     private static readonly TimeSpan DefaultLifetime = TimeSpan.FromDays(7);
+    private const int MaxActiveInvitesPerTeam = 20;
     private readonly EncryptedChatContext _db = db;
     private readonly IUserKeysService _userKeys = userKeys;
 
     public async Task<TeamInviteDTO?> CreateAsync(Guid teamId, string actorUserId, CancellationToken ct)
     {
         if (!await IsAdminAsync(teamId, actorUserId, ct)) return null;
+
+        var team = await _db.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == teamId, ct);
+        if (team is null || team.IsDirect) return null; // no invites for DMs
+
+        // Cap active invites per team (bound storage / anti-spam).
         var now = DateTime.UtcNow;
+        var activeCount = await _db.TeamInvites
+            .CountAsync(i => i.TeamId == teamId && i.RevokedAt == null && i.ExpiresAt > now, ct);
+        if (activeCount >= MaxActiveInvitesPerTeam) return null;
+
         var invite = new TeamInvite
         {
             TeamId = teamId,
@@ -63,6 +73,7 @@ public sealed class TeamInviteService(EncryptedChatContext db, IUserKeysService 
         if (invite is null) return new InviteJoinResult(InviteJoinOutcome.Invalid, null);
         var team = await _db.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == invite.TeamId, ct);
         if (team is null) return new InviteJoinResult(InviteJoinOutcome.Invalid, null);
+        if (team.IsDirect) return new InviteJoinResult(InviteJoinOutcome.Invalid, null); // DMs are not joinable via invite
         var teamDto = ToPublic(team);
         if (await _db.Members.AnyAsync(m => m.TeamId == invite.TeamId && m.UserId == userId, ct))
             return new InviteJoinResult(InviteJoinOutcome.AlreadyMember, teamDto);

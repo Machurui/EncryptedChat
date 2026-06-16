@@ -164,4 +164,29 @@ public sealed class TeamInviteServiceTests : IDisposable
         await _context.SaveChangesAsync();
         (await _service.RevokeAsync(teamId, invite.Id, "bob", CancellationToken.None)).Should().BeFalse();
     }
+
+    [Fact]
+    public async Task CreateAsync_ForDirectTeam_ReturnsNull()
+    {
+        var teamId = Guid.NewGuid();
+        _context.Teams.Add(new Team { Id = teamId, Name = "DM", Slug = "dm", KeyGeneration = 1, IsDirect = true });
+        await SeedUserAsync("admin");
+        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = teamId, UserId = "admin", Role = Member.OwnerRole, UrlToken = Guid.NewGuid().ToString("N")[..16] });
+        await _context.SaveChangesAsync();
+        (await _service.CreateAsync(teamId, "admin", CancellationToken.None)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task JoinAsync_ForDirectTeam_ReturnsInvalid()
+    {
+        var teamId = Guid.NewGuid();
+        _context.Teams.Add(new Team { Id = teamId, Name = "DM", Slug = "dm", KeyGeneration = 1, IsDirect = true });
+        await SeedUserAsync("admin");
+        _context.Members.Add(new Member { Id = Guid.NewGuid(), TeamId = teamId, UserId = "admin", Role = Member.OwnerRole, UrlToken = Guid.NewGuid().ToString("N")[..16] });
+        // Manually create a valid invite row bypassing CreateAsync (which now blocks DMs):
+        _context.TeamInvites.Add(new TeamInvite { TeamId = teamId, Token = "dmtok", CreatedByUserId = "admin", ExpiresAt = DateTime.UtcNow.AddDays(7) });
+        await _context.SaveChangesAsync();
+        await SeedUserAsync("newbie");
+        (await _service.JoinAsync("dmtok", "newbie", CancellationToken.None)).Outcome.Should().Be(InviteJoinOutcome.Invalid);
+    }
 }

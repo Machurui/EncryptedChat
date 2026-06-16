@@ -15,8 +15,15 @@ public class TeamInviteControllerTests
 {
     private readonly Mock<ITeamInviteService> _invites = new();
     private readonly Mock<ITeamKeyShareService> _keyShares = new();
+    private readonly Mock<IRateLimitService> _rateLimit = new();
     private readonly string _uid = Guid.NewGuid().ToString();
     private readonly Guid _teamId = Guid.NewGuid();
+
+    public TeamInviteControllerTests()
+    {
+        // Allow by default so existing tests are unaffected; individual tests may override.
+        _rateLimit.Setup(r => r.CheckAndRecord(It.IsAny<string>())).Returns(new RateLimitResult(true, 0));
+    }
 
     private TeamController Create(string? userId)
     {
@@ -31,7 +38,8 @@ public class TeamInviteControllerTests
             mockTeamService.Object,
             mockHubContext.Object,
             _keyShares.Object,
-            _invites.Object);
+            _invites.Object,
+            _rateLimit.Object);
 
         var claims = new List<Claim>();
         if (userId != null)
@@ -208,6 +216,14 @@ public class TeamInviteControllerTests
     {
         (await Create(null).JoinByInvite("tok", CancellationToken.None)).Result
             .Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task JoinByInvite_RateLimited_Returns429()
+    {
+        _rateLimit.Setup(r => r.CheckAndRecord(It.IsAny<string>())).Returns(new RateLimitResult(false, 5000));
+        var r = await Create(_uid).JoinByInvite("tok", CancellationToken.None);
+        r.Result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(429);
     }
 
     // ==================== MissingKeyShare ====================

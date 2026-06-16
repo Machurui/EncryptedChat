@@ -32,7 +32,9 @@ public class TeamControllerTests
     {
         Mock<ITeamKeyShareService> mockTeamKeyShares = new();
         Mock<ITeamInviteService> mockTeamInviteService = new();
-        TeamController controller = new(_mockTeamService.Object, _mockHubContext.Object, mockTeamKeyShares.Object, mockTeamInviteService.Object);
+        Mock<IRateLimitService> mockRateLimit = new();
+        mockRateLimit.Setup(r => r.CheckAndRecord(It.IsAny<string>())).Returns(new RateLimitResult(true, 0));
+        TeamController controller = new(_mockTeamService.Object, _mockHubContext.Object, mockTeamKeyShares.Object, mockTeamInviteService.Object, mockRateLimit.Object);
         List<Claim> claims = [];
 
         if (userId != null)

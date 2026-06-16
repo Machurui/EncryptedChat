@@ -16,14 +16,24 @@ namespace EncryptedChat.Controllers
         ITeamService teamService,
         IHubContext<ChatHub> hubContext,
         ITeamKeyShareService teamKeyShares,
-        ITeamInviteService teamInviteService) : ControllerBase
+        ITeamInviteService teamInviteService,
+        IRateLimitService rateLimit) : ControllerBase
     {
         private readonly ITeamService _teamService = teamService;
         private readonly IHubContext<ChatHub> _hubContext = hubContext;
         private readonly ITeamKeyShareService _teamKeyShares = teamKeyShares;
         private readonly ITeamInviteService _inviteService = teamInviteService;
+        private readonly IRateLimitService _rateLimit = rateLimit;
 
         private string? GetCurrentUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        private ActionResult? RateLimited(string userId)
+        {
+            var rc = _rateLimit.CheckAndRecord(userId);
+            if (rc.Allowed) return null;
+            Response.Headers["Retry-After"] = Math.Ceiling(rc.RetryAfterMs / 1000.0).ToString();
+            return StatusCode(429, new { error = "RateLimited", retryAfterMs = rc.RetryAfterMs });
+        }
 
         // GET: api/Team
         [HttpGet]
@@ -405,6 +415,8 @@ namespace EncryptedChat.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var limited = RateLimited(userId);
+            if (limited is not null) return limited;
             var dto = await _inviteService.CreateAsync(teamId, userId, ct);
             return dto is null ? Forbid() : Ok(dto);
         }
@@ -431,6 +443,8 @@ namespace EncryptedChat.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var limited = RateLimited(userId);
+            if (limited is not null) return limited;
             var preview = await _inviteService.PreviewAsync(token, ct);
             return preview is null ? NotFound() : Ok(preview);
         }
@@ -440,6 +454,8 @@ namespace EncryptedChat.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var limited = RateLimited(userId);
+            if (limited is not null) return limited;
             var result = await _inviteService.JoinAsync(token, userId, ct);
             return result.Outcome switch
             {
