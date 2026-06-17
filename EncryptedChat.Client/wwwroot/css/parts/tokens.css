@@ -184,17 +184,40 @@ button {
     appearance: none !important;
 }
 
-/* The reset above flattens native checkboxes to 0×0. Opt confirmation checkboxes
-   back into native rendering at a visible size (recovery-phrase confirms, etc.). */
+/* The reset above flattens native checkboxes to 0×0. Confirmation checkboxes
+   (recovery-phrase confirms, etc.) get a custom glass box at a visible size:
+   transparent/blurred when unchecked, accent-filled with a drawn tick when checked. */
 input[type="checkbox"].confirm-checkbox {
-    -webkit-appearance: auto !important;
-    appearance: auto !important;
     width: 16px;
     height: 16px;
     flex: 0 0 16px;
     margin: 2px 0 0;
-    accent-color: var(--accent);
+    border-radius: 5px;
+    border: 0.5px solid var(--border);
+    background: var(--bg-input);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.20), inset -1px -1px 1px rgba(0, 0, 0, 0.10);
     cursor: pointer;
+    position: relative;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+input[type="checkbox"].confirm-checkbox:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+input[type="checkbox"].confirm-checkbox:checked::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
 }
 
 input:focus,
