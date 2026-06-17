@@ -4,7 +4,7 @@
   <Var name="OutPath" value="publish/api-obf" />
   <Var name="KeepPublicApi" value="true" />
   <Var name="HidePrivateApi" value="true" />
-  <Var name="HideStrings" value="false" />
+  <Var name="HideStrings" value="true" />
   <Var name="RenamePublicTypes" value="false" />
   <Var name="RenamePublicMethods" value="false" />
   <Var name="RenamePublicProperties" value="false" />
@@ -18,5 +18,13 @@
     <SkipNamespace name="EncryptedChat.Migrations" />
     <SkipNamespace name="EncryptedChat.Hubs" />
     <SkipNamespace name="EncryptedChat.Controllers" />
+    <!-- EF DbContext builds expression trees in OnModelCreating; keep it intact. -->
+    <SkipNamespace name="EncryptedChat.Data" />
+    <!-- Anonymous types (<>f__AnonymousType*) live in the GLOBAL (empty) namespace
+         and are used inside expression trees (EF model + query projections
+         Select(x => new {...})) and as anonymous JSON responses (new { Message }).
+         Renaming them breaks Expression.GetProperty and changes JSON keys.
+         KeepPublicApi does NOT cover them; skip the whole global namespace. -->
+    <SkipNamespace name="" />
   </Module>
 </Obfuscator>
