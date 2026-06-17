@@ -184,6 +184,19 @@ button {
     appearance: none !important;
 }
 
+/* The reset above flattens native checkboxes to 0×0. Opt confirmation checkboxes
+   back into native rendering at a visible size (recovery-phrase confirms, etc.). */
+input[type="checkbox"].confirm-checkbox {
+    -webkit-appearance: auto !important;
+    appearance: auto !important;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    margin: 2px 0 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
 input:focus,
 textarea:focus,
 select:focus,
