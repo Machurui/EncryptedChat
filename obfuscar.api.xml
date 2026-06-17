@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Obfuscator>
+  <Var name="InPath" value="publish/api" />
+  <Var name="OutPath" value="publish/api-obf" />
+  <Var name="KeepPublicApi" value="true" />
+  <Var name="HidePrivateApi" value="true" />
+  <Var name="HideStrings" value="false" />
+  <Var name="RenamePublicTypes" value="false" />
+  <Var name="RenamePublicMethods" value="false" />
+  <Var name="RenamePublicProperties" value="false" />
+  <Var name="RenamePublicFields" value="false" />
+  <Var name="ReuseNames" value="true" />
+  <Var name="SuppressIldasm" value="true" />
+
+  <Module file="$(InPath)/EncryptedChat.dll">
+    <!-- Reflection contract (already public; excluded as defense-in-depth) -->
+    <SkipNamespace name="EncryptedChat.Models" />
+    <SkipNamespace name="EncryptedChat.Migrations" />
+    <SkipNamespace name="EncryptedChat.Hubs" />
+    <SkipNamespace name="EncryptedChat.Controllers" />
+  </Module>
+</Obfuscator>
