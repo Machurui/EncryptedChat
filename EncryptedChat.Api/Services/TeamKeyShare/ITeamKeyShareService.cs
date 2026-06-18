@@ -29,4 +29,4 @@ public interface ITeamKeyShareService
 }
 
 public enum KeyShareInsertResult { Ok, Forbidden, AlreadyExists, NotFound }
-public enum RemoveAndRotateResult { Ok, Forbidden, KeyShareCoverageMismatch, NotFound, CannotRemoveLastAdmin }
+public enum RemoveAndRotateResult { Ok, Forbidden, KeyShareCoverageMismatch, NotFound, CannotRemoveLastAdmin, CannotRemoveOwner }

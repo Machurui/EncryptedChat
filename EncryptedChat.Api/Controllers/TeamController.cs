@@ -364,6 +364,7 @@ namespace EncryptedChat.Controllers
                 RemoveAndRotateResult.Ok => NoContent(),
                 RemoveAndRotateResult.Forbidden => Forbid(),
                 RemoveAndRotateResult.NotFound => NotFound(),
+                RemoveAndRotateResult.CannotRemoveOwner => Forbid(),
                 RemoveAndRotateResult.CannotRemoveLastAdmin => BadRequest(new { Message = "Cannot remove the last admin" }),
                 RemoveAndRotateResult.KeyShareCoverageMismatch => BadRequest(new { Message = "NewKeyShares must cover exactly the remaining members" }),
                 _ => BadRequest()

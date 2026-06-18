@@ -71,6 +71,10 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == removedMemberId);
         if (removedMembership == null) return RemoveAndRotateResult.NotFound;
 
+        // The Owner cannot be removed by anyone — ownership must be transferred first.
+        if (removedMembership.Role == Member.OwnerRole)
+            return RemoveAndRotateResult.CannotRemoveOwner;
+
         // Can't remove the last admin
         if (removedMembership.Role == "Admin")
         {

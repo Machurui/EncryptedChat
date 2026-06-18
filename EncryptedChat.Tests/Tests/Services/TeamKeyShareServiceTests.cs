@@ -198,6 +198,29 @@ public sealed class TeamKeyShareServiceTests : IDisposable
         result.Should().Be(RemoveAndRotateResult.Ok);
     }
 
+    [Fact]
+    public async Task RemoveMemberAndRotateAsync_CannotRemoveOwner()
+    {
+        // An admin must NOT be able to remove the Owner — ownership has to be
+        // transferred first. The team is left untouched (owner stays, no rotation).
+        var teamId = Guid.NewGuid();
+        await SeedTeamAsync(teamId, "Team", generation: 1);
+        await SeedMemberAsync(teamId, "owner", Member.OwnerRole);
+        await SeedMemberAsync(teamId, "alice", Member.AdminRole);
+
+        var result = await _service.RemoveMemberAndRotateAsync("alice", teamId, "owner", new[]
+        {
+            new KeyShareEntryDTO("alice", "aliceG2")
+        });
+
+        result.Should().Be(RemoveAndRotateResult.CannotRemoveOwner);
+
+        // Owner is still a member and no key rotation happened.
+        (await _context.Members.AnyAsync(m => m.TeamId == teamId && m.UserId == "owner"))
+            .Should().BeTrue();
+        (await _context.Teams.FirstAsync(t => t.Id == teamId)).KeyGeneration.Should().Be(1);
+    }
+
     private async Task SeedTeamAsync(Guid id, string name, int generation)
     {
         _context.Teams.Add(new Team
