@@ -300,4 +300,34 @@ public class UserControllerTests
 
         result.Should().BeOfType<ForbidResult>();
     }
+
+    [Fact]
+    public async Task SearchUsers_ReturnsBadRequest_WhenLimitTooHigh()
+    {
+        Mock<IUserService> mockService = new();
+        UserController controller = CreateController(mockService);
+
+        IActionResult result = await controller.SearchUsers("alice", limit: 1000);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        // An out-of-range limit must be rejected before hitting the service.
+        mockService.Verify(
+            s => s.SearchUsersAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task SearchUsers_ReturnsOk_WhenLimitValid()
+    {
+        Mock<IUserService> mockService = new();
+        mockService
+            .Setup(s => s.SearchUsersAsync("alice", TestUserId, 10))
+            .ReturnsAsync(new List<UserDTOPublic>());
+
+        UserController controller = CreateController(mockService);
+
+        IActionResult result = await controller.SearchUsers("alice", limit: 10);
+
+        result.Should().BeOfType<OkObjectResult>();
+    }
 }

@@ -244,6 +244,9 @@ public class UserController(
         if (string.IsNullOrWhiteSpace(requesterId))
             return Unauthorized();
 
+        if (limit is < 1 or > 50)
+            return BadRequest(new { Message = "Limit must be between 1 and 50." });
+
         if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
             return Ok(Array.Empty<UserDTOPublic>());
 
