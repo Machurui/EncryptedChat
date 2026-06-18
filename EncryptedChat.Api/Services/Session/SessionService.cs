@@ -157,15 +157,6 @@ public class SessionService(EncryptedChatContext context) : ISessionService
         await _context.SaveChangesAsync();
     }
 
-    public async Task<List<Session>> GetAllUserSessionsDebugAsync(string userId)
-    {
-        return await _context.Sessions
-            .AsNoTracking()
-            .Where(s => s.UserId == userId)
-            .OrderByDescending(s => s.CreatedAt)
-            .ToListAsync();
-    }
-
     private static string? MaskIpAddress(string? ipAddress)
     {
         if (string.IsNullOrEmpty(ipAddress))

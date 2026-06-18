@@ -131,34 +131,6 @@ public class SecurityController(
         return NoContent();
     }
 
-    // GET: api/Security/sessions/debug
-    [HttpGet("sessions/debug")]
-    [Authorize(Roles = "User")]
-    public async Task<IActionResult> DebugSessions()
-    {
-        var userId = GetCurrentUserId();
-        if (string.IsNullOrEmpty(userId))
-            return Unauthorized();
-
-        var tokenHash = GetCurrentTokenHash();
-        var allSessions = await _sessionService.GetAllUserSessionsDebugAsync(userId);
-
-        return Ok(new {
-            UserId = userId,
-            CurrentTokenHash = tokenHash?.Substring(0, Math.Min(10, tokenHash?.Length ?? 0)) + "...",
-            HasCookie = !string.IsNullOrEmpty(HttpContext.Request.Cookies["ec.accessToken"]),
-            TotalSessions = allSessions.Count,
-            Sessions = allSessions.Select(s => new {
-                s.Id,
-                TokenHashPrefix = s.TokenHash.Substring(0, Math.Min(10, s.TokenHash.Length)) + "...",
-                s.DeviceInfo,
-                s.IsRevoked,
-                s.CreatedAt,
-                MatchesCurrent = s.TokenHash == tokenHash
-            })
-        });
-    }
-
     // DELETE: api/Security/sessions
     [HttpDelete("sessions")]
     [Authorize(Roles = "User")]

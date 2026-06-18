@@ -12,5 +12,4 @@ public interface ISessionService
     Task<bool> UpdateLastActiveAsync(string tokenHash);
     Task<bool> IsSessionValidAsync(string tokenHash);
     Task CleanupExpiredSessionsAsync();
-    Task<List<Session>> GetAllUserSessionsDebugAsync(string userId);
 }
