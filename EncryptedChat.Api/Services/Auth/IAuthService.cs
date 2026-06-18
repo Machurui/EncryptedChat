@@ -14,5 +14,6 @@ public interface IAuthService
     Task<IdentityResult> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model);
     Task<IdentityResult> ChangePasswordAsync(string userId, ChangePasswordDTO model);
     Task<DateTime?> GetPasswordChangedAtAsync(string userId);
+    Task<bool> VerifyPasswordAsync(string userId, string password);
     Task<(bool Success, string Message, IReadOnlyList<string>? NewWords, string? AccessToken)> RecoverAsync(string email, List<string> words, string newPassword);
 }

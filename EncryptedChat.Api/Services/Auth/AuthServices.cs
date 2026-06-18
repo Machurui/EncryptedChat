@@ -325,6 +325,21 @@ public class AuthService(
         return user?.PasswordChangedAt;
     }
 
+    // Confirms the user's current password (used to gate sensitive self-service
+    // actions like regenerating the recovery phrase). Returns false for an empty
+    // password or unknown user rather than throwing.
+    public async Task<bool> VerifyPasswordAsync(string userId, string password)
+    {
+        if (string.IsNullOrEmpty(password))
+            return false;
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return false;
+
+        return await _userManager.CheckPasswordAsync(user, password);
+    }
+
     public async Task<(bool Success, string Message, IReadOnlyList<string>? NewWords, string? AccessToken)> RecoverAsync(
         string email, List<string> words, string newPassword)
     {

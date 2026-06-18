@@ -476,6 +476,17 @@ public sealed class AuthServiceTests : IDisposable
         round2.Errors.Should().ContainSingle(e => e.Code == "PasswordRecentlyUsed");
     }
 
+    [Fact]
+    public async Task VerifyPasswordAsync_ReturnsTrueForCorrect_FalseForWrong()
+    {
+        await SeedUserWithPasswordAsync("kate@test.com", "Right!P@ss1", "kate");
+
+        (await _service.VerifyPasswordAsync("kate-id", "Right!P@ss1")).Should().BeTrue();
+        (await _service.VerifyPasswordAsync("kate-id", "Wrong!P@ss9")).Should().BeFalse();
+        (await _service.VerifyPasswordAsync("kate-id", string.Empty)).Should().BeFalse();
+        (await _service.VerifyPasswordAsync("missing-id", "Right!P@ss1")).Should().BeFalse();
+    }
+
     private async Task SeedUserWithPasswordAsync(string email, string password, string handle)
     {
         User user = new()

@@ -79,6 +79,12 @@ public class SecurityController(
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
+        // Rotating the recovery phrase invalidates the old one, so require the
+        // caller to re-prove their password — an authenticated session alone is
+        // not enough for this account-recovery–sensitive action.
+        if (!await _authService.VerifyPasswordAsync(userId, dto.Password))
+            return BadRequest(new { Message = "Invalid password" });
+
         var result = await _recoveryService.GenerateRecoveryPhraseAsync(userId);
         if (result == null)
             return BadRequest(new { Message = "Failed to generate recovery phrase" });
