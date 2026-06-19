@@ -25,51 +25,43 @@ public class AttachmentController(
     // only validates size, declared MIME, and team membership.
     [HttpPost]
     [EnableRateLimiting("AttachmentUpload")]
-    public async Task<IActionResult> Upload(
-        IFormFile file,
-        [FromForm] Guid messageId,
-        [FromForm] string encryptedFileName,
-        [FromForm] string fileNameIv,
-        [FromForm] string fileIv,
-        [FromForm] string signature,
-        [FromForm] string mimeType,
-        [FromForm] int keyGeneration)
+    public async Task<IActionResult> Upload([FromForm] AttachmentUploadRequest req)
     {
         string? userId = GetCurrentUserId();
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        if (file == null || file.Length == 0)
+        if (req.File == null || req.File.Length == 0)
             return BadRequest(new { Message = "Aucun fichier fourni" });
 
-        if (file.Length > 26_214_400)
+        if (req.File.Length > 26_214_400)
             return BadRequest(new { Message = "Fichier trop volumineux (max 25 Mo)" });
 
         using MemoryStream ms = new();
-        await file.CopyToAsync(ms);
+        await req.File.CopyToAsync(ms);
 
         AttachmentUploadDTO upload = new()
         {
             EncryptedContent = ms.ToArray(),
-            EncryptedFileName = encryptedFileName ?? string.Empty,
-            FileNameIv = fileNameIv ?? string.Empty,
-            FileIv = fileIv ?? string.Empty,
-            Signature = signature ?? string.Empty,
-            MimeType = mimeType ?? string.Empty,
-            KeyGeneration = keyGeneration
+            EncryptedFileName = req.EncryptedFileName,
+            FileNameIv = req.FileNameIv,
+            FileIv = req.FileIv,
+            Signature = req.Signature,
+            MimeType = req.MimeType,
+            KeyGeneration = req.KeyGeneration
         };
 
         (AttachmentDTOPublic? attachment, string? error, bool isForbidden) =
-            await _attachmentService.CreateAsync(messageId, upload, userId);
+            await _attachmentService.CreateAsync(req.MessageId, upload, userId);
 
         if (attachment == null)
             return isForbidden ? Forbid() : BadRequest(new { Message = error });
 
         // Broadcast attachment to team
-        Guid? teamId = await _attachmentService.GetTeamIdForMessageAsync(messageId);
+        Guid? teamId = await _attachmentService.GetTeamIdForMessageAsync(req.MessageId);
         if (teamId.HasValue)
         {
-            await _realtimeService.BroadcastAttachmentAddedAsync(teamId.Value, messageId, attachment);
+            await _realtimeService.BroadcastAttachmentAddedAsync(teamId.Value, req.MessageId, attachment);
         }
 
         return CreatedAtAction(nameof(GetMetadata), new { id = attachment.Id }, attachment);

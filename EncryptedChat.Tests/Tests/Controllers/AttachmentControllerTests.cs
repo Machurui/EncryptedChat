@@ -62,7 +62,17 @@ public class AttachmentControllerTests
     }
 
     private Task<IActionResult> InvokeUpload(AttachmentController controller, IFormFile file, Guid messageId)
-        => controller.Upload(file, messageId, "encfile", "fniv", "fiv", "sig", "text/plain", 1);
+        => controller.Upload(new AttachmentUploadRequest
+        {
+            File = file,
+            MessageId = messageId,
+            EncryptedFileName = "encfile",
+            FileNameIv = "fniv",
+            FileIv = "fiv",
+            Signature = "sig",
+            MimeType = "text/plain",
+            KeyGeneration = 1
+        });
 
     #region Upload
 
