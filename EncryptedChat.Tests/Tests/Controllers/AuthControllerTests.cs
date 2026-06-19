@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Moq;
 
 namespace EncryptedChat.Tests;
@@ -13,7 +14,10 @@ public class AuthControllerTests
 {
     private static AuthController CreateControllerWithHttpContext(Mock<IAuthService> mockAuthService)
     {
-        AuthController controller = new(mockAuthService.Object);
+        // Provide a default IConfiguration that mirrors production defaults
+        // (Secure=true, SameSite=None) so cookie helpers work in unit tests.
+        IConfiguration config = new ConfigurationBuilder().Build();
+        AuthController controller = new(mockAuthService.Object, config);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()

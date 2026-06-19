@@ -304,6 +304,29 @@ builder.Services.AddHostedService<MessageCleanupService>();
 
 var app = builder.Build();
 
+// In Docker the DB starts empty; apply EF migrations on boot (idempotent), retrying
+// while SQL Server finishes starting. Gated so dev/`dotnet run`/tests are untouched.
+if (app.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<EncryptedChatContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    for (int attempt = 1; ; attempt++)
+    {
+        try
+        {
+            await db.Database.MigrateAsync();
+            logger.LogInformation("Database migrations applied.");
+            break;
+        }
+        catch (Exception ex) when (attempt < 12)
+        {
+            logger.LogWarning(ex, "Migration attempt {Attempt} failed; retrying in 5s…", attempt);
+            await Task.Delay(TimeSpan.FromSeconds(5));
+        }
+    }
+}
+
 // ---------- Pipeline ----------
 
 // Global exception handler - returns consistent error format, no technical details
@@ -341,7 +364,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// In containers we terminate TLS at the proxy and serve HTTP internally, so the
+// redirect must be skippable (otherwise every request 307s to an absent https port).
+if (!builder.Configuration.GetValue<bool>("DisableHttpsRedirection"))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseStaticFiles();
 

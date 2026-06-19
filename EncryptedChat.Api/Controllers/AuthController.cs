@@ -11,9 +11,10 @@ namespace EncryptedChat.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, IConfiguration configuration) : ControllerBase
 {
     private readonly IAuthService _auth = authService;
+    private readonly IConfiguration _config = configuration;
 
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDTO model)
@@ -206,42 +207,40 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(new RecoverResultDTO(message, newWords ?? Array.Empty<string>(), accessToken ?? string.Empty));
     }
 
-    private void SetAccessTokenCookie(string token, DateTime expiresUtc)
+    // Secure/SameSite are configurable so the same code works cross-origin in dev
+    // (defaults: Secure=true, SameSite=None) and same-origin behind a reverse proxy
+    // over HTTP in Docker (Cookies:Secure=false, Cookies:SameSite=Lax).
+    private CookieOptions BuildCookieOptions(DateTime expiresUtc)
     {
-        CookieOptions options = new()
+        bool secure = _config.GetValue("Cookies:Secure", true);
+        SameSiteMode sameSite = Enum.TryParse(_config["Cookies:SameSite"], ignoreCase: true, out SameSiteMode parsed)
+            ? parsed
+            : SameSiteMode.None;
+        return new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
+            Secure = secure,
+            SameSite = sameSite,
             Expires = expiresUtc,
             Path = "/"
         };
-        Response.Cookies.Append("ec.accessToken", token, options);
+    }
+
+    private void SetAccessTokenCookie(string token, DateTime expiresUtc)
+    {
+        Response.Cookies.Append("ec.accessToken", token, BuildCookieOptions(expiresUtc));
     }
 
     private void SetRefreshTokenCookie(string token)
     {
-        CookieOptions options = new()
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Expires = DateTime.UtcNow.AddDays(7),
-            Path = "/"
-        };
-        Response.Cookies.Append("ec.refreshToken", token, options);
+        Response.Cookies.Append("ec.refreshToken", token, BuildCookieOptions(DateTime.UtcNow.AddDays(7)));
     }
 
     private void ClearCookie(string name)
     {
-        CookieOptions options = new()
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Expires = DateTimeOffset.UtcNow.AddDays(-1),
-            Path = "/"
-        };
-        Response.Cookies.Append(name, "", options);
+        // Use the same config-driven Secure/SameSite as the set helpers, with a past
+        // expiry — otherwise over HTTP (Docker) a Secure clear-cookie is ignored and
+        // the cookie survives logout.
+        Response.Cookies.Append(name, "", BuildCookieOptions(DateTime.UtcNow.AddDays(-1)));
     }
 }
