@@ -303,6 +303,22 @@ public class TeamService : ITeamService
         if (teamToDelete == null)
             return null;
 
+        // UserTeamPreferences (DeleteBehavior.ClientCascade) and PinnedMessages
+        // (NoAction) do NOT cascade at the DB level, so on SQL Server deleting the
+        // team would hit a FK REFERENCE constraint. Remove them explicitly first;
+        // EF orders these child deletes before the parent in the single
+        // SaveChanges below. Everything else (Members, Messages, TeamKeyShares,
+        // TeamInvites, Attachments-via-Message) cascades in the database.
+        List<UserTeamPreference> prefs = await _context.UserTeamPreferences
+            .Where(p => p.TeamId == id)
+            .ToListAsync();
+        _context.UserTeamPreferences.RemoveRange(prefs);
+
+        List<PinnedMessage> pins = await _context.PinnedMessages
+            .Where(p => p.TeamId == id)
+            .ToListAsync();
+        _context.PinnedMessages.RemoveRange(pins);
+
         _context.Teams.Remove(teamToDelete);
         await _context.SaveChangesAsync();
 

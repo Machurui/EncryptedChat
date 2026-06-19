@@ -387,6 +387,59 @@ public class TeamServiceTests : IDisposable
         result.Should().BeNull();
     }
 
+    [Fact]
+    public async Task DeleteAsync_RemovesNonCascadingChildren_WhenOwner()
+    {
+        // UserTeamPreferences (ClientCascade) and PinnedMessages (NoAction) don't
+        // cascade at the DB level. On SQL Server, leaving them blocks the team
+        // delete with a FK REFERENCE constraint (the production 500). DeleteAsync
+        // must remove them explicitly. (InMemory ignores FKs, so we assert the
+        // observable behaviour: no orphaned children remain after delete.)
+        User owner = await CreateUser("owner-children");
+        Team team = await CreateTeam("Team With Children", owner, Member.OwnerRole);
+
+        _context.UserTeamPreferences.Add(new UserTeamPreference
+        {
+            UserId = owner.Id,
+            TeamId = team.Id,
+            BubbleColor = "#ff8800"
+        });
+
+        Message msg = new()
+        {
+            EncryptedText = "x",
+            Iv = "iv",
+            Signature = "sig",
+            Sender = owner,
+            Team = team,
+            KeyGeneration = 1
+        };
+        _context.Messages.Add(msg);
+        _context.PinnedMessages.Add(new PinnedMessage
+        {
+            Team = team,
+            MessageId = msg.Id,
+            Message = msg,
+            PinnedById = owner.Id,
+            PinnedBy = owner
+        });
+        await _context.SaveChangesAsync();
+
+        // Detach the seeded children so EF's in-memory ClientCascade can't delete
+        // them implicitly — this reproduces a real request (fresh context, children
+        // not tracked) where only an explicit removal in DeleteAsync prevents the
+        // orphan / FK violation.
+        _context.ChangeTracker.Clear();
+
+        TeamDTOPublic? result = await _service.DeleteAsync(team.Id, owner.Id);
+
+        result.Should().NotBeNull();
+        (await _context.UserTeamPreferences.CountAsync(p => p.TeamId == team.Id))
+            .Should().Be(0);
+        (await _context.PinnedMessages.CountAsync(p => p.TeamId == team.Id))
+            .Should().Be(0);
+    }
+
     #endregion
 
     #region AddMemberAsync
