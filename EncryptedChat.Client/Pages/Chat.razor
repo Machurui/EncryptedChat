@@ -26,6 +26,7 @@
 @inject IJSRuntime JS
 @inject EncryptedChat.Client.Services.Crypto.KeyVaultService KeyVault
 @inject EncryptedChat.Client.Services.Crypto.TeamKeyCacheService TeamKeyCache
+@inject HttpClient Http
 
 @implements IAsyncDisposable
 
@@ -3783,7 +3784,7 @@
 
     [Parameter] public string? UrlToken { get; set; }
 
-    private const string ApiBaseUrl = "https://localhost:7294";
+    private string ApiBaseUrl => Http.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
 
     private string? _userId;
     private bool showKeyBootstrap;
@@ -5083,7 +5084,7 @@ private async Task SelectStatus(string status)
             if (string.IsNullOrEmpty(token)) return;
 
             hubConnection = new HubConnectionBuilder()
-                .WithUrl($"https://localhost:7294/hubs/chat?access_token={token}")
+                .WithUrl($"{Http.BaseAddress}hubs/chat?access_token={token}")
                 .WithAutomaticReconnect()
                 .Build();
 

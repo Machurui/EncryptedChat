@@ -4,6 +4,7 @@
 @inject InviteClient InviteClient
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject HttpClient Http
 
 @if (IsOpen && Team != null)
 {
@@ -887,7 +888,7 @@
     [Parameter] public EventCallback<string> OnBubbleColorChange { get; set; }
     [Parameter] public EventCallback OnBubbleColorReset { get; set; }
 
-    private const string ApiBaseUrl = "https://localhost:7294";
+    private string ApiBaseUrl => Http.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
     private const string DefaultBubbleColor = "oklch(0.65 0.16 165)";
 
     private string activeTab = "general";

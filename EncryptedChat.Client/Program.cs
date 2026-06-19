@@ -28,17 +28,22 @@ builder.UseSentry(options =>
             ? rate : 0.0;
 });
 
-// API Endpoint
-const string ApiBase = "https://localhost:7294/";
+// API endpoint: configurable via wwwroot/appsettings.json ("ApiBaseUrl"). Empty ⇒ same
+// origin as the WASM host (BaseAddress) — the Docker case, where nginx reverse-proxies
+// /api + /hubs to the backend. Dev (appsettings.Development.json) keeps the cross-origin
+// API URL (https://localhost:7294/).
+string configuredApiBase = builder.Configuration["ApiBaseUrl"] ?? string.Empty;
+string apiBase = string.IsNullOrWhiteSpace(configuredApiBase)
+    ? builder.HostEnvironment.BaseAddress
+    : configuredApiBase;
 
-// HttpClient with cookie credentials for cross-origin requests
 builder.Services.AddTransient<CookieHandler>();
 builder.Services.AddScoped(sp =>
 {
     var handler = sp.GetRequiredService<CookieHandler>();
     return new HttpClient(handler)
     {
-        BaseAddress = new Uri(ApiBase)
+        BaseAddress = new Uri(apiBase)
     };
 });
 

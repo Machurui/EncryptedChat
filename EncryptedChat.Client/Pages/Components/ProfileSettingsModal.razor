@@ -4,9 +4,9 @@
 @inject EncryptedChat.Client.Services.Crypto.BootstrapKeyService BootstrapKeys
 @inject IJSRuntime JS
 @inject RecentNameColorsService RecentNameColors
+@inject HttpClient Http
 
 @{
-    const string ApiBaseUrl = "https://localhost:7294";
     string? GetFullImageUrl(string? url) => string.IsNullOrEmpty(url) ? null : (url.StartsWith("http") ? url : $"{ApiBaseUrl}{url}");
 }
 
@@ -1806,6 +1806,8 @@
 </style>
 
 @code {
+    private string ApiBaseUrl => Http.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
+
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnSave { get; set; }
