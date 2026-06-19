@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+publish/
+.git/
+.vs/
+**/node_modules/
+EncryptedChat.Client/wwwroot/css/output.css
+**/storage/attachments/
+*.user
+.env
