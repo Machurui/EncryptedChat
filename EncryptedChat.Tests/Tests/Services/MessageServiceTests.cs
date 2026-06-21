@@ -3,6 +3,7 @@ using EncryptedChat.Models;
 using EncryptedChat.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 
 namespace EncryptedChat.Tests;
 
@@ -18,6 +19,7 @@ public class MessageServiceTests : IDisposable
         "Server-side crypto removed in True E2E v1; test rewrites in a later phase";
 
     private readonly EncryptedChatContext _context;
+    private readonly Mock<IRealtimeService> _realtimeMock;
     private readonly MessageService _service;
 
     public MessageServiceTests()
@@ -27,7 +29,8 @@ public class MessageServiceTests : IDisposable
             .Options;
 
         _context = new EncryptedChatContext(options);
-        _service = new MessageService(_context);
+        _realtimeMock = new Mock<IRealtimeService>();
+        _service = new MessageService(_context, _realtimeMock.Object);
     }
 
     public void Dispose()
@@ -423,6 +426,61 @@ public class MessageServiceTests : IDisposable
         MessageDTOPublic? result = await _service.CreateAsync(dto, user.Id);
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateAsync_AwardsXp_OnFirstMessage_NoLevelUpYet()
+    {
+        User user = await CreateUser("xp-1", "Alice");
+        Team team = await CreateTeam();
+        await AddMember(user, team);
+        MessageDTO dto = new() { Team = team.Id, EncryptedText = "c", Iv = "iv", Signature = "s", KeyGeneration = team.KeyGeneration };
+
+        await _service.CreateAsync(dto, user.Id);
+
+        User reloaded = await _context.Users.FindAsync(user.Id) ?? throw new Exception("user gone");
+        reloaded.Experience.Should().Be(5);
+        reloaded.Level.Should().Be(0);          // 5 < 10 => still level 0
+        reloaded.LastXpAt.Should().NotBeNull();
+        _realtimeMock.Verify(r => r.BroadcastLevelChangedAsync(
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyList<Guid>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAsync_DoesNotAwardXp_WithinCooldown()
+    {
+        User user = await CreateUser("xp-2", "Bob");
+        Team team = await CreateTeam();
+        await AddMember(user, team);
+        user.Experience = 5;
+        user.LastXpAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        MessageDTO dto = new() { Team = team.Id, EncryptedText = "c", Iv = "iv", Signature = "s", KeyGeneration = team.KeyGeneration };
+
+        await _service.CreateAsync(dto, user.Id);
+
+        User reloaded = await _context.Users.FindAsync(user.Id) ?? throw new Exception("user gone");
+        reloaded.Experience.Should().Be(5);     // unchanged
+    }
+
+    [Fact]
+    public async Task CreateAsync_LevelsUp_AndBroadcasts_WhenThresholdCrossed()
+    {
+        User user = await CreateUser("xp-3", "Carol");
+        Team team = await CreateTeam();
+        await AddMember(user, team);
+        user.Experience = 5;
+        user.LastXpAt = DateTime.UtcNow.AddSeconds(-61);
+        await _context.SaveChangesAsync();
+        MessageDTO dto = new() { Team = team.Id, EncryptedText = "c", Iv = "iv", Signature = "s", KeyGeneration = team.KeyGeneration };
+
+        await _service.CreateAsync(dto, user.Id);
+
+        User reloaded = await _context.Users.FindAsync(user.Id) ?? throw new Exception("user gone");
+        reloaded.Experience.Should().Be(10);
+        reloaded.Level.Should().Be(1);
+        _realtimeMock.Verify(r => r.BroadcastLevelChangedAsync(
+            user.Id, 1, It.IsAny<IReadOnlyList<Guid>>()), Times.Once);
     }
 
     #endregion

@@ -8,9 +8,10 @@ namespace EncryptedChat.Services;
 // KeyGeneration invariant on writes, then persists / returns the
 // encrypted envelope verbatim. All AES-GCM + ECDSA work lives on the
 // client.
-public class MessageService(EncryptedChatContext context) : IMessageService
+public class MessageService(EncryptedChatContext context, IRealtimeService realtime) : IMessageService
 {
     private readonly EncryptedChatContext _context = context;
+    private readonly IRealtimeService _realtime = realtime;
 
     private const int MaxPageSize = 100;
 
@@ -150,8 +151,35 @@ public class MessageService(EncryptedChatContext context) : IMessageService
             Date = DateTime.UtcNow
         };
 
+        // ----- Leveling: award XP (server-derived, anti-farm cooldown). sender is a
+        // tracked entity, so this persists in the same SaveChanges as the message. -----
+        DateTime now = DateTime.UtcNow;
+        bool leveledUp = false;
+        if (sender.LastXpAt == null || now - sender.LastXpAt.Value >= LevelCurve.XpCooldown)
+        {
+            sender.Experience += LevelCurve.XpPerMessage;
+            sender.LastXpAt = now;
+            int newLevel = LevelCurve.LevelForXp(sender.Experience);
+            if (newLevel > sender.Level)
+            {
+                sender.Level = newLevel;
+                leveledUp = true;
+            }
+        }
+
         await _context.Messages.AddAsync(newMessage);
         await _context.SaveChangesAsync();
+
+        if (leveledUp)
+        {
+            // Audience = every team the sender belongs to (covers self + teammates).
+            List<Guid> teamIds = await _context.Members
+                .AsNoTracking()
+                .Where(m => m.UserId == sender.Id)
+                .Select(m => m.TeamId)
+                .ToListAsync();
+            await _realtime.BroadcastLevelChangedAsync(sender.Id, sender.Level, teamIds);
+        }
 
         return MapMessage(newMessage);
     }
