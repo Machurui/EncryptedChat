@@ -1,0 +1,63 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:${MSSQL_TAG}
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/machurui/encryptedchat-api:${IMAGE_TAG}
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__Default: "Server=db;Database=EncryptedChat;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=true"
+      Jwt__Key: "${JWT_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER}"
+      Jwt__Audience: "${JWT_AUDIENCE}"
+      Cookies__Secure: "true"
+      Cookies__SameSite: "Lax"
+      DisableHttpsRedirection: "true"
+      RunMigrationsOnStartup: "true"
+      Sentry__Dsn: "${SENTRY_DSN}"
+    volumes:
+      - attachments:/app/storage/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/machurui/encryptedchat-web:${IMAGE_TAG}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
+  attachments:
+  caddy_data:
+  caddy_config:

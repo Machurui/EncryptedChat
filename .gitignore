@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+.env.prod
 
 # AI assistants config
 .claude/
