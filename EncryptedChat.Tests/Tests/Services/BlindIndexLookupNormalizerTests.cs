@@ -43,4 +43,17 @@ public class BlindIndexLookupNormalizerTests
         var n = new BlindIndexLookupNormalizer(BuildBlindIndex());
         n.NormalizeName("a@b.com").Should().Be(n.NormalizeEmail("a@b.com"));
     }
+
+    [Fact]
+    public void NormalizeName_RoleName_UsesUpperInvariant_NotBlindIndex()
+    {
+        // Role names (no '@') keep standard normalization so the HasData-seeded
+        // AspNetRoles rows (NormalizedName = "USER"/"ADMIN"/"APP") still resolve.
+        BlindIndex bi = BuildBlindIndex();
+        var n = new BlindIndexLookupNormalizer(bi);
+        n.NormalizeName("User").Should().Be("USER");
+        n.NormalizeName("Admin").Should().Be("ADMIN");
+        // Usernames (emails) still blind-index.
+        n.NormalizeName("a@b.com").Should().Be(bi.Compute("a@b.com", "identity"));
+    }
 }
