@@ -4,6 +4,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Blazor WASM Release publish trims the app and disables the
+         NullabilityInfoContext feature switch. System.Text.Json's reflection-based
+         serializer (used by Blazor JS interop, e.g. on navigation) needs it, else it
+         throws NullabilityInfoContext_NotSupported in the published/containerized build
+         (works in `dotnet run` because dev builds aren't trimmed). Keep it enabled. -->
+    <NullabilityInfoContextSupport>true</NullabilityInfoContextSupport>
   </PropertyGroup>
 
   <ItemGroup>
