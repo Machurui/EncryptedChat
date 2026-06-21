@@ -45,6 +45,18 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
                 .HasConversion(
                     v => _cipher.Encrypt(v, "Handle"),
                     v => _cipher.Decrypt(v, "Handle"));
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Email)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "Email"),
+                    v => _cipher.Decrypt(v, "Email"));
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.UserName)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "UserName"),
+                    v => _cipher.Decrypt(v, "UserName"));
         }
 
         modelBuilder.Entity<User>()
@@ -52,9 +64,14 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             .IsUnique()
             .HasFilter("[HandleBlindIndex] IS NOT NULL");
 
+        // Email/UserName are encrypted (randomized ciphertext) → widen the columns to fit,
+        // and move email uniqueness onto the blind-index normalized column (a unique index
+        // on the encrypted Email column would be meaningless).
+        modelBuilder.Entity<User>().Property(u => u.Email).HasMaxLength(512);
+        modelBuilder.Entity<User>().Property(u => u.UserName).HasMaxLength(512);
         modelBuilder.Entity<User>()
-         .HasIndex(u => u.Email)
-         .IsUnique();
+            .HasIndex(u => u.NormalizedEmail)
+            .IsUnique();
 
         modelBuilder.Entity<UserTeamPreference>()
             .HasKey(p => new { p.UserId, p.TeamId });

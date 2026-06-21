@@ -77,6 +77,52 @@ public sealed class AuthServiceTests : IDisposable
         _context.Dispose();
     }
 
+    // Mirrors CreateUserManager but uses the production blind-index lookup normalizer, so
+    // FindByEmail/FindByName resolve against the blind-index NormalizedEmail/NormalizedUserName.
+    private static UserManager<User> CreateUserManagerWithBlindIndexNormalizer(EncryptedChatContext context, IBlindIndex blindIndex)
+    {
+        UserStore<User> store = new(context);
+        var services = new ServiceCollection();
+        services.AddDataProtection();
+        services.AddLogging();
+        services.AddSingleton<DataProtectorTokenProvider<User>>();
+        var provider = services.BuildServiceProvider();
+
+        IdentityOptions identityOptions = new();
+        identityOptions.Tokens.ProviderMap.Add(
+            TokenOptions.DefaultProvider,
+            new TokenProviderDescriptor(typeof(DataProtectorTokenProvider<User>)));
+
+        return new UserManager<User>(
+            store,
+            Options.Create(identityOptions),
+            new PasswordHasher<User>(),
+            [],
+            [new PasswordValidator<User>(new IdentityErrorDescriber())],
+            new BlindIndexLookupNormalizer(blindIndex),
+            new IdentityErrorDescriber(),
+            provider,
+            NullLogger<UserManager<User>>.Instance);
+    }
+
+    [Fact]
+    public async Task BlindIndexNormalizer_MakesFindByEmailAndName_Work()
+    {
+        using UserManager<User> um = CreateUserManagerWithBlindIndexNormalizer(_context, _blindIndex);
+        User user = new() { Id = "bi-login", Email = "login@test.com", UserName = "login@test.com", Name = "L", Level = 1 };
+
+        (await um.CreateAsync(user)).Succeeded.Should().BeTrue();
+
+        // The normalized columns hold the blind index (purpose "identity"), not the uppercased email.
+        user.NormalizedEmail.Should().Be(_blindIndex.Compute("login@test.com", "identity"));
+        user.NormalizedUserName.Should().Be(_blindIndex.Compute("login@test.com", "identity"));
+
+        // Lookups resolve via the blind index, case-insensitively — this is what makes login work.
+        (await um.FindByEmailAsync("login@test.com")).Should().NotBeNull();
+        (await um.FindByEmailAsync("LOGIN@TEST.COM")).Should().NotBeNull();
+        (await um.FindByNameAsync("Login@Test.com")).Should().NotBeNull();
+    }
+
     [Fact]
     public async Task LoginAsync_StoresHashedRefreshToken_AndRefreshAndLogoutUseRawToken()
     {
