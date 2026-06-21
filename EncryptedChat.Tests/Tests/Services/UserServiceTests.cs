@@ -642,4 +642,22 @@ public class UserServiceTests : IDisposable
         status.Should().Be(UserOperationStatus.Success);
         (await _context.UserTeamPreferences.AnyAsync()).Should().BeFalse();
     }
+
+    [Fact]
+    public async Task UpdateAsync_DoesNotChangeLevelOrExperience_NoOverPosting()
+    {
+        User user = await CreateTestUser();
+        user.Level = 7;
+        user.Experience = 320;
+        await _context.SaveChangesAsync();
+
+        // UserUpdateDTO has no Level/Experience field; updating other fields must
+        // leave the server-derived progression untouched (no over-posting).
+        UserUpdateResult result = await _service.UpdateAsync(user.Id, user.Id, new UserUpdateDTO { Name = "Renamed" });
+
+        result.Status.Should().Be(UserOperationStatus.Success);
+        User reloaded = (await _context.Users.FindAsync(user.Id))!;
+        reloaded.Level.Should().Be(7);
+        reloaded.Experience.Should().Be(320);
+    }
 }
