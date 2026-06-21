@@ -309,6 +309,7 @@
                                     <div class="friend-row-content">
                                         <div class="friend-row-name" style="color: @friend.NameColor;">@friend.Name</div>
                                         <div class="friend-row-meta">
+                                            <LevelChip Level="friend.Level" />
                                             <span class="friend-status-indicator @GetFriendDisplayStatus(friend.Status)"></span>
                                             @if (IsStatusOnline(friend.Status))
                                             {
@@ -375,6 +376,7 @@
                     </div>
                     <div class="profile-info">
                         <div class="profile-name" style="color: @currentUserNameColor;">@currentUserName</div>
+                        <LevelChip Level="currentUserLevel" />
                         <div class="profile-status-text @currentStatus">
                             @if (!string.IsNullOrEmpty(currentStatusMessage))
                             {
@@ -1222,6 +1224,7 @@
                                     <Avatar Name="@member.User?.Name" ImageUrl="@GetFullImageUrl(member.User?.ProfileImageUrl)" Size="30" />
                                     <div class="member-info">
                                         <div class="member-name" style="color: @(member.User?.NameColor ?? "#FFFFFF");">@member.User?.Name</div>
+                                        <LevelChip Level="@(member.User?.Level ?? 0)" />
                                         <div class="member-status @(member.Role == "Admin" ? "admin" : "")">
                                             @(member.Role == "Admin" ? "Admin" : "Member")
                                         </div>
@@ -3808,6 +3811,7 @@
     private bool showStatusMenu;
     private string currentStatus = "online";
     private string? currentStatusMessage;
+    private int currentUserLevel;
     private string editStatusMessage = string.Empty;
     private bool isSavingStatus;
 
@@ -3949,6 +3953,7 @@
     private record SelfReadStateEvent(Guid TeamId, DateTime? LastReadAt);
     private record SelfMuteEvent(Guid TeamId, bool Muted);
     private record SelfSettingsEvent(string? NotificationPreference, string? Status);
+    private record LevelChangedEvent(string UserId, int Level);
 
     // Aggregate unread across all teams/DMs, surfaced on the Chats tab while the
     // Friends tab is active (per-conversation badges are hidden there). Badges
@@ -4346,6 +4351,7 @@
             currentUserNameColor = result.Value.NameColor;
             currentStatus = result.Value.Status;
             currentStatusMessage = result.Value.StatusMessage;
+            currentUserLevel = result.Value.Level;
             currentTheme = result.Value.Theme;
             currentReadReceipts = result.Value.ReadReceipts;
             currentTypingIndicators = result.Value.TypingIndicators;
@@ -5197,6 +5203,36 @@ private async Task SelectStatus(string status)
                 if (!string.IsNullOrWhiteSpace(evt.Status))
                     currentStatus = evt.Status!;
                 await NotifyStateChangedAsync();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<LevelChangedEvent>("LevelChanged", async evt =>
+            {
+                if (evt.UserId == _userId)
+                    currentUserLevel = evt.Level;
+
+                for (int i = 0; i < friends.Count; i++)
+                {
+                    if (friends[i].UserId == evt.UserId)
+                    {
+                        friends[i] = friends[i] with { Level = evt.Level };
+                        break;
+                    }
+                }
+
+                var members = teamDetails?.Members;
+                if (members != null)
+                {
+                    for (int i = 0; i < members.Count; i++)
+                    {
+                        if (members[i].User?.Id == evt.UserId)
+                        {
+                            members[i] = members[i] with { User = members[i].User! with { Level = evt.Level } };
+                            break;
+                        }
+                    }
+                }
+
                 await InvokeAsync(StateHasChanged);
             });
 

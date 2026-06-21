@@ -1,0 +1,26 @@
+@namespace EncryptedChat.Client.Pages.Components
+
+@if (Level >= 1)
+{
+    <span class="level-chip">Lv.@Level</span>
+}
+
+<style>
+    .level-chip {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--accent);
+        background: rgba(var(--accent-rgb, 99, 102, 241), 0.15);
+        border: 1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.35);
+    }
+</style>
+
+@code {
+    [Parameter] public int Level { get; set; }
+}
