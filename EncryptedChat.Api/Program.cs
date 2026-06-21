@@ -286,6 +286,7 @@ builder.Services.AddScoped<JwtTokenService>();
 // File storage
 builder.Services.Configure<FileStorageOptions>(
     builder.Configuration.GetSection("FileStorage"));
+builder.Services.AddSingleton<IFieldCipher, FieldCipher>();
 builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 builder.Services.AddSingleton<MimeTypeValidator>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();

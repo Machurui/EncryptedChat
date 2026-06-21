@@ -30,6 +30,7 @@ services:
       RunMigrationsOnStartup: "true"
       Sentry__Dsn: ""
       Giphy__ServiceApiKey: "${GIPHY_API_KEY}"
+      Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:
       - attachments:/app/storage/attachments
     depends_on:
