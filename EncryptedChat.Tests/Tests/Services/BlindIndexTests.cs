@@ -54,4 +54,31 @@ public class BlindIndexTests
         Action act = () => Build(key: null);
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void Compute_DefaultPurpose_ReproducesUnlabeledValue()
+    {
+        // Default purpose "blind-index" must keep producing the SP-C Handle values (no churn).
+        BlindIndex b = Build();
+        b.Compute("alice").Should().Be(b.Compute("alice", "blind-index"));
+    }
+
+    [Fact]
+    public void Compute_DifferentPurposes_ProduceDifferentDigests()
+    {
+        BlindIndex b = Build();
+        string handle = b.Compute("alice", "blind-index");
+        string identity = b.Compute("alice", "identity");
+        string slug = b.Compute("alice", "slug");
+        handle.Should().NotBe(identity);
+        identity.Should().NotBe(slug);
+        handle.Should().NotBe(slug);
+    }
+
+    [Fact]
+    public void Compute_SamePurpose_IsDeterministic()
+    {
+        BlindIndex b = Build();
+        b.Compute("alice", "identity").Should().Be(b.Compute("alice", "identity"));
+    }
 }

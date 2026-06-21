@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
@@ -6,7 +7,8 @@ namespace EncryptedChat.Services;
 
 public sealed class BlindIndex : IBlindIndex
 {
-    private readonly byte[] _key; // HMAC key, HKDF-derived from the master key
+    private readonly byte[] _master;
+    private readonly ConcurrentDictionary<string, byte[]> _subKeys = new();
 
     public BlindIndex(IConfiguration config)
     {
@@ -18,19 +20,19 @@ public sealed class BlindIndex : IBlindIndex
         catch (FormatException) { throw new InvalidOperationException("Encryption:Key is not valid base64."); }
         if (master.Length != 32)
             throw new InvalidOperationException($"Encryption:Key must be 32 bytes; got {master.Length}.");
-
-        // Distinct sub-key for blind indexing (cryptographic separation from the AES key).
-        _key = HKDF.DeriveKey(
-            HashAlgorithmName.SHA256,
-            ikm: master,
-            outputLength: 32,
-            salt: null,
-            info: Encoding.UTF8.GetBytes("blind-index"));
+        _master = master;
     }
 
-    public string Compute(string normalizedValue)
+    public string Compute(string normalizedValue, string purpose = "blind-index")
     {
-        byte[] mac = HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes(normalizedValue ?? string.Empty));
+        // Distinct HKDF sub-key per purpose (cached). "blind-index" reproduces the SP-C key.
+        byte[] key = _subKeys.GetOrAdd(purpose, p => HKDF.DeriveKey(
+            HashAlgorithmName.SHA256,
+            ikm: _master,
+            outputLength: 32,
+            salt: null,
+            info: Encoding.UTF8.GetBytes(p)));
+        byte[] mac = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(normalizedValue ?? string.Empty));
         return Convert.ToBase64String(mac);
     }
 }
