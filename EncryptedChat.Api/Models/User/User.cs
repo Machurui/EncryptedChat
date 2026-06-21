@@ -15,6 +15,13 @@ public class User : IdentityUser
     [Required]
     public int Level { get; set; } = 0;
 
+    // Leveling: total XP earned (source of truth). Level above is the cached,
+    // derived value (LevelCurve.LevelForXp(Experience)), updated on each grant.
+    public int Experience { get; set; } = 0;
+
+    // Timestamp of the last XP grant — enforces the anti-farm cooldown.
+    public DateTime? LastXpAt { get; set; }
+
     [MaxLength(50)]
     public string NameColor { get; set; } = "#FFFFFF";
 
