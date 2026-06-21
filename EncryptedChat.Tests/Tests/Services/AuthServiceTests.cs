@@ -17,6 +17,8 @@ namespace EncryptedChat.Tests;
 
 public sealed class AuthServiceTests : IDisposable
 {
+    private const string TestEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+
     private readonly EncryptedChatContext _context;
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
@@ -24,6 +26,7 @@ public sealed class AuthServiceTests : IDisposable
     private readonly Mock<ISessionService> _sessionService;
     private readonly Mock<IRecoveryService> _recoveryService = new();
     private readonly PasswordHistoryService _passwordHistory;
+    private readonly BlindIndex _blindIndex;
     private readonly AuthService _service;
 
     public AuthServiceTests()
@@ -42,6 +45,7 @@ public sealed class AuthServiceTests : IDisposable
                 Bip39Words.All.Take(12).ToList(),
                 DateTime.UtcNow));
         _passwordHistory = new PasswordHistoryService(_context, _userManager.PasswordHasher);
+        _blindIndex = new BlindIndex(CreateBlindIndexConfiguration());
         _service = new AuthService(
             _userManager,
             _signInManager.Object,
@@ -50,7 +54,8 @@ public sealed class AuthServiceTests : IDisposable
             _context,
             _sessionService.Object,
             _recoveryService.Object,
-            _passwordHistory);
+            _passwordHistory,
+            _blindIndex);
     }
 
     private AuthService BuildAuthService(IRecoveryService recovery)
@@ -62,7 +67,8 @@ public sealed class AuthServiceTests : IDisposable
             _context,
             _sessionService.Object,
             recovery,
-            _passwordHistory);
+            _passwordHistory,
+            _blindIndex);
 
     public void Dispose()
     {
@@ -201,6 +207,7 @@ public sealed class AuthServiceTests : IDisposable
             NormalizedUserName = "EXISTING@TEST.COM",
             Name = "existing",
             Handle = "taken",
+            HandleBlindIndex = _blindIndex.Compute("taken"),
             Level = 1,
         };
         await _userManager.CreateAsync(existing);
@@ -215,6 +222,19 @@ public sealed class AuthServiceTests : IDisposable
         result.Succeeded.Should().BeFalse();
         result.Errors.Should().ContainSingle(e => e.Code == "DuplicateHandle");
         recoveryWords.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RegisterAsync_RejectsDuplicateHandle_ViaBlindIndex()
+    {
+        await _roleManager.CreateAsync(new IdentityRole("User"));
+        var first = await _service.RegisterAsync(new RegisterDTO { Email = "a@test.com", Password = "P@ssw0rd123456", Handle = "dupe" });
+        first.Result.Succeeded.Should().BeTrue();
+
+        // Same handle, different case → normalizes to the same blind index → rejected.
+        var second = await _service.RegisterAsync(new RegisterDTO { Email = "b@test.com", Password = "P@ssw0rd123456", Handle = "DUPE" });
+        second.Result.Succeeded.Should().BeFalse();
+        second.Result.Errors.Should().Contain(e => e.Code == "DuplicateHandle");
     }
 
     [Fact]
@@ -510,6 +530,14 @@ public sealed class AuthServiceTests : IDisposable
                 ["Jwt:Key"] = "auth-service-test-jwt-key-with-at-least-32-bytes",
                 ["Jwt:Issuer"] = "EncryptedChat.Tests",
                 ["Jwt:Audience"] = "EncryptedChat.Tests"
+            })
+            .Build();
+
+    private static IConfiguration CreateBlindIndexConfiguration() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Encryption:Key"] = TestEncryptionKey
             })
             .Build();
 

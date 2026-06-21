@@ -15,7 +15,8 @@ public class AuthService(
     EncryptedChatContext context,
     ISessionService sessionService,
     IRecoveryService recoveryService,
-    IPasswordHistoryService passwordHistory) : IAuthService
+    IPasswordHistoryService passwordHistory,
+    IBlindIndex blindIndex) : IAuthService
 {
     private const string DefaultUserRole = "User";
     private const string ReuseRejection = "You cannot reuse one of your last 3 passwords.";
@@ -28,6 +29,7 @@ public class AuthService(
     private readonly ISessionService _sessionService = sessionService;
     private readonly IRecoveryService _recoveryService = recoveryService;
     private readonly IPasswordHistoryService _passwordHistory = passwordHistory;
+    private readonly IBlindIndex _blindIndex = blindIndex;
 
     public async Task<(IdentityResult Result, IReadOnlyList<string>? RecoveryWords, string? AccessToken)> RegisterAsync(RegisterDTO model)
     {
@@ -40,8 +42,9 @@ public class AuthService(
             }), null, null);
 
         string handle = (model.Handle ?? string.Empty).Trim().ToLowerInvariant();
+        string handleIndex = _blindIndex.Compute(handle);
 
-        bool handleExists = await _userManager.Users.AnyAsync(u => u.Handle == handle);
+        bool handleExists = await _userManager.Users.AnyAsync(u => u.HandleBlindIndex == handleIndex);
         if (handleExists)
             return (IdentityResult.Failed(new IdentityError
             {
@@ -54,6 +57,7 @@ public class AuthService(
             UserName = model.Email,
             Name = handle,    // initial display name = handle; user can customize later
             Handle = handle,
+            HandleBlindIndex = handleIndex,
             Email = model.Email,
             Level = 1
         };
