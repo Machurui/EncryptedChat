@@ -220,41 +220,6 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
                  (f.RequesterId == userId2 && f.AddresseeId == userId1)));
     }
 
-    public async Task<IReadOnlyList<UserDTOPublic>> SearchFriendsAsync(string userId, string query, int limit = 10)
-    {
-        if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
-            return [];
-
-        if (limit < 1) limit = 1;
-        if (limit > 20) limit = 20;
-
-        string normalizedQuery = query.Trim().ToLowerInvariant();
-
-        var friendIds = await _context.Friendships
-            .AsNoTracking()
-            .Where(f => f.Status == FriendshipStatus.Accepted &&
-                       (f.RequesterId == userId || f.AddresseeId == userId))
-            .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
-            .ToListAsync();
-
-        var friends = await _context.Users
-            .AsNoTracking()
-            .Where(u => friendIds.Contains(u.Id) &&
-                       (u.Name.ToLower().Contains(normalizedQuery) ||
-                        (u.Email != null && u.Email.ToLower().Contains(normalizedQuery))))
-            .OrderBy(u => u.Name)
-            .Take(limit)
-            .Select(u => new UserDTOPublic
-            {
-                Id = u.Id,
-                Name = u.Name,
-                Level = u.Level
-            })
-            .ToListAsync();
-
-        return friends;
-    }
-
     public async Task<IReadOnlyList<string>> GetPendingRequestUserIdsAsync(string userId)
     {
         var userIds = await _context.Friendships

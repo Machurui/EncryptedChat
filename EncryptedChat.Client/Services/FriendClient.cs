@@ -92,30 +92,6 @@ public class FriendClient(HttpClient http)
         }
     }
 
-    public async Task<Result<List<UserDTO>>> SearchFriendsAsync(string query, int limit = 10)
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
-                return Result<List<UserDTO>>.Ok([]);
-
-            var res = await _http.GetAsync($"api/friend/search?q={Uri.EscapeDataString(query)}&limit={limit}");
-            var body = await res.Content.ReadAsStringAsync();
-
-            if (!res.IsSuccessStatusCode)
-                return Result<List<UserDTO>>.Fail(ParseMessage(body) ?? "Search failed.");
-
-            var users = JsonSerializer.Deserialize<List<UserDTO>>(body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-
-            return Result<List<UserDTO>>.Ok(users);
-        }
-        catch
-        {
-            return Result<List<UserDTO>>.Fail("Unexpected error.");
-        }
-    }
-
     public async Task<Result> SendRequestAsync(string addresseeId)
     {
         try

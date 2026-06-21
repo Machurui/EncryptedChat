@@ -47,20 +47,6 @@ public class FriendController(
         return Ok(requests);
     }
 
-    [HttpGet("search")]
-    public async Task<IActionResult> SearchFriends([FromQuery] string q, [FromQuery] int limit = 10)
-    {
-        string? userId = GetCurrentUserId();
-        if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized();
-
-        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
-            return Ok(Array.Empty<UserDTOPublic>());
-
-        var friends = await _friendService.SearchFriendsAsync(userId, q, limit);
-        return Ok(friends);
-    }
-
     [HttpPost("{addresseeId}")]
     public async Task<IActionResult> SendRequest(string addresseeId)
     {
