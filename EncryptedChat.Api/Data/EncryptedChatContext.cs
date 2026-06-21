@@ -33,7 +33,24 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
                 .HasConversion(
                     v => _cipher.Encrypt(v, "StatusMessage"),
                     v => _cipher.Decrypt(v, "StatusMessage"));
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Name)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "Name"),
+                    v => _cipher.Decrypt(v, "Name") ?? string.Empty); // Name is [Required] — never null in storage
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Handle)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "Handle"),
+                    v => _cipher.Decrypt(v, "Handle"));
         }
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.HandleBlindIndex)
+            .IsUnique()
+            .HasFilter("[HandleBlindIndex] IS NOT NULL");
 
         modelBuilder.Entity<User>()
          .HasIndex(u => u.Email)

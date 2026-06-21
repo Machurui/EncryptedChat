@@ -5,12 +5,17 @@ using Microsoft.AspNetCore.Identity;
 public class User : IdentityUser
 {
     [Required]
-    [MaxLength(100)]
+    [MaxLength(512)]
     public string Name { get; set; } = string.Empty;
 
-    [MaxLength(32)]
+    [MaxLength(256)]
     [RegularExpression(@"^[a-zA-Z0-9_]+$")]
     public string? Handle { get; set; }
+
+    // Deterministic HMAC of the normalized handle (blind index) — enables uniqueness
+    // + exact lookup now that Handle itself is encrypted (randomized). Null until claimed.
+    [MaxLength(64)]
+    public string? HandleBlindIndex { get; set; }
 
     [Required]
     public int Level { get; set; } = 0;
