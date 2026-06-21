@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,9 @@ public class UserServiceTests : IDisposable
     private readonly UserManager<User> _userManager;
     private readonly UserService _service;
     private readonly Mock<IPresenceService> _presenceServiceMock;
+    private readonly BlindIndex _blindIndex;
+
+    private const string TestEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
     public UserServiceTests()
     {
@@ -29,14 +33,49 @@ public class UserServiceTests : IDisposable
         _userManager = CreateUserManager(_context);
         _presenceServiceMock = new Mock<IPresenceService>();
         _presenceServiceMock.Setup(p => p.IsOnline(It.IsAny<string>())).Returns(false);
-        _service = new UserService(_context, _userManager, _presenceServiceMock.Object);
+        _blindIndex = new BlindIndex(CreateBlindIndexConfiguration());
+        _service = new UserService(_context, _userManager, _presenceServiceMock.Object, _blindIndex);
     }
+
+    private static IConfiguration CreateBlindIndexConfiguration() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Encryption:Key"] = TestEncryptionKey
+            })
+            .Build();
 
     public void Dispose()
     {
         _userManager.Dispose();
         _context.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task SearchUsersAsync_ExactHandleMatch_ReturnsUser()
+    {
+        User target = new()
+        {
+            Id = "u-alice",
+            Name = "Alice",
+            Handle = "alice",
+            HandleBlindIndex = _blindIndex.Compute("alice"),
+            Email = "alice@test.com",
+            NormalizedEmail = "ALICE@TEST.COM",
+            UserName = "alice@test.com",
+            NormalizedUserName = "ALICE@TEST.COM"
+        };
+        _context.Users.Add(target);
+        await _context.SaveChangesAsync();
+
+        // Case-insensitive normalize → exact blind-index match.
+        var hit = await _service.SearchUsersAsync("ALICE", "someone-else", 10);
+        hit.Should().ContainSingle(u => u.Id == "u-alice");
+
+        // Partial query no longer matches (substring search is gone).
+        var miss = await _service.SearchUsersAsync("ali", "someone-else", 10);
+        miss.Should().BeEmpty();
     }
 
     private static UserManager<User> CreateUserManager(EncryptedChatContext context)

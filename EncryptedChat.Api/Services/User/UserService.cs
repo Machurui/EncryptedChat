@@ -6,11 +6,12 @@ using System.ComponentModel.DataAnnotations;
 
 namespace EncryptedChat.Services;
 
-public class UserService(EncryptedChatContext context, UserManager<User> userManager, IPresenceService presenceService) : IUserService
+public class UserService(EncryptedChatContext context, UserManager<User> userManager, IPresenceService presenceService, IBlindIndex blindIndex) : IUserService
 {
     private readonly EncryptedChatContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
     private readonly IPresenceService _presenceService = presenceService;
+    private readonly IBlindIndex _blindIndex = blindIndex;
 
     private static readonly System.Text.RegularExpressions.Regex HandleRegex =
         new(@"^[a-zA-Z0-9_]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -186,16 +187,16 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         if (limit > 20) limit = 20;
 
         string normalizedQuery = query.Trim().ToLowerInvariant();
-        if (normalizedQuery.Length < 2)
+        if (normalizedQuery.Length < 3)
             return [];
+
+        // Handle is encrypted at rest → exact match via the deterministic blind index
+        // (substring search is no longer possible). At most one user matches.
+        string queryIndex = _blindIndex.Compute(normalizedQuery);
 
         List<UserDTOPublic> users = await _context.Users
             .AsNoTracking()
-            .Where(u => u.Id != requesterId &&
-                        (u.Name.ToLower().Contains(normalizedQuery) ||
-                         (u.Handle != null && u.Handle.ToLower().Contains(normalizedQuery)) ||
-                         (u.Email != null && u.Email.ToLower().Contains(normalizedQuery))))
-            .OrderBy(u => u.Name)
+            .Where(u => u.Id != requesterId && u.HandleBlindIndex == queryIndex)
             .Take(limit)
             .Select(u => new UserDTOPublic
             {
@@ -269,11 +270,14 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
             // First-time claim — user.Handle is null, so no self-exclusion needed.
-            bool handleExists = await _context.Users.AnyAsync(u => u.Handle == handle);
+            // Handle is encrypted at rest, so uniqueness goes through the blind index.
+            string claimIndex = _blindIndex.Compute(handle);
+            bool handleExists = await _context.Users.AnyAsync(u => u.HandleBlindIndex == claimIndex);
             if (handleExists)
                 return new UserUpdateResult(UserOperationStatus.Conflict);
 
             user.Handle = handle;
+            user.HandleBlindIndex = claimIndex;
         }
 
         if (email != null)
