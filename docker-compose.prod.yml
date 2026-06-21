@@ -28,6 +28,7 @@ services:
       DisableHttpsRedirection: "true"
       RunMigrationsOnStartup: "true"
       Sentry__Dsn: "${SENTRY_DSN}"
+      Giphy__ServiceApiKey: "${GIPHY_API_KEY}"
     volumes:
       - attachments:/app/storage/attachments
     depends_on:
