@@ -3,12 +3,15 @@ using EncryptedChat.Models;
 using EncryptedChat.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Moq;
 
 namespace EncryptedChat.Tests;
 
 public class TeamServiceTests : IDisposable
 {
+    private const string TestEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+
     private readonly EncryptedChatContext _context;
     private readonly TeamService _service;
     private readonly Mock<IFriendService> _friendServiceMock;
@@ -26,7 +29,10 @@ public class TeamServiceTests : IDisposable
             .ReturnsAsync(true);
         _presenceServiceMock = new Mock<IPresenceService>();
         _presenceServiceMock.Setup(p => p.IsOnline(It.IsAny<string>())).Returns(false);
-        _service = new TeamService(_context, _friendServiceMock.Object, _presenceServiceMock.Object);
+        BlindIndex blindIndex = new(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Encryption:Key"] = TestEncryptionKey })
+            .Build());
+        _service = new TeamService(_context, _friendServiceMock.Object, _presenceServiceMock.Object, blindIndex);
     }
 
     public void Dispose()
@@ -252,6 +258,28 @@ public class TeamServiceTests : IDisposable
 
         result.Should().BeNull();
         (await _context.Teams.AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateTeam_SameName_ProducesDistinctSlugs_ViaBlindIndex()
+    {
+        // Two teams with the same name: the first gets the base slug and its blind index;
+        // the second must get a suffixed slug because CreateUniqueSlugAsync detects the
+        // collision via SlugBlindIndex (uniqueness enforced through the blind index now
+        // that Slug is encrypted in production).
+        User creator = await CreateUser("creator-slug");
+        TeamDTO dto1 = new() { Name = "Acme Corp", Admins = [], Members = [], MemberKeyShares = new() { [creator.Id] = "w1" } };
+        TeamDTO dto2 = new() { Name = "Acme Corp", Admins = [], Members = [], MemberKeyShares = new() { [creator.Id] = "w2" } };
+
+        TeamDTOPublic? team1 = await _service.CreateAsync(dto1, creator.Id);
+        TeamDTOPublic? team2 = await _service.CreateAsync(dto2, creator.Id);
+
+        team1.Should().NotBeNull();
+        team2.Should().NotBeNull();
+        string slug1 = team1!.Slug;
+        string slug2 = team2!.Slug;
+        slug1.Should().NotBe(slug2);
+        slug2.Should().StartWith("acme-corp");
     }
 
     #endregion

@@ -20,15 +20,20 @@ public class Team
     public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required]
-    [MaxLength(100)]
+    [MaxLength(512)]
     [MinLength(1)]
     public string Name { get; set; } = string.Empty;
 
     public int KeyGeneration { get; set; } = 1;
 
     [Required]
-    [MaxLength(100)]
+    [MaxLength(512)]
     public string Slug { get; set; } = string.Empty;
+
+    // Deterministic HMAC of the slug (blind index) — enables uniqueness now that Slug is
+    // encrypted (randomized). Null until a slug is assigned (always set on create/rename).
+    [MaxLength(64)]
+    public string? SlugBlindIndex { get; set; }
 
     [Required]
     [MaxLength(10)]

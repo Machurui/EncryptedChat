@@ -57,6 +57,18 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
                 .HasConversion(
                     v => _cipher.Encrypt(v, "UserName"),
                     v => _cipher.Decrypt(v, "UserName"));
+
+            modelBuilder.Entity<Team>()
+                .Property(t => t.Name)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "Team.Name"),
+                    v => _cipher.Decrypt(v, "Team.Name") ?? string.Empty);
+
+            modelBuilder.Entity<Team>()
+                .Property(t => t.Slug)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "Team.Slug"),
+                    v => _cipher.Decrypt(v, "Team.Slug") ?? string.Empty);
         }
 
         modelBuilder.Entity<User>()
@@ -108,8 +120,9 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Team>()
-            .HasIndex(t => t.Slug)
-            .IsUnique();
+            .HasIndex(t => t.SlugBlindIndex)
+            .IsUnique()
+            .HasFilter("[SlugBlindIndex] IS NOT NULL");
 
         modelBuilder.Entity<Member>()
             .HasOne(m => m.User)

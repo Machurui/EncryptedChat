@@ -10,12 +10,14 @@ public class TeamService : ITeamService
     private readonly EncryptedChatContext _context;
     private readonly IFriendService _friendService;
     private readonly IPresenceService _presenceService;
+    private readonly IBlindIndex _blindIndex;
 
-    public TeamService(EncryptedChatContext context, IFriendService friendService, IPresenceService presenceService)
+    public TeamService(EncryptedChatContext context, IFriendService friendService, IPresenceService presenceService, IBlindIndex blindIndex)
     {
         _context = context;
         _friendService = friendService;
         _presenceService = presenceService;
+        _blindIndex = blindIndex;
     }
 
     public async Task<IEnumerable<TeamDTOPublic?>?> GetAllAsync()
@@ -98,6 +100,7 @@ public class TeamService : ITeamService
         {
             Name = trimmedName,
             Slug = slug,
+            SlugBlindIndex = _blindIndex.Compute(slug, "slug"),
             Glyph = glyph,
             Color = color,
             MessageLifetime = messageLifetime,
@@ -237,7 +240,7 @@ public class TeamService : ITeamService
         }
 
         teamToUpdate.Name = trimmedName;
-        teamToUpdate.Slug = await CreateUniqueSlugAsync(trimmedName, teamToUpdate.Id);
+        SetTeamSlug(teamToUpdate, await CreateUniqueSlugAsync(trimmedName, teamToUpdate.Id));
         teamToUpdate.ModifiedAt = DateTime.UtcNow;
 
         try
@@ -278,7 +281,7 @@ public class TeamService : ITeamService
             return null;
 
         team.Name = trimmedName;
-        team.Slug = await CreateUniqueSlugAsync(name, id);
+        SetTeamSlug(team, await CreateUniqueSlugAsync(name, id));
         team.ModifiedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -588,7 +591,7 @@ public class TeamService : ITeamService
             if (trimmedName.Length >= 1 && trimmedName.Length <= 100)
             {
                 team.Name = trimmedName;
-                team.Slug = await CreateUniqueSlugAsync(trimmedName, id);
+                SetTeamSlug(team, await CreateUniqueSlugAsync(trimmedName, id));
                 hasChanges = true;
             }
         }
@@ -680,11 +683,13 @@ public class TeamService : ITeamService
         if (string.IsNullOrEmpty(myWrappedKey) || string.IsNullOrEmpty(friendWrappedKey))
             return (null, false);
 
+        string dmSlug = $"dm-{Guid.NewGuid():N}";
         var dm = new Team
         {
             Id = Guid.NewGuid(),
             Name = $"{user.Name} & {friend.Name}",
-            Slug = $"dm-{Guid.NewGuid():N}",
+            Slug = dmSlug,
+            SlugBlindIndex = _blindIndex.Compute(dmSlug, "slug"),
             IsDirect = true,
             Glyph = "💬",
             Color = "oklch(0.65 0.16 165)",
@@ -788,11 +793,18 @@ public class TeamService : ITeamService
         throw new InvalidOperationException("Could not generate unique URL token after 5 attempts.");
     }
 
+    private void SetTeamSlug(Team team, string slug)
+    {
+        team.Slug = slug;
+        team.SlugBlindIndex = _blindIndex.Compute(slug, "slug");
+    }
+
     private async Task<string> CreateUniqueSlugAsync(string? name, Guid? excludeTeamId = null)
     {
         var baseSlug = CreateSlug(name);
 
-        var existsQuery = _context.Teams.AsNoTracking().Where(t => t.Slug == baseSlug);
+        string baseIndex = _blindIndex.Compute(baseSlug, "slug");
+        var existsQuery = _context.Teams.AsNoTracking().Where(t => t.SlugBlindIndex == baseIndex);
         if (excludeTeamId.HasValue)
             existsQuery = existsQuery.Where(t => t.Id != excludeTeamId.Value);
 
