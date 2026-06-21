@@ -55,4 +55,24 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
             logger.LogWarning(ex, "Failed to broadcast last message update for team {TeamId}", teamId);
         }
     }
+
+    public async Task BroadcastLevelChangedAsync(string userId, int level, IReadOnlyList<Guid> teamIds)
+    {
+        if (teamIds.Count == 0) return;
+
+        try
+        {
+            var payload = new { UserId = userId, Level = level };
+            // One emit per team group: reaches the user themself (they're in their own
+            // team groups => self-update) AND their connected teammates.
+            foreach (Guid teamId in teamIds)
+            {
+                await hubContext.Clients.Group(TeamGroup(teamId)).SendAsync("LevelChanged", payload);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to broadcast level change for user {UserId}", userId);
+        }
+    }
 }
