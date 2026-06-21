@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using EncryptedChat.Models;
 using Microsoft.AspNetCore.Identity;
+using EncryptedChat.Services;
 
 namespace EncryptedChat.Data;
-public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options) : IdentityDbContext<User>(options)
+public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options, IFieldCipher? cipher = null) : IdentityDbContext<User>(options)
 {
+    private readonly IFieldCipher? _cipher = cipher;
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<Member> Members => Set<Member>();
     public DbSet<Message> Messages => Set<Message>();
@@ -23,6 +25,15 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        if (_cipher is not null)
+        {
+            modelBuilder.Entity<User>()
+                .Property(u => u.StatusMessage)
+                .HasConversion(
+                    v => _cipher.Encrypt(v, "StatusMessage"),
+                    v => _cipher.Decrypt(v, "StatusMessage"));
+        }
 
         modelBuilder.Entity<User>()
          .HasIndex(u => u.Email)

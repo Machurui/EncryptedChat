@@ -31,7 +31,7 @@ public class User : IdentityUser
     [MaxLength(20)]
     public string Status { get; set; } = "online";
 
-    [MaxLength(100)]
+    [MaxLength(512)]
     public string? StatusMessage { get; set; }
 
     [MaxLength(10)]
