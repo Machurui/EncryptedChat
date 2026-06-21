@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -99,6 +100,10 @@ builder.Services
     })
     .AddEntityFrameworkStores<EncryptedChatContext>()
     .AddDefaultTokenProviders();
+
+// Override Identity's lookup normalizer so email/username lookups use a blind index
+// (Email/UserName are encrypted at rest; the normalized columns hold the blind index).
+builder.Services.Replace(ServiceDescriptor.Scoped<ILookupNormalizer, BlindIndexLookupNormalizer>());
 
 // Disable cookie redirects for API
 builder.Services.ConfigureApplicationCookie(options =>
