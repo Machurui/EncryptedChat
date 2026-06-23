@@ -309,6 +309,12 @@ builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
 builder.Services.AddHostedService<MessageCleanupService>();
 
+// Liveness probe for the Docker healthcheck. Deliberately a plain liveness check
+// (no DB/readiness): the API must stay healthy while it serves requests, so a
+// transient SQL hiccup can't trigger a container restart loop. Startup ordering
+// is already handled by the compose `depends_on: db healthy`.
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 // In Docker the DB starts empty; apply EF migrations on boot (idempotent), retrying
@@ -391,6 +397,9 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapHub<ChatHub>("/hubs/chat");
+
+// Anonymous liveness endpoint probed by the Docker healthcheck.
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapGet("/", () => @"Encrypted Chat API. Navigate to /swagger to open the Swagger test UI.");
 app.Run();
