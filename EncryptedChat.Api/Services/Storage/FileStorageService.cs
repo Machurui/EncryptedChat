@@ -6,6 +6,7 @@ public class FileStorageOptions
 {
     public string BasePath { get; set; } = "./storage/attachments";
     public long MaxFileSizeBytes { get; set; } = 26_214_400;
+    public long MaxTeamStorageBytes { get; set; } = 1_073_741_824; // 1 GiB per team
     public string[] AllowedExtensions { get; set; } =
     [
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg",
