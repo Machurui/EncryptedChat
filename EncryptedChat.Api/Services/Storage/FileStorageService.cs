@@ -61,6 +61,39 @@ public class FileStorageService(IOptions<FileStorageOptions> options) : IFileSto
 
     public string GetFullPath(string storagePath) => Path.Combine(_basePath, storagePath);
 
+    public Task<int> DeleteOrphansAsync(ISet<string> knownStoragePaths, DateTime cutoffUtc, CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(_basePath))
+            return Task.FromResult(0);
+
+        int deleted = 0;
+        foreach (string fullPath in Directory.EnumerateFiles(_basePath, "*.enc", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string relativePath = Path.GetRelativePath(_basePath, fullPath);
+            if (knownStoragePaths.Contains(relativePath))
+                continue;
+
+            // An upload writes the blob before committing its DB row, so a fresh
+            // "unknown" file may just be an in-flight upload — leave recent files alone.
+            if (File.GetLastWriteTimeUtc(fullPath) >= cutoffUtc)
+                continue;
+
+            try
+            {
+                File.Delete(fullPath);
+                deleted++;
+            }
+            catch (IOException)
+            {
+                // Locked/transient — retried on the next sweep.
+            }
+        }
+
+        return Task.FromResult(deleted);
+    }
+
     private void EnsureBasePathExists() => Directory.CreateDirectory(_basePath);
 
     private void ValidatePath(string fullPath)
