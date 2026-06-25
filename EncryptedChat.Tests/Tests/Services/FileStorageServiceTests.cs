@@ -163,4 +163,50 @@ public class FileStorageServiceTests : IDisposable
     }
 
     #endregion
+
+    #region DeleteOrphansAsync
+
+    [Fact]
+    public async Task DeleteOrphansAsync_DeletesOldUnknownBlobsOnly()
+    {
+        string team = Guid.NewGuid().ToString();
+        Directory.CreateDirectory(Path.Combine(_testBasePath, team));
+
+        string known = Path.Combine(team, "known.enc");
+        string orphanOld = Path.Combine(team, "orphan-old.enc");
+        string orphanNew = Path.Combine(team, "orphan-new.enc");
+
+        await File.WriteAllBytesAsync(Path.Combine(_testBasePath, known), new byte[8]);
+        await File.WriteAllBytesAsync(Path.Combine(_testBasePath, orphanOld), new byte[8]);
+        await File.WriteAllBytesAsync(Path.Combine(_testBasePath, orphanNew), new byte[8]);
+
+        // Age the known + old-orphan blobs past the cutoff; orphanNew stays fresh.
+        DateTime old = DateTime.UtcNow.AddHours(-2);
+        File.SetLastWriteTimeUtc(Path.Combine(_testBasePath, known), old);
+        File.SetLastWriteTimeUtc(Path.Combine(_testBasePath, orphanOld), old);
+
+        HashSet<string> knownSet = new() { known };
+        int removed = await _service.DeleteOrphansAsync(knownSet, DateTime.UtcNow.AddHours(-1));
+
+        removed.Should().Be(1);
+        File.Exists(Path.Combine(_testBasePath, known)).Should().BeTrue();        // referenced → kept
+        File.Exists(Path.Combine(_testBasePath, orphanOld)).Should().BeFalse();   // orphan + old → deleted
+        File.Exists(Path.Combine(_testBasePath, orphanNew)).Should().BeTrue();    // orphan but fresh → kept (anti-race)
+    }
+
+    [Fact]
+    public async Task DeleteOrphansAsync_KeepsReferencedBlobs()
+    {
+        Guid teamId = Guid.NewGuid();
+        string path = await _service.SaveAsync([1, 2, 3], teamId);
+        File.SetLastWriteTimeUtc(Path.Combine(_testBasePath, path), DateTime.UtcNow.AddHours(-2));
+
+        HashSet<string> knownSet = new() { path };
+        int removed = await _service.DeleteOrphansAsync(knownSet, DateTime.UtcNow.AddHours(-1));
+
+        removed.Should().Be(0);
+        File.Exists(Path.Combine(_testBasePath, path)).Should().BeTrue();
+    }
+
+    #endregion
 }
