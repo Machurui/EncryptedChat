@@ -89,4 +89,77 @@ public class FriendServiceTests
         removedFriendId.Should().Be(friendId);
         deletedDmId.Should().BeNull();
     }
+
+    #region SearchFriendsAsync
+
+    private async Task AddAcceptedFriendAsync(string userId, string name, string? handle)
+    {
+        var friend = new User { Id = Guid.NewGuid().ToString(), UserName = name.ToLowerInvariant(), Name = name, Handle = handle, NameColor = "#FFFFFF" };
+        _context.Users.Add(friend);
+        _context.Friendships.Add(new Friendship
+        {
+            Id = Guid.NewGuid(),
+            RequesterId = userId,
+            AddresseeId = friend.Id,
+            Status = FriendshipStatus.Accepted,
+            CreatedAt = DateTime.UtcNow,
+            AcceptedAt = DateTime.UtcNow,
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task SearchFriendsAsync_MatchesByName_CaseInsensitive()
+    {
+        var (userId, _) = await SetupAcceptedFriendshipAsync(); // friend "Bob", no handle
+
+        var result = await _service.SearchFriendsAsync(userId, "bo", 20);
+
+        result.Should().ContainSingle(f => f.Name == "Bob");
+    }
+
+    [Fact]
+    public async Task SearchFriendsAsync_MatchesByHandle()
+    {
+        var (userId, _) = await SetupAcceptedFriendshipAsync();
+        await AddAcceptedFriendAsync(userId, "Carol", "carol_handle");
+
+        var result = await _service.SearchFriendsAsync(userId, "carol_h", 20);
+
+        result.Should().ContainSingle(f => f.Handle == "carol_handle");
+    }
+
+    [Fact]
+    public async Task SearchFriendsAsync_ReturnsEmpty_WhenNoMatch()
+    {
+        var (userId, _) = await SetupAcceptedFriendshipAsync();
+
+        var result = await _service.SearchFriendsAsync(userId, "zzz", 20);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchFriendsAsync_ReturnsAllFriends_WhenQueryEmpty()
+    {
+        var (userId, _) = await SetupAcceptedFriendshipAsync();
+        await AddAcceptedFriendAsync(userId, "Carol", "carol");
+
+        var result = await _service.SearchFriendsAsync(userId, "  ", 20);
+
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task SearchFriendsAsync_RespectsLimit()
+    {
+        var (userId, _) = await SetupAcceptedFriendshipAsync();
+        await AddAcceptedFriendAsync(userId, "Carol", "carol");
+
+        var result = await _service.SearchFriendsAsync(userId, "", 1);
+
+        result.Should().HaveCount(1);
+    }
+
+    #endregion
 }

@@ -47,6 +47,22 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
         }).ToList();
     }
 
+    public async Task<IReadOnlyList<FriendDTO>> SearchFriendsAsync(string userId, string? q, int limit)
+    {
+        // Friends are a small, already-decrypted set, so a partial in-memory filter
+        // is fine here (unlike the all-users search, which must use the exact blind index).
+        IReadOnlyList<FriendDTO> friends = await GetFriendsAsync(userId);
+        string term = (q ?? string.Empty).Trim();
+
+        IEnumerable<FriendDTO> matches = string.IsNullOrEmpty(term)
+            ? friends
+            : friends.Where(f =>
+                (f.Name ?? string.Empty).Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                (f.Handle ?? string.Empty).Contains(term, StringComparison.OrdinalIgnoreCase));
+
+        return matches.Take(Math.Clamp(limit, 1, 100)).ToList();
+    }
+
     public async Task<IReadOnlyList<FriendRequestDTO>> GetPendingRequestsAsync(string userId)
     {
         var requests = await _context.Friendships
