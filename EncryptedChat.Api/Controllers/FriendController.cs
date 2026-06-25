@@ -133,6 +133,19 @@ public class FriendController(
         return NoContent();
     }
 
+    // Search within the caller's own friends (partial, in-memory). Distinct from
+    // search-users, which finds strangers to add via an exact blind-index lookup.
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchFriends([FromQuery] string? q, [FromQuery] int limit = 20)
+    {
+        string? userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        IReadOnlyList<FriendDTO> friends = await _friendService.SearchFriendsAsync(userId, q, limit);
+        return Ok(friends);
+    }
+
     [HttpGet("search-users")]
     public async Task<IActionResult> SearchUsersToAdd([FromQuery] string q, [FromQuery] int limit = 10)
     {

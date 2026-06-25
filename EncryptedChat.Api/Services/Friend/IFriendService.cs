@@ -5,6 +5,7 @@ namespace EncryptedChat.Services;
 public interface IFriendService
 {
     Task<IReadOnlyList<FriendDTO>> GetFriendsAsync(string userId);
+    Task<IReadOnlyList<FriendDTO>> SearchFriendsAsync(string userId, string? q, int limit);
     Task<IReadOnlyList<FriendRequestDTO>> GetPendingRequestsAsync(string userId);
     Task<FriendRequestDTO?> SendRequestAsync(string requesterId, string addresseeId);
     Task<(bool Success, string? RequesterId, FriendDTO? AccepterAsFriend)> AcceptRequestAsync(string userId, Guid requestId);
