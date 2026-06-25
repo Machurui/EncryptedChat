@@ -116,6 +116,19 @@ public class AttachmentServiceTests : IDisposable
         KeyGeneration = keyGeneration
     };
 
+    // Builds a service whose team quota is small enough to exercise in a test.
+    private AttachmentService ServiceWithQuota(long maxTeamStorageBytes)
+    {
+        IOptions<FileStorageOptions> opts = Options.Create(new FileStorageOptions
+        {
+            BasePath = "./test",
+            MaxFileSizeBytes = 25 * 1024 * 1024,
+            MaxTeamStorageBytes = maxTeamStorageBytes,
+            AllowedExtensions = [".txt", ".png", ".jpg", ".pdf", ".gif"]
+        });
+        return new AttachmentService(_context, _mockStorage.Object, new MimeTypeValidator(opts), opts);
+    }
+
     #region CreateAsync
 
     [Fact(Skip = SkipReason)]
@@ -384,6 +397,94 @@ public class AttachmentServiceTests : IDisposable
         IReadOnlyList<AttachmentDTOPublic> result = await _service.GetByMessageIdAsync(message.Id, outsider.Id);
 
         result.Should().BeEmpty();
+    }
+
+    #endregion
+
+    #region Team storage quota
+
+    [Fact]
+    public async Task CreateAsync_Succeeds_WhenUnderTeamQuota()
+    {
+        User user = await CreateUser("user1");
+        Team team = await CreateTeam("Team", user);
+        Message message = await CreateMessage(user, team);
+        _mockStorage.Setup(s => s.SaveAsync(It.IsAny<byte[]>(), team.Id)).ReturnsAsync("path/file.enc");
+        AttachmentService service = ServiceWithQuota(maxTeamStorageBytes: 1000);
+
+        var (attachment, error, isForbidden) = await service.CreateAsync(
+            message.Id, MakeUpload(new byte[500], "text/plain", team.KeyGeneration), user.Id);
+
+        attachment.Should().NotBeNull();
+        error.Should().BeNull();
+        isForbidden.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReturnsError_WhenTeamQuotaExceeded()
+    {
+        User user = await CreateUser("user1");
+        Team team = await CreateTeam("Team", user);
+        Message message = await CreateMessage(user, team);
+        _mockStorage.Setup(s => s.SaveAsync(It.IsAny<byte[]>(), team.Id)).ReturnsAsync("path/file.enc");
+        AttachmentService service = ServiceWithQuota(maxTeamStorageBytes: 1000);
+
+        // First upload (800 B) fills most of the quota.
+        await service.CreateAsync(message.Id, MakeUpload(new byte[800], "text/plain", team.KeyGeneration), user.Id);
+        _mockStorage.Invocations.Clear();
+
+        // Second upload (300 B) would push the team to 1100 B > 1000 B → rejected.
+        var (attachment, error, isForbidden) = await service.CreateAsync(
+            message.Id, MakeUpload(new byte[300], "text/plain", team.KeyGeneration), user.Id);
+
+        attachment.Should().BeNull();
+        error.Should().Contain("Quota");
+        isForbidden.Should().BeFalse();
+        _mockStorage.Verify(s => s.SaveAsync(It.IsAny<byte[]>(), It.IsAny<Guid>()), Times.Never);
+        (await _context.Attachments.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CreateAsync_Succeeds_WhenExactlyAtTeamQuota()
+    {
+        User user = await CreateUser("user1");
+        Team team = await CreateTeam("Team", user);
+        Message message = await CreateMessage(user, team);
+        _mockStorage.Setup(s => s.SaveAsync(It.IsAny<byte[]>(), team.Id)).ReturnsAsync("path/file.enc");
+        AttachmentService service = ServiceWithQuota(maxTeamStorageBytes: 1000);
+
+        await service.CreateAsync(message.Id, MakeUpload(new byte[700], "text/plain", team.KeyGeneration), user.Id);
+
+        // 700 + 300 == 1000, not strictly greater than the quota → allowed.
+        var (attachment, error, _) = await service.CreateAsync(
+            message.Id, MakeUpload(new byte[300], "text/plain", team.KeyGeneration), user.Id);
+
+        attachment.Should().NotBeNull();
+        error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateAsync_AllowsUpload_AfterTeamQuotaFreedByDeletion()
+    {
+        User user = await CreateUser("user1");
+        Team team = await CreateTeam("Team", user);
+        Message message = await CreateMessage(user, team);
+        _mockStorage.Setup(s => s.SaveAsync(It.IsAny<byte[]>(), team.Id)).ReturnsAsync("path/file.enc");
+        _mockStorage.Setup(s => s.DeleteAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        AttachmentService service = ServiceWithQuota(maxTeamStorageBytes: 1000);
+
+        var (first, _, _) = await service.CreateAsync(message.Id, MakeUpload(new byte[900], "text/plain", team.KeyGeneration), user.Id);
+
+        // 900/1000 used → a 300 B upload is blocked.
+        var (blocked, _, _) = await service.CreateAsync(message.Id, MakeUpload(new byte[300], "text/plain", team.KeyGeneration), user.Id);
+        blocked.Should().BeNull();
+
+        // Free space, then the same upload succeeds.
+        await service.DeleteAsync(first!.Id, user.Id);
+        var (retry, error, _) = await service.CreateAsync(message.Id, MakeUpload(new byte[300], "text/plain", team.KeyGeneration), user.Id);
+
+        retry.Should().NotBeNull();
+        error.Should().BeNull();
     }
 
     #endregion

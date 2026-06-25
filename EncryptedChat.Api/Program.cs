@@ -308,6 +308,7 @@ builder.Services.AddScoped<IGifService>(sp =>
 builder.Services.AddSingleton<IEmailSender<User>, FakeEmailSender>();
 
 builder.Services.AddHostedService<MessageCleanupService>();
+builder.Services.AddHostedService<OrphanAttachmentCleanupService>();
 
 var app = builder.Build();
 

@@ -24,6 +24,7 @@ public class AttachmentService(
     private readonly IFileStorageService _storage = storage;
     private readonly MimeTypeValidator _validator = validator;
     private readonly long _maxFileSize = options.Value.MaxFileSizeBytes;
+    private readonly long _maxTeamStorageBytes = options.Value.MaxTeamStorageBytes;
 
     public async Task<(AttachmentDTOPublic? Attachment, string? Error, bool IsForbidden)> CreateAsync(
         Guid messageId, AttachmentUploadDTO upload, string userId)
@@ -59,6 +60,15 @@ public class AttachmentService(
         // current generation, same as messages.
         if (upload.KeyGeneration != message.Team.KeyGeneration)
             return (null, "Generation de clé invalide", false);
+
+        // Team storage quota: bound the total bytes a team can accumulate so a
+        // member can't fill the disk (which would also take down SQL Server on the
+        // same host). Computed on the fly — no maintained counter to drift.
+        long usedBytes = await _context.Attachments
+            .Where(a => a.Message.Team!.Id == message.Team.Id)
+            .SumAsync(a => (long?)a.Size) ?? 0;
+        if (usedBytes + upload.EncryptedContent.Length > _maxTeamStorageBytes)
+            return (null, $"Quota de stockage de l'équipe atteint ({usedBytes / 1_048_576}/{_maxTeamStorageBytes / 1_048_576} Mo)", false);
 
         string storagePath = await _storage.SaveAsync(upload.EncryptedContent, message.Team.Id);
 
