@@ -32,6 +32,13 @@ COPY --from=build /src/publish/api-obf/Mapping.txt /Mapping.txt
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /src/publish/api .
+# Attachments are written under /app/storage; create + own the dir as the
+# non-root `app` user BEFORE switching to it, so a fresh named volume mounted
+# here inherits `app` ownership on first run. (Docker only propagates ownership
+# for an empty/new volume; a pre-existing root-owned volume must be recreated.)
+RUN mkdir -p /app/storage/attachments && chown -R app:app /app/storage
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
+# Drop root: run as the image's built-in non-root `app` user.
+USER app
 ENTRYPOINT ["dotnet", "EncryptedChat.dll"]
