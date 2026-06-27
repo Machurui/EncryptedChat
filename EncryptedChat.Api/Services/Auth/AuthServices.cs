@@ -273,21 +273,6 @@ public class AuthService(
         return LoginResult.Success(newTokenPair.AccessToken, newTokenPair.AccessTokenExpiresUtc, newTokenPair.RefreshToken);
     }
 
-    public async Task<IdentityResult> ForgotPasswordAsync(ForgotPasswordDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
-    public async Task<IdentityResult> ResetPasswordAsync(ResetPasswordDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<IdentityResult> ResendConfirmationEmailAsync(ResendConfirmationEmailDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
     public async Task<IdentityResult> ChangePasswordAsync(string userId, ChangePasswordDTO model)
     {
         var user = await _userManager.FindByIdAsync(userId);

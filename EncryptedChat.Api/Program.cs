@@ -90,7 +90,7 @@ builder.Services
         // Project password policy: 14+ chars, at least one upper, lower,
         // digit, and non-alphanumeric. Mirrored on every client+server
         // validation surface (RegisterDTO, ChangePasswordDTO,
-        // ResetPasswordDTO, RecoverRequestDTO, Login.razor, Register.razor,
+        // RecoverRequestDTO, Login.razor, Register.razor,
         // RestoreModal.razor). Bump them all together.
         options.Password.RequiredLength = 14;
         options.Password.RequireUppercase = true;

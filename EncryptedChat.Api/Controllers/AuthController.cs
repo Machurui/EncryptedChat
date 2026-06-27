@@ -160,25 +160,6 @@ public class AuthController(IAuthService authService, IConfiguration configurati
         });
     }
 
-    [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
-    [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword(ResetPasswordDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
-    [HttpPost("resend-confirmation-email")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
     [HttpGet("signalr-token")]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public IActionResult GetSignalRToken()
