@@ -9,10 +9,10 @@ public static class TokenGenerator
 
     public static string Generate(int length = 10)
     {
-        var bytes = new byte[length];
-        using var rng = RandomNumberGenerator.Create();
+        byte[] bytes = new byte[length];
+        using RandomNumberGenerator rng = RandomNumberGenerator.Create();
         rng.GetBytes(bytes);
-        var chars = new char[length];
+        char[] chars = new char[length];
         for (int i = 0; i < length; i++)
             chars[i] = Alphabet[bytes[i] % Alphabet.Length];
         return new string(chars);

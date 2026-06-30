@@ -5,17 +5,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-public class MessageCleanupService : BackgroundService
+public class MessageCleanupService(IServiceProvider serviceProvider, ILogger<MessageCleanupService> logger) : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<MessageCleanupService> _logger;
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly ILogger<MessageCleanupService> _logger = logger;
     private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(1);
-
-    public MessageCleanupService(IServiceProvider serviceProvider, ILogger<MessageCleanupService> logger)
-    {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -36,22 +30,25 @@ public class MessageCleanupService : BackgroundService
 
     private async Task CleanupExpiredMessagesAsync(CancellationToken cancellationToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<EncryptedChatContext>();
-        var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
+        using IServiceScope scope = _serviceProvider.CreateScope();
+        EncryptedChatContext context = scope.ServiceProvider.GetRequiredService<EncryptedChatContext>();
+        IHubContext<ChatHub> hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
 
-        var teamsWithLifetime = await context.Teams
+        List<TeamWithLifetimeDTO> teamsWithLifetime = await context.Teams
             .AsNoTracking()
             .Where(t => t.MessageLifetime != "off")
-            .Select(t => new { t.Id, t.MessageLifetime })
+            .Select(t => new TeamWithLifetimeDTO(
+                t.Id,
+                t.MessageLifetime
+            ))
             .ToListAsync(cancellationToken);
 
-        foreach (var team in teamsWithLifetime)
+        foreach (TeamWithLifetimeDTO team in teamsWithLifetime)
         {
-            var cutoffDate = GetCutoffDate(team.MessageLifetime);
+            DateTime? cutoffDate = GetCutoffDate(team.MessageLifetime);
             if (cutoffDate == null) continue;
 
-            var expiredMessages = await context.Messages
+            List<Guid> expiredMessages = await context.Messages
                 .Where(m => m.Team != null && m.Team.Id == team.Id && m.Date < cutoffDate.Value)
                 .Select(m => m.Id)
                 .ToListAsync(cancellationToken);
@@ -62,7 +59,7 @@ public class MessageCleanupService : BackgroundService
                 .Where(m => expiredMessages.Contains(m.Id))
                 .ExecuteDeleteAsync(cancellationToken);
 
-            var memberIds = await context.Members
+            List<string> memberIds = await context.Members
                 .AsNoTracking()
                 .Where(m => m.TeamId == team.Id)
                 .Select(m => m.UserId)
@@ -82,7 +79,7 @@ public class MessageCleanupService : BackgroundService
 
     private static DateTime? GetCutoffDate(string messageLifetime)
     {
-        var now = DateTime.UtcNow;
+        DateTime now = DateTime.UtcNow;
         return messageLifetime switch
         {
             "24h" => now.AddHours(-24),
@@ -91,4 +88,9 @@ public class MessageCleanupService : BackgroundService
             _ => null
         };
     }
+
+    public record TeamWithLifetimeDTO(
+        Guid Id,
+        string MessageLifetime
+    );
 }

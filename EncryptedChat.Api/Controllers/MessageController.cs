@@ -66,10 +66,10 @@ public class MessageController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var rateCheck = _rateLimitService.CheckAndRecord(userId);
+        RateLimitResult rateCheck = _rateLimitService.CheckAndRecord(userId);
         if (!rateCheck.Allowed)
         {
-            Response.Headers["Retry-After"] = Math.Ceiling(rateCheck.RetryAfterMs / 1000.0).ToString();
+            Response.Headers.RetryAfter = Math.Ceiling(rateCheck.RetryAfterMs / 1000.0).ToString();
             return StatusCode(429, new { error = "RateLimited", retryAfterMs = rateCheck.RetryAfterMs });
         }
 
@@ -93,13 +93,8 @@ public class MessageController(
         // Broadcast to team members
         await _realtimeService.BroadcastMessageAsync(dto.Team, message);
 
-        // First message in a DM? The other side wasn't joined to the team's
-        // SignalR group yet (their client never saw the DM exist), so the
-        // group broadcast above missed them. Notify them directly so they
-        // (a) see the new DM in their sidebar and (b) get the message in
-        // real time. Mirrors the ChatHub logic that lived on the legacy
-        // SendMessageToTeam path.
         TeamDTOPublic? team = await _teamService.GetByIdAsync(dto.Team);
+
         IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(dto.Team);
         if (team?.IsDirect == true)
         {
@@ -115,10 +110,6 @@ public class MessageController(
             }
         }
 
-        // Update last message for sidebar. The server cannot read the
-        // plaintext anymore, so it ships the envelope; clients decrypt
-        // locally and render their own preview. Empty preview is fine —
-        // the timestamp + sender name are still useful.
         if (memberIds.Count > 0)
         {
             await _realtimeService.BroadcastTeamLastMessageAsync(

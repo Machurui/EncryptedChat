@@ -19,15 +19,15 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
 
     public async Task<RecoveryPhraseDTO?> GenerateRecoveryPhraseAsync(string userId)
     {
-        var user = await _userManager.FindByIdAsync(userId);
+        User? user = await _userManager.FindByIdAsync(userId);
         if (user == null)
             return null;
 
-        var words = GenerateRandomWords(WordCount);
-        var (hash, salt) = HashPhrase(words);
+        IReadOnlyList<string> words = GenerateRandomWords(WordCount);
+        (string, string) hashPhrase = HashPhrase(words);
 
-        user.RecoveryPhraseHash = hash;
-        user.RecoveryPhraseSalt = salt;
+        user.RecoveryPhraseHash = hashPhrase.Item1;
+        user.RecoveryPhraseSalt = hashPhrase.Item2;
         user.RecoveryPhraseLastViewed = DateTime.UtcNow;
 
         await _userManager.UpdateAsync(user);
@@ -40,7 +40,7 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
         if (words == null || words.Count != WordCount)
             return false;
 
-        var user = await _context.Users
+        User? user = await _context.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == userId);
 
@@ -51,6 +51,7 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
 
         byte[] expectedHash;
         byte[] salt;
+
         try
         {
             expectedHash = Convert.FromBase64String(user.RecoveryPhraseHash);
@@ -62,13 +63,13 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
             return false;
         }
 
-        var actualHash = DeriveKey(NormalizePhrase(words), salt);
+        byte[] actualHash = DeriveKey(NormalizePhrase(words), salt);
         return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
     }
 
     public async Task<DateTime?> GetLastViewedAsync(string userId)
     {
-        var user = await _context.Users
+        User? user = await _context.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == userId);
         return user?.RecoveryPhraseLastViewed;
@@ -85,7 +86,7 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
 
     private static IReadOnlyList<string> GenerateRandomWords(int count)
     {
-        var words = new string[count];
+        string[] words = new string[count];
         for (int i = 0; i < count; i++)
         {
             int index = RandomNumberGenerator.GetInt32(Bip39Words.All.Length);
@@ -96,8 +97,8 @@ public class RecoveryService(EncryptedChatContext context, UserManager<User> use
 
     private static (string Hash, string Salt) HashPhrase(IReadOnlyList<string> words)
     {
-        var salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
-        var hash = DeriveKey(NormalizePhrase(words), salt);
+        byte[] salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
+        byte[] hash = DeriveKey(NormalizePhrase(words), salt);
         return (Convert.ToBase64String(hash), Convert.ToBase64String(salt));
     }
 

@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,9 +13,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Features;
-using Sentry.AspNetCore;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // ---------- Observability (Sentry) ----------
 // DSN read from config (empty ⇒ SDK disabled / no-op). Real DSN goes in user-secrets/env.
@@ -74,7 +72,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<EncryptedChatContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("Default")
+    string connectionString = builder.Configuration.GetConnectionString("Default")
         ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
 
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -87,11 +85,6 @@ builder.Services.AddDbContext<EncryptedChatContext>(options =>
 builder.Services
     .AddIdentity<User, IdentityRole>(options =>
     {
-        // Project password policy: 14+ chars, at least one upper, lower,
-        // digit, and non-alphanumeric. Mirrored on every client+server
-        // validation surface (RegisterDTO, ChangePasswordDTO,
-        // RecoverRequestDTO, Login.razor, Register.razor,
-        // RestoreModal.razor). Bump them all together.
         options.Password.RequiredLength = 14;
         options.Password.RequireUppercase = true;
         options.Password.RequireLowercase = true;
@@ -102,7 +95,6 @@ builder.Services
     .AddDefaultTokenProviders();
 
 // Override Identity's lookup normalizer so email/username lookups use a blind index
-// (Email/UserName are encrypted at rest; the normalized columns hold the blind index).
 builder.Services.Replace(ServiceDescriptor.Scoped<ILookupNormalizer, BlindIndexLookupNormalizer>());
 
 // Disable cookie redirects for API
@@ -173,19 +165,15 @@ builder.Services
                 }
                 return Task.CompletedTask;
             },
-            // Per-request session check: rejects access tokens whose Session row
-            // has been revoked (or whose linked refresh token is gone). Makes
-            // session revocation effective on the very next request instead of
-            // waiting up to 15 min for the access token to expire.
             OnTokenValidated = async context =>
             {
                 if (context.SecurityToken is not Microsoft.IdentityModel.JsonWebTokens.JsonWebToken jwt)
                     return;
 
-                EncryptedChat.Services.ISessionService sessionService =
-                    context.HttpContext.RequestServices.GetRequiredService<EncryptedChat.Services.ISessionService>();
+                ISessionService sessionService =
+                    context.HttpContext.RequestServices.GetRequiredService<ISessionService>();
 
-                string tokenHash = EncryptedChat.Services.SessionService.HashToken(jwt.EncodedToken);
+                string tokenHash = SessionService.HashToken(jwt.EncodedToken);
                 bool valid = await sessionService.IsSessionValidAsync(tokenHash);
                 if (!valid)
                     context.Fail("Session revoked");
@@ -197,9 +185,6 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddRateLimiter(options =>
 {
-    // 429 Too Many Requests is the IETF standard for rate-limited responses
-    // (RFC 6585). The default 503 also signals "try again later" but clients
-    // typically can't tell it apart from a real outage.
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("UserLookup", context =>
@@ -243,15 +228,15 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, SignalRUserIdProvider>();
 
 // ===== CORS =====
-var allowedOrigins = new[]
-{
+string[] allowedOrigins =
+[
     "http://localhost:5183",
     "https://localhost:5183",
     "http://localhost:7174",
     "https://localhost:7174",
     "http://localhost:7276",
     "https://localhost:7276"
-};
+];
 
 builder.Services.AddCors(o => o.AddPolicy("Client", p => p
     .WithOrigins(allowedOrigins)
@@ -316,15 +301,15 @@ builder.Services.AddHostedService<OrphanAttachmentCleanupService>();
 // is already handled by the compose `depends_on: db healthy`.
 builder.Services.AddHealthChecks();
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 // In Docker the DB starts empty; apply EF migrations on boot (idempotent), retrying
 // while SQL Server finishes starting. Gated so dev/`dotnet run`/tests are untouched.
 if (app.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<EncryptedChatContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    using IServiceScope scope = app.Services.CreateScope();
+    EncryptedChatContext db = scope.ServiceProvider.GetRequiredService<EncryptedChatContext>();
+    ILogger<Program> logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     for (int attempt = 1; ; attempt++)
     {
         try

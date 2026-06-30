@@ -9,6 +9,7 @@ public class RateLimitCleanupService(IRateLimitService rateLimitService) : Backg
         while (!stoppingToken.IsCancellationRequested)
         {
             _rateLimitService.CleanupStaleEntries(TimeSpan.FromMinutes(10));
+            
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);

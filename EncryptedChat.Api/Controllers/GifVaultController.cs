@@ -21,17 +21,17 @@ namespace EncryptedChat.Controllers
         [HttpGet]
         public async Task<ActionResult<GifVaultReadDTO>> Get(CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-            var vault = await _vaultService.GetAsync(userId, ct);
+            GifVaultReadDTO? vault = await _vaultService.GetAsync(userId, ct);
             return vault is null ? NoContent() : Ok(vault);
         }
 
         [HttpPut]
         public async Task<ActionResult> Put([FromBody] GifVaultWriteDTO dto, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
             if (string.IsNullOrEmpty(dto.WrappedKey) || dto.WrappedKey.Length > MaxWrappedKeyLength)
@@ -43,7 +43,7 @@ namespace EncryptedChat.Controllers
             if (dto.ExpectedRevision < 0)
                 return BadRequest(new { Message = "Invalid revision." });
 
-            var result = await _vaultService.UpsertAsync(userId, dto, ct);
+            GifVaultUpsertResult result = await _vaultService.UpsertAsync(userId, dto, ct);
             return result.Kind == GifVaultUpsertKind.Conflict
                 ? Conflict(new { result.Revision })
                 : Ok(new { result.Revision });

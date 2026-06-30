@@ -8,32 +8,19 @@ using Microsoft.AspNetCore.SignalR;
 namespace EncryptedChat.Hubs;
 
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class ChatHub : Hub
+public class ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IPresenceService presenceService, IRateLimitService rateLimitService, ILogger<ChatHub> logger, IHubContext<ChatHub> hubContext) : Hub
 {
     private const int MaxMessageLength = 4000;
 
-    private readonly IMessageService _messageService;
-    private readonly ITeamService _teamService;
-    private readonly IUserService _userService;
-    private readonly IFriendService _friendService;
-    private readonly IRealtimeService _realtimeService;
-    private readonly IPresenceService _presenceService;
-    private readonly IRateLimitService _rateLimitService;
-    private readonly ILogger<ChatHub> _logger;
-    private readonly IHubContext<ChatHub> _hubContext;
-
-    public ChatHub(IMessageService messageService, ITeamService teamService, IUserService userService, IFriendService friendService, IRealtimeService realtimeService, IPresenceService presenceService, IRateLimitService rateLimitService, ILogger<ChatHub> logger, IHubContext<ChatHub> hubContext)
-    {
-        _messageService = messageService;
-        _teamService = teamService;
-        _userService = userService;
-        _friendService = friendService;
-        _realtimeService = realtimeService;
-        _presenceService = presenceService;
-        _rateLimitService = rateLimitService;
-        _logger = logger;
-        _hubContext = hubContext;
-    }
+    private readonly IMessageService _messageService = messageService;
+    private readonly ITeamService _teamService = teamService;
+    private readonly IUserService _userService = userService;
+    private readonly IFriendService _friendService = friendService;
+    private readonly IRealtimeService _realtimeService = realtimeService;
+    private readonly IPresenceService _presenceService = presenceService;
+    private readonly IRateLimitService _rateLimitService = rateLimitService;
+    private readonly ILogger<ChatHub> _logger = logger;
+    private readonly IHubContext<ChatHub> _hubContext = hubContext;
 
     private static string TeamGroup(Guid teamId) => $"team-{teamId}";
 
@@ -42,7 +29,6 @@ public class ChatHub : Hub
     public override async Task OnConnectedAsync()
     {
         string? userId = GetUserId();
-        _logger.LogInformation("[ChatHub] OnConnectedAsync: UserId={UserId}, ConnectionId={ConnectionId}", userId, Context.ConnectionId);
 
         if (!string.IsNullOrWhiteSpace(userId))
         {
@@ -79,28 +65,28 @@ public class ChatHub : Hub
 
     private async Task SendOnlineFriendsStatus(string userId)
     {
-        var friends = await _friendService.GetFriendsAsync(userId);
+        IReadOnlyList<FriendDTO> friends = await _friendService.GetFriendsAsync(userId);
 
-        foreach (var friend in friends)
+        foreach (FriendDTO friend in friends)
         {
             if (_presenceService.IsOnline(friend.UserId))
             {
-                var profile = await _userService.GetOwnProfileAsync(friend.UserId);
+                UserProfileDTO? profile = await _userService.GetOwnProfileAsync(friend.UserId);
                 if (profile == null) continue;
 
-                var displayStatus = profile.Status == "invisible" ? "offline" : (string.IsNullOrEmpty(profile.Status) ? "online" : profile.Status);
+                string displayStatus = profile.Status == "invisible" ? "offline" : (string.IsNullOrEmpty(profile.Status) ? "online" : profile.Status);
 
-                var statusUpdate = new
-                {
-                    Id = profile.Id,
-                    profile.Name,
-                    profile.Handle,
-                    profile.Level,
-                    profile.NameColor,
-                    profile.ProfileImageUrl,
-                    Status = displayStatus,
-                    StatusMessage = profile.Status == "invisible" ? (string?)null : profile.StatusMessage
-                };
+                UserStatusUpdateDTO statusUpdate = new(
+                    Id: profile.Id,
+                    Name: profile.Name,
+                    Handle: profile.Handle,
+                    Level: profile.Level,
+                    NameColor: profile.NameColor,
+                    ProfileImageUrl: profile.ProfileImageUrl,
+                    Status: displayStatus,
+                    StatusMessage: profile.Status == "invisible" ? null : profile.StatusMessage,
+                    LastSeenAt: null
+                );
 
                 await Clients.Caller.SendAsync("FriendProfileUpdated", statusUpdate);
             }
@@ -109,41 +95,38 @@ public class ChatHub : Hub
 
     private async Task NotifyFriendsOfStatusChange(string userId, string newStatus)
     {
-        var profile = await _userService.GetOwnProfileAsync(userId);
+        UserProfileDTO? profile = await _userService.GetOwnProfileAsync(userId);
         if (profile == null) return;
 
-        var displayStatus = profile.Status == "invisible" ? "offline" : (newStatus == "offline" ? "offline" : profile.Status);
-        var lastSeenAt = newStatus == "offline" ? DateTime.UtcNow : (DateTime?)null;
+        string displayStatus = profile.Status == "invisible" ? "offline" : (newStatus == "offline" ? "offline" : profile.Status);
+        DateTime? lastSeenAt = newStatus == "offline" ? DateTime.UtcNow : (DateTime?)null;
 
-        var statusUpdate = new
-        {
-            profile.Id,
-            profile.Name,
-            profile.Handle,
-            profile.Level,
-            profile.NameColor,
-            profile.ProfileImageUrl,
-            Status = displayStatus,
-            StatusMessage = profile.Status == "invisible" ? (string?)null : profile.StatusMessage,
-            LastSeenAt = lastSeenAt
-        };
+        UserStatusUpdateDTO statusUpdate = new(
+            Id: profile.Id,
+            Name: profile.Name,
+            Handle: profile.Handle,
+            Level: profile.Level,
+            NameColor: profile.NameColor,
+            ProfileImageUrl: profile.ProfileImageUrl,
+            Status: displayStatus,
+            StatusMessage: profile.Status == "invisible" ? null : profile.StatusMessage,
+            LastSeenAt: lastSeenAt
+        );
 
-        var friends = await _friendService.GetFriendsAsync(userId);
-        var friendIds = friends.Select(f => f.UserId).ToList();
+        IReadOnlyList<FriendDTO> friends = await _friendService.GetFriendsAsync(userId);
+        List<string> friendIds = [.. friends.Select(f => f.UserId)];
 
         if (friendIds.Count > 0)
-        {
             await Clients.Users(friendIds).SendAsync("FriendProfileUpdated", statusUpdate);
-        }
     }
 
     private async Task BroadcastStatusToUserTeams(string userId, bool isOnline)
     {
-        var profile = await _userService.GetOwnProfileAsync(userId);
-        var effective = StatusHelper.EffectiveStatus(profile?.Status, isOnline);
+        UserProfileDTO? profile = await _userService.GetOwnProfileAsync(userId);
+        string effective = StatusHelper.EffectiveStatus(profile?.Status, isOnline);
 
-        var teams = await _userService.GetUserTeamsAsync(userId, userId);
-        foreach (var team in teams)
+        IReadOnlyList<UserTeamDTO> teams = await _userService.GetUserTeamsAsync(userId, userId);
+        foreach (UserTeamDTO team in teams)
         {
             await Clients.Group($"team-{team.Id}").SendAsync(
                 "TeamMemberStatusChanged",
@@ -154,23 +137,15 @@ public class ChatHub : Hub
     public async Task JoinTeam(Guid teamId)
     {
         string? userId = GetUserId();
-        _logger.LogInformation("[JoinTeam] UserId={UserId}, TeamId={TeamId}, ConnectionId={ConnectionId}", userId, teamId, Context.ConnectionId);
 
         if (string.IsNullOrWhiteSpace(userId))
-        {
-            _logger.LogWarning("[JoinTeam] No userId, cannot join");
             return;
-        }
 
         bool isMember = await _teamService.IsMemberAsync(userId, teamId);
         if (!isMember)
-        {
-            _logger.LogWarning("[JoinTeam] User {UserId} is not a member of team {TeamId}", userId, teamId);
             return;
-        }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, TeamGroup(teamId));
-        _logger.LogInformation("[JoinTeam] Added connection {ConnectionId} to group {Group}", Context.ConnectionId, TeamGroup(teamId));
     }
 
     public async Task LeaveTeam(Guid teamId)
@@ -190,7 +165,7 @@ public class ChatHub : Hub
         if (string.IsNullOrWhiteSpace(senderId))
             return null;
 
-        var rateCheck = _rateLimitService.CheckAndRecord(senderId);
+        RateLimitResult rateCheck = _rateLimitService.CheckAndRecord(senderId);
         if (!rateCheck.Allowed)
         {
             await Clients.Caller.SendAsync("RateLimited", rateCheck.RetryAfterMs);
@@ -214,26 +189,18 @@ public class ChatHub : Hub
         if (created is null)
             return null;
 
-        // Ensure the sender's connection is in the team group BEFORE broadcasting.
-        // Required for fresh DMs where the client-side JoinTeam may not have
-        // completed (race with hubConnection state) or for any robustness gap.
-        // Idempotent — safe to call every time.
         await _hubContext.Groups.AddToGroupAsync(Context.ConnectionId, TeamGroup(teamId));
 
         await _realtimeService.BroadcastMessageAsync(teamId, created);
 
-        // First message in a DM? Notify the friend directly so they receive both
-        // (a) the new DM in their sidebar and (b) the initial message in real time.
-        // (Required because TeamController no longer broadcasts DirectMessageCreated
-        // on bare DM creation — the friend is only notified once there's content.)
-        var teamDto = await _teamService.GetByIdAsync(teamId);
+        TeamDTOPublic? teamDto = await _teamService.GetByIdAsync(teamId);
         if (teamDto?.IsDirect == true)
         {
             int messageCount = await _messageService.CountByTeamAsync(teamId);
             if (messageCount == 1)
             {
-                var allMemberIds = await _teamService.GetMemberUserIdsAsync(teamId);
-                var friendId = allMemberIds.FirstOrDefault(id => id != senderId);
+                IReadOnlyList<string> allMemberIds = await _teamService.GetMemberUserIdsAsync(teamId);
+                string? friendId = allMemberIds.FirstOrDefault(id => id != senderId);
                 if (!string.IsNullOrEmpty(friendId))
                 {
                     await _hubContext.Clients.User(friendId).SendAsync("DirectMessageCreated", teamDto);
@@ -242,49 +209,30 @@ public class ChatHub : Hub
             }
         }
 
-        var memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
+        IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
         if (memberIds.Count > 0)
-        {
-            // Server can no longer read the plaintext (true E2E). Clients
-            // render their own preview from the message they just decrypted.
             await _realtimeService.BroadcastTeamLastMessageAsync(teamId, memberIds, string.Empty, created.Date, created.Sender?.Name);
-        }
 
-        // Return the saved message so the sender can render it locally — robust
-        // even if the group broadcast didn't reach them (e.g., fresh DM race).
-        // The client uses message.Id to dedup against the eventual ReceiveMessage.
         return created;
     }
 
     public async Task StartTyping(Guid teamId)
     {
         string? userId = GetUserId();
-        _logger.LogInformation("[StartTyping] UserId: {UserId}, TeamId: {TeamId}", userId, teamId);
 
         if (string.IsNullOrWhiteSpace(userId))
-        {
-            _logger.LogWarning("[StartTyping] No userId found in claims");
             return;
-        }
 
         bool isMember = await _teamService.IsMemberAsync(userId, teamId);
         if (!isMember)
-        {
-            _logger.LogWarning("[StartTyping] User {UserId} is not a member of team {TeamId}", userId, teamId);
             return;
-        }
 
-        var profile = await _userService.GetOwnProfileAsync(userId);
+        UserProfileDTO? profile = await _userService.GetOwnProfileAsync(userId);
         if (profile == null || !profile.TypingIndicators)
-        {
-            _logger.LogInformation("[StartTyping] Profile null or TypingIndicators disabled. Profile exists: {Exists}, TypingIndicators: {Setting}",
-                profile != null, profile?.TypingIndicators);
             return;
-        }
 
-        var memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
-        var otherMembers = memberIds.Where(id => id != userId).ToList();
-        _logger.LogInformation("[StartTyping] Sending to {Count} other members: {Members}", otherMembers.Count, string.Join(", ", otherMembers));
+        IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
+        List<string> otherMembers = [.. memberIds.Where(id => id != userId)];
 
         if (otherMembers.Count > 0)
         {
@@ -294,7 +242,6 @@ public class ChatHub : Hub
                 UserId = userId,
                 UserName = profile.Name
             });
-            _logger.LogInformation("[StartTyping] UserTyping event sent for {UserName}", profile.Name);
         }
     }
 
@@ -308,8 +255,8 @@ public class ChatHub : Hub
         if (!isMember)
             return;
 
-        var memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
-        var otherMembers = memberIds.Where(id => id != userId).ToList();
+        IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(teamId);
+        List<string> otherMembers = [.. memberIds.Where(id => id != userId)];
 
         if (otherMembers.Count > 0)
         {
@@ -320,4 +267,16 @@ public class ChatHub : Hub
             });
         }
     }
+
+    public record UserStatusUpdateDTO(
+        string Id,
+        string Name,
+        string? Handle,
+        int Level,
+        string NameColor,
+        string? ProfileImageUrl,
+        string Status,
+        string? StatusMessage,
+        DateTime? LastSeenAt
+    );
 }

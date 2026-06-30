@@ -28,7 +28,7 @@ public class PinnedMessageController(IPinnedMessageService pinnedService, ITeamS
         if (!isMember)
             return Forbid();
 
-        var pins = await _pinnedService.GetPinnedMessagesAsync(teamId, userId);
+        List<PinnedMessageDTO> pins = await _pinnedService.GetPinnedMessagesAsync(teamId, userId);
         return Ok(pins);
     }
 
@@ -43,7 +43,7 @@ public class PinnedMessageController(IPinnedMessageService pinnedService, ITeamS
         if (!isMember)
             return Forbid();
 
-        var pin = await _pinnedService.PinMessageAsync(teamId, messageId, userId);
+        PinnedMessageDTO? pin = await _pinnedService.PinMessageAsync(teamId, messageId, userId);
         if (pin == null)
             return BadRequest(new { Message = "Unable to pin message. Already pinned or not found." });
 

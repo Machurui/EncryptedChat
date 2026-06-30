@@ -55,7 +55,7 @@ public class AuthService(
         User user = new()
         {
             UserName = model.Email,
-            Name = handle,    // initial display name = handle; user can customize later
+            Name = handle,
             Handle = handle,
             HandleBlindIndex = handleIndex,
             Email = model.Email,
@@ -86,12 +86,6 @@ public class AuthService(
 
         RecoveryPhraseDTO? phrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
 
-        // Issue an access token immediately so the client can call
-        // PUT /api/User/me/encryption-keys to upload the freshly-generated
-        // identity key bundle without forcing the user to log in twice.
-        // Also create the matching Session + RefreshToken — per-request session
-        // validation (Program.cs OnTokenValidated → IsSessionValidAsync) would
-        // otherwise reject this fresh JWT for lack of a Session row.
         IList<string> roles = await _userManager.GetRolesAsync(user);
         JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
 
@@ -103,7 +97,9 @@ public class AuthService(
             ExpiresAt = tokenPair.RefreshTokenExpiresUtc,
             CreatedAt = DateTime.UtcNow
         };
+
         _context.RefreshTokens.Add(refreshTokenEntity);
+
         await _sessionService.CreateSessionAsync(
             user.Id,
             tokenPair.AccessToken,
@@ -111,6 +107,7 @@ public class AuthService(
             deviceKind: "web",
             ipAddress: null,
             refreshTokenId: refreshTokenEntity.Id);
+
         await _context.SaveChangesAsync();
 
         return (result, phrase?.Words, tokenPair.AccessToken);
@@ -146,7 +143,7 @@ public class AuthService(
         if (!string.IsNullOrEmpty(deviceInfo))
         {
             // Check for existing session with same device to avoid duplicates
-            var existingSession = await _context.Sessions
+            Session? existingSession = await _context.Sessions
                 .FirstOrDefaultAsync(s => s.UserId == user.Id && s.DeviceInfo == deviceInfo && !s.IsRevoked);
 
             if (existingSession != null)
@@ -194,9 +191,7 @@ public class AuthService(
         Session? linkedSession = await _context.Sessions
             .FirstOrDefaultAsync(s => s.CurrentRefreshTokenId == token.Id && !s.IsRevoked);
         if (linkedSession != null)
-        {
             linkedSession.IsRevoked = true;
-        }
 
         await _context.SaveChangesAsync();
     }
@@ -243,10 +238,8 @@ public class AuthService(
 
         // If not found by token, find existing session for same device (avoid duplicates)
         if (session == null && !string.IsNullOrEmpty(deviceInfo))
-        {
             session = await _context.Sessions
                 .FirstOrDefaultAsync(s => s.UserId == user.Id && s.DeviceInfo == deviceInfo && !s.IsRevoked);
-        }
 
         if (session != null)
         {
@@ -275,7 +268,7 @@ public class AuthService(
 
     public async Task<IdentityResult> ChangePasswordAsync(string userId, ChangePasswordDTO model)
     {
-        var user = await _userManager.FindByIdAsync(userId);
+        User? user = await _userManager.FindByIdAsync(userId);
         if (user == null)
             return IdentityResult.Failed(new IdentityError
             {
@@ -294,7 +287,7 @@ public class AuthService(
 
         string? previousHash = user.PasswordHash;
 
-        var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+        IdentityResult result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
 
         if (result.Succeeded)
         {
@@ -310,19 +303,16 @@ public class AuthService(
 
     public async Task<DateTime?> GetPasswordChangedAtAsync(string userId)
     {
-        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        User? user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
         return user?.PasswordChangedAt;
     }
 
-    // Confirms the user's current password (used to gate sensitive self-service
-    // actions like regenerating the recovery phrase). Returns false for an empty
-    // password or unknown user rather than throwing.
     public async Task<bool> VerifyPasswordAsync(string userId, string password)
     {
         if (string.IsNullOrEmpty(password))
             return false;
 
-        var user = await _userManager.FindByIdAsync(userId);
+        User? user = await _userManager.FindByIdAsync(userId);
         if (user == null)
             return false;
 
@@ -348,28 +338,15 @@ public class AuthService(
         if (!valid)
             return (false, GenericFailure, null, null);
 
-        // Block reuse of the current password or either of the two most recent
-        // previous ones — before touching anything else, so a rejected reuse
-        // leaves the account fully intact.
         if (await _passwordHistory.IsReusedAsync(user, newPassword))
             return (false, ReuseRejection, null, null);
 
-        // Capture the current hash so we can append it to history once the
-        // reset succeeds (becomes the "previous" entry for the next change).
         string? previousHash = user.PasswordHash;
 
-        // Reset the password atomically via Identity's reset-token flow.
-        // ResetPasswordAsync validates the new password BEFORE replacing the
-        // existing hash — a weak/rejected new password leaves the old one intact
-        // rather than bricking the account.
         string resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
         IdentityResult resetResult = await _userManager.ResetPasswordAsync(user, resetToken, newPassword);
         if (!resetResult.Succeeded)
         {
-            // Password policy is public information — surface the specific rule that
-            // failed so the legitimate user can fix it. This is distinct from the
-            // generic "email or phrase" failure, which intentionally hides which
-            // half mismatched to block account enumeration.
             string detail = string.Join(" ", resetResult.Errors.Select(e => e.Description));
             return (false, string.IsNullOrWhiteSpace(detail) ? "Invalid new password" : detail, null, null);
         }
@@ -380,26 +357,20 @@ public class AuthService(
         user.PasswordChangedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
-        // Rotate the recovery phrase FIRST so the just-used phrase is dead even
-        // if the session-revocation step crashes. This preserves the one-shot
-        // invariant under partial failure.
         RecoveryPhraseDTO? newPhrase = await _recoveryService.GenerateRecoveryPhraseAsync(user.Id);
 
         // Kick every live session and revoke every active refresh token.
         await _sessionService.RevokeAllSessionsAsync(user.Id);
 
-        var activeRefreshTokens = await _context.RefreshTokens
+        List<RefreshToken> activeRefreshTokens = await _context.RefreshTokens
             .Where(rt => rt.UserId == user.Id && rt.RevokedAt == null)
             .ToListAsync();
-        foreach (var rt in activeRefreshTokens)
+
+        foreach (RefreshToken rt in activeRefreshTokens)
             rt.RevokedAt = DateTime.UtcNow;
+
         await _context.SaveChangesAsync();
 
-        // Issue a new access token so the client can immediately PUT the
-        // re-wrapped key bundle (paired with the new recovery phrase) to
-        // /api/User/me/encryption-keys without forcing a separate login.
-        // Same session caveat as Register: create a Session + RefreshToken so
-        // the per-request session validator accepts the fresh JWT.
         IList<string> roles = await _userManager.GetRolesAsync(user);
         JwtTokenService.TokenPair tokenPair = _tokens.CreateTokenPair(user, roles);
 
@@ -411,7 +382,9 @@ public class AuthService(
             ExpiresAt = tokenPair.RefreshTokenExpiresUtc,
             CreatedAt = DateTime.UtcNow
         };
+
         _context.RefreshTokens.Add(newRefreshToken);
+
         await _sessionService.CreateSessionAsync(
             user.Id,
             tokenPair.AccessToken,
@@ -419,6 +392,7 @@ public class AuthService(
             deviceKind: "web",
             ipAddress: null,
             refreshTokenId: newRefreshToken.Id);
+
         await _context.SaveChangesAsync();
 
         return (true, "Account recovered. Save your new recovery phrase.", newPhrase?.Words, tokenPair.AccessToken);

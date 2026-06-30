@@ -20,11 +20,11 @@ public sealed class GifCacheDecorator(IGifService inner, IMemoryCache cache) : I
 
     public async Task<List<GifResultDTO>> TrendingAsync(int limit, int offset, bool stickers, CancellationToken ct)
     {
-        var key = $"gif:trending:{(stickers ? "s" : "g")}:{limit}:{offset}";
+        string key = $"gif:trending:{(stickers ? "s" : "g")}:{limit}:{offset}";
         if (_cache.TryGetValue(key, out List<GifResultDTO>? cached) && cached is not null)
             return cached;
 
-        var result = await _inner.TrendingAsync(limit, offset, stickers, ct);
+        List<GifResultDTO> result = await _inner.TrendingAsync(limit, offset, stickers, ct);
         _cache.Set(key, result, TrendingTtl);
         return result;
     }
@@ -35,7 +35,7 @@ public sealed class GifCacheDecorator(IGifService inner, IMemoryCache cache) : I
         if (_cache.TryGetValue(key, out List<GifCategoryDTO>? cached) && cached is not null)
             return cached;
 
-        var result = await _inner.CategoriesAsync(ct);
+        List<GifCategoryDTO> result = await _inner.CategoriesAsync(ct);
         _cache.Set(key, result, CategoriesTtl);
         return result;
     }

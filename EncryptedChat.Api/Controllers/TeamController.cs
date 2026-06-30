@@ -29,9 +29,10 @@ namespace EncryptedChat.Controllers
 
         private ActionResult? RateLimited(string userId)
         {
-            var rc = _rateLimit.CheckAndRecord(userId);
+            RateLimitResult? rc = _rateLimit.CheckAndRecord(userId);
             if (rc.Allowed) return null;
-            Response.Headers["Retry-After"] = Math.Ceiling(rc.RetryAfterMs / 1000.0).ToString();
+
+            Response.Headers.RetryAfter = Math.Ceiling(rc.RetryAfterMs / 1000.0).ToString();
             return StatusCode(429, new { error = "RateLimited", retryAfterMs = rc.RetryAfterMs });
         }
 
@@ -69,7 +70,7 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrWhiteSpace(userId))
                 return Unauthorized();
 
-            var team = await _teamService.GetTeamByUrlTokenAsync(token, userId);
+            TeamDTOPublic? team = await _teamService.GetTeamByUrlTokenAsync(token, userId);
             if (team == null)
                 return NotFound();
 
@@ -110,11 +111,9 @@ namespace EncryptedChat.Controllers
             if (team is null)
                 return BadRequest(new { Message = "Données invalides" });
 
-            var memberIds = await _teamService.GetMemberUserIdsAsync(team.Id);
+            IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(team.Id);
             if (memberIds.Count > 0)
-            {
                 await _hubContext.Clients.Users(memberIds).SendAsync("TeamCreated", team);
-            }
 
             return CreatedAtAction(nameof(GetTeam), new { id = team.Id }, team);
         }
@@ -132,11 +131,9 @@ namespace EncryptedChat.Controllers
             if (teamUpdated is null)
                 return NotFound();
 
-            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(id);
             if (memberIds.Count > 0)
-            {
                 await _hubContext.Clients.Users(memberIds).SendAsync("TeamUpdated", teamUpdated);
-            }
 
             return Ok(teamUpdated);
         }
@@ -150,16 +147,14 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
-            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(id);
 
             TeamDTOPublic? deleted = await _teamService.DeleteAsync(id, userId);
             if (deleted is null)
                 return NotFound();
 
             if (memberIds.Count > 0)
-            {
                 await _hubContext.Clients.Users(memberIds).SendAsync("TeamDeleted", new { TeamId = id });
-            }
 
             return NoContent();
         }
@@ -179,14 +174,12 @@ namespace EncryptedChat.Controllers
             if (!success)
                 return NotFound();
 
-            var team = await _teamService.GetByIdAsync(id);
+            TeamDTOPublic? team = await _teamService.GetByIdAsync(id);
             if (team != null)
             {
-                var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+                IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(id);
                 if (memberIds.Count > 0)
-                {
                     await _hubContext.Clients.Users(memberIds).SendAsync("TeamMemberAdded", new { TeamId = id, UserId = dto.UserId, Team = team });
-                }
             }
 
             return NoContent();
@@ -204,16 +197,14 @@ namespace EncryptedChat.Controllers
             if (userId == currentUserId)
                 return BadRequest(new { Message = "You cannot remove yourself. Use leave or transfer ownership." });
 
-            var memberIdsBefore = await _teamService.GetMemberUserIdsAsync(id);
+            IReadOnlyList<string> memberIdsBefore = await _teamService.GetMemberUserIdsAsync(id);
 
             bool success = await _teamService.RemoveMemberAsync(id, userId, currentUserId);
             if (!success)
                 return NotFound();
 
             if (memberIdsBefore.Count > 0)
-            {
                 await _hubContext.Clients.Users(memberIdsBefore).SendAsync("TeamMemberRemoved", new { TeamId = id, UserId = userId });
-            }
 
             return NoContent();
         }
@@ -231,15 +222,10 @@ namespace EncryptedChat.Controllers
             if (!success)
                 return NotFound();
 
-            // Broadcast so every member's UI updates the badge / role select
-            // without an F5. Includes the demoted/promoted user themselves so
-            // their own view of "I am admin" flips too.
-            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(id);
             if (memberIds.Count > 0)
-            {
                 await _hubContext.Clients.Users(memberIds)
                     .SendAsync("TeamMemberRoleChanged", new { TeamId = id, UserId = dto.UserId, NewRole = "Admin" });
-            }
 
             return NoContent();
         }
@@ -261,7 +247,7 @@ namespace EncryptedChat.Controllers
             // Two role changes broadcast as separate events — clients update
             // both rows. Order matters: old owner first so any "I'm owner"
             // local state on the recipient flips before the new role arrives.
-            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(id);
             if (memberIds.Count > 0)
             {
                 await _hubContext.Clients.Users(memberIds)
@@ -289,12 +275,10 @@ namespace EncryptedChat.Controllers
             if (!success)
                 return NotFound();
 
-            var memberIds = await _teamService.GetMemberUserIdsAsync(id);
+            IReadOnlyList<string> memberIds = await _teamService.GetMemberUserIdsAsync(id);
             if (memberIds.Count > 0)
-            {
                 await _hubContext.Clients.Users(memberIds)
                     .SendAsync("TeamMemberRoleChanged", new { TeamId = id, UserId = userId, NewRole = "Member" });
-            }
 
             return NoContent();
         }
@@ -310,22 +294,20 @@ namespace EncryptedChat.Controllers
             if (string.IsNullOrEmpty(currentUserId))
                 return Unauthorized();
 
-            var (dm, _) = await _teamService.GetOrCreateDirectMessageWithStatusAsync(
+            (TeamDTOPublic?, bool) getOrCreateRequest = await _teamService.GetOrCreateDirectMessageWithStatusAsync(
                 currentUserId, friendId, dto?.MyWrappedKey, dto?.FriendWrappedKey);
-            if (dm == null)
+            if (getOrCreateRequest.Item1 == null)
                 return BadRequest(new { Message = "Could not create direct message channel." });
 
-            // Friend is intentionally NOT notified here. ChatHub.SendMessageToTeam
-            // detects the first message in a DM and sends DirectMessageCreated +
-            // the initial ReceiveMessage to the friend at that point.
-            return Ok(dm);
+            return Ok(getOrCreateRequest.Item1);
         }
 
         [HttpGet("{teamId}/key-shares")]
         public async Task<IActionResult> GetMyKeyShares(Guid teamId)
         {
             string? userId = GetCurrentUserId();
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
 
             List<TeamKeyShareDTO> shares = await _teamKeyShares.GetMineForTeamAsync(userId, teamId);
             return Ok(shares);
@@ -336,10 +318,12 @@ namespace EncryptedChat.Controllers
             Guid teamId, string memberId, [FromBody] AddMemberKeyShareDTO dto)
         {
             string? userId = GetCurrentUserId();
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
 
             KeyShareInsertResult result = await _teamKeyShares.InsertKeyShareForMemberAsync(
                 userId, teamId, memberId, dto.WrappedKey);
+
             return result switch
             {
                 KeyShareInsertResult.Ok => NoContent(),
@@ -355,10 +339,12 @@ namespace EncryptedChat.Controllers
             Guid teamId, string memberId, [FromBody] RemoveMemberDTO dto)
         {
             string? userId = GetCurrentUserId();
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
 
             RemoveAndRotateResult result = await _teamKeyShares.RemoveMemberAndRotateAsync(
                 userId, teamId, memberId, dto.NewKeyShares);
+
             return result switch
             {
                 RemoveAndRotateResult.Ok => NoContent(),
@@ -414,50 +400,66 @@ namespace EncryptedChat.Controllers
         [HttpPost("{teamId}/invites")]
         public async Task<ActionResult<TeamInviteDTO>> CreateInvite(Guid teamId, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
-            var limited = RateLimited(userId);
-            if (limited is not null) return limited;
-            var dto = await _inviteService.CreateAsync(teamId, userId, ct);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            ActionResult? limited = RateLimited(userId);
+            if (limited is not null)
+                return limited;
+
+            TeamInviteDTO? dto = await _inviteService.CreateAsync(teamId, userId, ct);
             return dto is null ? Forbid() : Ok(dto);
         }
 
         [HttpGet("{teamId}/invites")]
         public async Task<ActionResult<List<TeamInviteListItemDTO>>> ListInvites(Guid teamId, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
-            var list = await _inviteService.ListAsync(teamId, userId, ct);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            List<TeamInviteListItemDTO>? list = await _inviteService.ListAsync(teamId, userId, ct);
             return list is null ? Forbid() : Ok(list);
         }
 
         [HttpDelete("{teamId}/invites/{inviteId}")]
         public async Task<IActionResult> RevokeInvite(Guid teamId, Guid inviteId, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
             return await _inviteService.RevokeAsync(teamId, inviteId, userId, ct) ? NoContent() : Forbid();
         }
 
         [HttpGet("invite/{token}")]
         public async Task<ActionResult<InvitePreviewDTO>> PreviewInvite(string token, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
-            var limited = RateLimited(userId);
-            if (limited is not null) return limited;
-            var preview = await _inviteService.PreviewAsync(token, ct);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            ActionResult? limited = RateLimited(userId);
+            if (limited is not null)
+                return limited;
+
+            InvitePreviewDTO? preview = await _inviteService.PreviewAsync(token, ct);
             return preview is null ? NotFound() : Ok(preview);
         }
 
         [HttpPost("invite/{token}/join")]
         public async Task<ActionResult<TeamDTOPublic>> JoinByInvite(string token, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
-            var limited = RateLimited(userId);
-            if (limited is not null) return limited;
-            var result = await _inviteService.JoinAsync(token, userId, ct);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            ActionResult? limited = RateLimited(userId);
+            if (limited is not null)
+                return limited;
+
+            InviteJoinResult result = await _inviteService.JoinAsync(token, userId, ct);
             return result.Outcome switch
             {
                 InviteJoinOutcome.Ok or InviteJoinOutcome.AlreadyMember => Ok(result.Team),
@@ -469,9 +471,11 @@ namespace EncryptedChat.Controllers
         [HttpGet("{teamId}/members/missing-key-share")]
         public async Task<ActionResult<List<string>>> MissingKeyShare(Guid teamId, CancellationToken ct)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
-            var missing = await _teamKeyShares.GetMembersMissingKeyShareAsync(teamId, userId);
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            List<string>? missing = await _teamKeyShares.GetMembersMissingKeyShareAsync(teamId, userId);
             return missing is null ? Forbid() : Ok(missing);
         }
     }

@@ -7,9 +7,9 @@ public class EncryptedChatContextFactory : IDesignTimeDbContextFactory<Encrypted
 {
     public EncryptedChatContext CreateDbContext(string[] args)
     {
-        var optionsBuilder = new DbContextOptionsBuilder<EncryptedChatContext>();
-        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
-        var configuration = new ConfigurationBuilder()
+        DbContextOptionsBuilder<EncryptedChatContext> optionsBuilder = new();
+        string environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+        IConfigurationRoot configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("EncryptedChat.Api/appsettings.json", optional: true)
             .AddJsonFile($"EncryptedChat.Api/appsettings.{environment}.json", optional: true)
@@ -19,7 +19,7 @@ public class EncryptedChatContextFactory : IDesignTimeDbContextFactory<Encrypted
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("Default")
+        string connectionString = configuration.GetConnectionString("Default")
             ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
 
         if (string.IsNullOrWhiteSpace(connectionString))
