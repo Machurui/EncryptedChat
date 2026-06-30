@@ -5,7 +5,6 @@ namespace EncryptedChat.Services;
 public class RateLimitService : IRateLimitService
 {
     private const int BurstAllowance = 10;
-    private const int FastSendThresholdMs = 2000;
     private const int IdleResetMs = 10_000;
     private const int MaxCooldownMs = 30_000;
 
@@ -22,12 +21,12 @@ public class RateLimitService : IRateLimitService
         if (string.IsNullOrWhiteSpace(userId))
             return new RateLimitResult(true, 0);
 
-        var now = DateTime.UtcNow;
-        var state = _states.GetOrAdd(userId, _ => new SpamState { LastSendUtc = DateTime.MinValue });
+        DateTime now = DateTime.UtcNow;
+        SpamState state = _states.GetOrAdd(userId, _ => new SpamState { LastSendUtc = DateTime.MinValue });
 
         lock (state)
         {
-            var deltaMs = (now - state.LastSendUtc).TotalMilliseconds;
+            double deltaMs = (now - state.LastSendUtc).TotalMilliseconds;
 
             // Idle reset: long pause clears the burst counter
             if (deltaMs > IdleResetMs)
@@ -36,7 +35,7 @@ public class RateLimitService : IRateLimitService
             // Cooldown is based on the count AFTER this send: if this send would
             // push us past the burst allowance, enforce the corresponding cooldown.
             int excessAfterThisSend = Math.Max(0, (state.ConsecutiveFastSends + 1) - BurstAllowance);
-            var cooldownMs = excessAfterThisSend == 0
+            int cooldownMs = excessAfterThisSend == 0
                 ? 0
                 : Math.Min((int)Math.Pow(2, excessAfterThisSend - 1) * 1000, MaxCooldownMs);
 
@@ -51,8 +50,8 @@ public class RateLimitService : IRateLimitService
 
     public void CleanupStaleEntries(TimeSpan olderThan)
     {
-        var cutoff = DateTime.UtcNow - olderThan;
-        foreach (var kvp in _states)
+        DateTime cutoff = DateTime.UtcNow - olderThan;
+        foreach (KeyValuePair<string, SpamState> kvp in _states)
         {
             if (kvp.Value.LastSendUtc < cutoff)
                 _states.TryRemove(kvp.Key, out _);

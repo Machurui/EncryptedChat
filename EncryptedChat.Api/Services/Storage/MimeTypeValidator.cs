@@ -4,8 +4,7 @@ namespace EncryptedChat.Services;
 
 public class MimeTypeValidator(IOptions<FileStorageOptions> options)
 {
-    private readonly HashSet<string> _allowedExtensions = new(
-        options.Value.AllowedExtensions.Select(e => e.ToLowerInvariant()));
+    private readonly HashSet<string> _allowedExtensions = [.. options.Value.AllowedExtensions.Select(e => e.ToLowerInvariant())];
 
     private static readonly Dictionary<string, string[]> MimeTypesByCategory = new()
     {
@@ -98,10 +97,6 @@ public class MimeTypeValidator(IOptions<FileStorageOptions> options)
         return string.Join(", ", _allowedExtensions.OrderBy(e => e));
     }
 
-    // Declared-MIME allow-list. Used when the server cannot inspect file
-    // content (e.g. True E2E attachments that arrive already ciphered).
-    // No magic-byte sniff is possible against ciphertext, so this is the
-    // only MIME check left for E2E uploads.
     public bool IsDeclaredMimeTypeAllowed(string declaredMimeType)
     {
         if (string.IsNullOrWhiteSpace(declaredMimeType))

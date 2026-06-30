@@ -7,7 +7,7 @@ namespace EncryptedChat.Observability;
 /// Removes auth secrets, request bodies and PII from a Sentry event before it leaves the server.
 /// Pure/static so it is unit-testable without spinning up the Sentry pipeline.
 /// </summary>
-public static class SentryScrubbing
+public static partial class SentryScrubbing
 {
     public static SentryEvent? ScrubEvent(SentryEvent e)
     {
@@ -32,6 +32,7 @@ public static class SentryScrubbing
     }
 
     /// Replaces the value of any access_token=... in a query string or URL with a marker.
-    public static string StripToken(string input) =>
-        Regex.Replace(input, @"access_token=[^&\s]*", "access_token=[Filtered]", RegexOptions.IgnoreCase);
+    public static string StripToken(string input) => MyRegex().Replace(input, "access_token=[Filtered]");
+    [GeneratedRegex(@"access_token=[^&\s]*", RegexOptions.IgnoreCase, "fr-FR")]
+    private static partial Regex MyRegex();
 }

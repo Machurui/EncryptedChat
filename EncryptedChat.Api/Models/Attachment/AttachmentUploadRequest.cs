@@ -1,13 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Http;
 
 namespace EncryptedChat.Models;
 
-// Multipart upload contract for POST /api/Attachment. The [MaxLength] limits
-// mirror the Attachment table columns so that an over-long value is rejected
-// with 400 by [ApiController] model validation instead of triggering a SQL
-// truncation (DbUpdateException -> 500) at insert time. Property names match the
-// multipart field names sent by the Blazor client (case-insensitive binding).
 public sealed class AttachmentUploadRequest
 {
     public IFormFile File { get; set; } = null!;

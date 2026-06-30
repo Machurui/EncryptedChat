@@ -8,24 +8,33 @@ public class PresenceService : IPresenceService
 
     public bool IsOnline(string userId)
     {
-        if (string.IsNullOrWhiteSpace(userId)) return false;
-        if (!_connections.TryGetValue(userId, out var set)) return false;
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        if (!_connections.TryGetValue(userId, out HashSet<string>? set))
+            return false;
+
         lock (set) { return set.Count > 0; }
     }
 
     public void AddConnection(string userId, string connectionId)
     {
-        if (string.IsNullOrWhiteSpace(userId)) return;
+        if (string.IsNullOrWhiteSpace(userId))
+            return;
+
         _connections.AddOrUpdate(
             userId,
-            _ => new HashSet<string> { connectionId },
+            _ => [connectionId],
             (_, set) => { lock (set) { set.Add(connectionId); } return set; });
     }
 
     public bool RemoveConnection(string userId, string connectionId)
     {
-        if (string.IsNullOrWhiteSpace(userId)) return false;
-        if (!_connections.TryGetValue(userId, out var set)) return false;
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        if (!_connections.TryGetValue(userId, out HashSet<string>? set))
+            return false;
 
         lock (set)
         {

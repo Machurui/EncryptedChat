@@ -13,7 +13,8 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
         bool isMember = await _context.Members
             .AsNoTracking()
             .AnyAsync(m => m.TeamId == teamId && m.UserId == userId);
-        if (!isMember) return new List<TeamKeyShareDTO>();
+        if (!isMember)
+            return [];
 
         return await _context.TeamKeyShares
             .AsNoTracking()
@@ -29,20 +30,25 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
         Member? adminMembership = await _context.Members
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == adminUserId);
+
         if (adminMembership == null || !Member.IsAdminOrAbove(adminMembership.Role))
             return KeyShareInsertResult.Forbidden;
 
         Team? team = await _context.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == teamId);
-        if (team == null) return KeyShareInsertResult.NotFound;
+        if (team == null)
+            return KeyShareInsertResult.NotFound;
 
         bool memberExists = await _context.Members
             .AsNoTracking()
             .AnyAsync(m => m.TeamId == teamId && m.UserId == memberId);
-        if (!memberExists) return KeyShareInsertResult.NotFound;
+        if (!memberExists)
+            return KeyShareInsertResult.NotFound;
 
         bool already = await _context.TeamKeyShares
             .AnyAsync(k => k.TeamId == teamId && k.MemberId == memberId && k.Generation == team.KeyGeneration);
-        if (already) return KeyShareInsertResult.AlreadyExists;
+
+        if (already)
+            return KeyShareInsertResult.AlreadyExists;
 
         _context.TeamKeyShares.Add(new TeamKeyShare
         {
@@ -69,7 +75,9 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
 
         Member? removedMembership = await _context.Members
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == removedMemberId);
-        if (removedMembership == null) return RemoveAndRotateResult.NotFound;
+
+        if (removedMembership == null)
+            return RemoveAndRotateResult.NotFound;
 
         // The Owner cannot be removed by anyone — ownership must be transferred first.
         if (removedMembership.Role == Member.OwnerRole)
@@ -79,7 +87,8 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
         if (removedMembership.Role == "Admin")
         {
             int adminCount = await _context.Members.CountAsync(m => m.TeamId == teamId && m.Role == "Admin");
-            if (adminCount <= 1) return RemoveAndRotateResult.CannotRemoveLastAdmin;
+            if (adminCount <= 1)
+                return RemoveAndRotateResult.CannotRemoveLastAdmin;
         }
 
         List<string> remainingMemberIds = await _context.Members
@@ -117,6 +126,7 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
             List<TeamKeyShare> removedMemberShares = await _context.TeamKeyShares
                 .Where(k => k.TeamId == teamId && k.MemberId == removedMemberId)
                 .ToListAsync();
+
             _context.TeamKeyShares.RemoveRange(removedMemberShares);
 
             team.KeyGeneration = newGeneration;
@@ -135,12 +145,17 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
             }
 
             await _context.SaveChangesAsync();
-            if (transaction != null) await transaction.CommitAsync();
+
+            if (transaction != null)
+                await transaction.CommitAsync();
+
             return RemoveAndRotateResult.Ok;
         }
         catch
         {
-            if (transaction != null) await transaction.RollbackAsync();
+            if (transaction != null)
+                await transaction.RollbackAsync();
+
             throw;
         }
         finally
@@ -151,20 +166,22 @@ public class TeamKeyShareService(EncryptedChatContext context) : ITeamKeyShareSe
 
     public async Task<List<string>?> GetMembersMissingKeyShareAsync(Guid teamId, string actorUserId)
     {
-        var team = await _context.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == teamId);
-        if (team is null) return null;
+        Team? team = await _context.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.Id == teamId);
+        if (team is null)
+            return null;
 
-        var actorRole = await _context.Members.AsNoTracking()
+        string? actorRole = await _context.Members.AsNoTracking()
             .Where(m => m.TeamId == teamId && m.UserId == actorUserId)
             .Select(m => m.Role).FirstOrDefaultAsync();
-        if (actorRole != Member.AdminRole && actorRole != Member.OwnerRole) return null;
+        if (actorRole != Member.AdminRole && actorRole != Member.OwnerRole)
+            return null;
 
         int gen = team.KeyGeneration;
-        var memberIds = await _context.Members.AsNoTracking()
-            .Where(m => m.TeamId == teamId).Select(m => m.UserId).ToListAsync();
-        var withShare = await _context.TeamKeyShares.AsNoTracking()
-            .Where(k => k.TeamId == teamId && k.Generation == gen).Select(k => k.MemberId).ToListAsync();
-        var have = withShare.ToHashSet();
-        return memberIds.Where(id => !have.Contains(id)).ToList();
+        List<string> memberIds = await _context.Members.AsNoTracking().Where(m => m.TeamId == teamId).Select(m => m.UserId).ToListAsync();
+
+        List<string> withShare = await _context.TeamKeyShares.AsNoTracking().Where(k => k.TeamId == teamId && k.Generation == gen).Select(k => k.MemberId).ToListAsync();
+
+        HashSet<string> have = [.. withShare];
+        return [.. memberIds.Where(id => !have.Contains(id))];
     }
 }

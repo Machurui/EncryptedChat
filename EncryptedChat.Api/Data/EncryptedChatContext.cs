@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using EncryptedChat.Services;
 
 namespace EncryptedChat.Data;
+
 public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options, IFieldCipher? cipher = null) : IdentityDbContext<User>(options)
 {
     private readonly IFieldCipher? _cipher = cipher;
@@ -38,7 +39,7 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
                 .Property(u => u.Name)
                 .HasConversion(
                     v => _cipher.Encrypt(v, "Name"),
-                    v => _cipher.Decrypt(v, "Name") ?? string.Empty); // Name is [Required] — never null in storage
+                    v => _cipher.Decrypt(v, "Name") ?? string.Empty);
 
             modelBuilder.Entity<User>()
                 .Property(u => u.Handle)
@@ -76,9 +77,6 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             .IsUnique()
             .HasFilter("[HandleBlindIndex] IS NOT NULL");
 
-        // Email/UserName are encrypted (randomized ciphertext) → widen the columns to fit,
-        // and move email uniqueness onto the blind-index normalized column (a unique index
-        // on the encrypted Email column would be meaningless).
         modelBuilder.Entity<User>().Property(u => u.Email).HasMaxLength(512);
         modelBuilder.Entity<User>().Property(u => u.UserName).HasMaxLength(512);
         modelBuilder.Entity<User>()
@@ -98,10 +96,6 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             .HasOne(p => p.Team)
             .WithMany()
             .HasForeignKey(p => p.TeamId)
-            // ClientCascade avoids SQL Server's multi-cascade-path error
-            // (User→UserTeamPreferences already cascades). EF Core deletes
-            // UserTeamPreferences when a Team is removed via the in-memory
-            // change tracker rather than via DB-level cascade.
             .OnDelete(DeleteBehavior.ClientCascade);
 
         modelBuilder.Entity<UserGifVault>()
@@ -189,10 +183,6 @@ public class EncryptedChatContext(DbContextOptions<EncryptedChatContext> options
             .HasOne(s => s.CurrentRefreshToken)
             .WithMany()
             .HasForeignKey(s => s.CurrentRefreshTokenId)
-            // NoAction avoids SQL Server's multi-cascade-path error (User cascades
-            // to both Sessions and RefreshTokens). Refresh tokens are never hard
-            // deleted today (only RevokedAt is set); if a cleanup ever deletes
-            // rows, it must null this FK first.
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<Session>()

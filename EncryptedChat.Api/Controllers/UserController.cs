@@ -60,9 +60,9 @@ public class UserController(
             // Broadcast status change to team groups if status was updated
             if (dto.Status != null)
             {
-                var effectiveStatus = StatusHelper.EffectiveStatus(result.User.Status, _presenceService.IsOnline(userId));
-                var teams = await _service.GetUserTeamsAsync(userId, userId);
-                foreach (var team in teams)
+                string effectiveStatus = StatusHelper.EffectiveStatus(result.User.Status, _presenceService.IsOnline(userId));
+                IReadOnlyList<UserTeamDTO> teams = await _service.GetUserTeamsAsync(userId, userId);
+                foreach (UserTeamDTO team in teams)
                 {
                     await _hubContext.Clients.Group($"team-{team.Id}").SendAsync(
                         "TeamMemberStatusChanged",
@@ -70,8 +70,6 @@ public class UserController(
                 }
             }
 
-            // Sync the caller's OWN other devices: notification preference + status
-            // so their toast policy updates and active toasts clear in real time.
             await _hubContext.Clients.User(userId).SendAsync("SelfSettingsChanged", new
             {
                 result.User.NotificationPreference,
@@ -117,10 +115,8 @@ public class UserController(
         string fileName = $"{userId}_{Guid.NewGuid():N}{extension}";
         string filePath = Path.Combine(uploadsFolder, fileName);
 
-        using (var stream = new FileStream(filePath, FileMode.Create))
-        {
+        using (FileStream stream = new(filePath, FileMode.Create))
             await file.CopyToAsync(stream);
-        }
 
         string imageUrl = $"/uploads/avatars/{fileName}";
 
@@ -188,39 +184,30 @@ public class UserController(
 
     private async Task NotifyFriendsOfProfileUpdate(string userId, UserProfileDTO profile)
     {
-        var publicProfile = new
-        {
+        UserPublicProfileDTO publicProfile = new(
             profile.Id,
             profile.Name,
             profile.Handle,
             profile.Level,
             profile.NameColor,
             profile.ProfileImageUrl,
-            Status = profile.Status == "invisible" ? "offline" : profile.Status,
-            StatusMessage = profile.Status == "invisible" ? null : profile.StatusMessage
-        };
+            profile.Status == "invisible" ? "offline" : profile.Status,
+            profile.Status == "invisible" ? null : profile.StatusMessage
+        );
 
         // Notify friends
-        var friends = await _friendService.GetFriendsAsync(userId);
-        var friendIds = friends.Select(f => f.UserId).ToList();
-        var pendingUserIds = await _friendService.GetPendingRequestUserIdsAsync(userId);
-        var teams = await _service.GetUserTeamsAsync(userId, userId, 1, 100);
-
-        Console.WriteLine($"[Profile] Broadcasting FriendProfileUpdated for user {userId}: " +
-                          $"{friendIds.Count} friends, {pendingUserIds.Count} pending, {teams.Count} teams " +
-                          $"(NameColor={publicProfile.NameColor})");
+        IReadOnlyList<FriendDTO> friends = await _friendService.GetFriendsAsync(userId);
+        List<string> friendIds = friends.Select(f => f.UserId).ToList();
+        IReadOnlyList<string> pendingUserIds = await _friendService.GetPendingRequestUserIdsAsync(userId);
+        IReadOnlyList<UserTeamDTO> teams = await _service.GetUserTeamsAsync(userId, userId, 1, 100);
 
         if (friendIds.Count > 0)
-        {
             await _hubContext.Clients.Users(friendIds).SendAsync("FriendProfileUpdated", publicProfile);
-        }
 
         if (pendingUserIds.Count > 0)
-        {
             await _hubContext.Clients.Users(pendingUserIds).SendAsync("FriendRequestProfileUpdated", publicProfile);
-        }
 
-        foreach (var team in teams)
+        foreach (UserTeamDTO team in teams)
         {
             await _hubContext.Clients.Group($"team-{team.Id}").SendAsync("FriendProfileUpdated", publicProfile);
         }
@@ -314,4 +301,15 @@ public class UserController(
         PublicKeysDTO? keys = await _userKeys.GetPublicKeysAsync(userId);
         return keys == null ? NotFound() : Ok(keys);
     }
+
+    public record UserPublicProfileDTO(
+        string Id,
+        string Name,
+        string? Handle,
+        int Level,
+        string NameColor,
+        string? ProfileImageUrl,
+        string Status,
+        string? StatusMessage
+    );
 }

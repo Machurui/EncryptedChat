@@ -12,13 +12,11 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
     {
         try
         {
-            await hubContext.Clients.Group(TeamGroup(teamId))
-                .SendAsync("ReceiveMessage", message);
+            await hubContext.Clients.Group(TeamGroup(teamId)).SendAsync("ReceiveMessage", message);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to broadcast message {MessageId} to team {TeamId}",
-                message.Id, teamId);
+            logger.LogWarning(ex, "Failed to broadcast message {MessageId} to team {TeamId}", message.Id, teamId);
         }
     }
 
@@ -26,8 +24,7 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
     {
         try
         {
-            await hubContext.Clients.Group(TeamGroup(teamId))
-                .SendAsync("AttachmentAdded", new { MessageId = messageId, Attachment = attachment });
+            await hubContext.Clients.Group(TeamGroup(teamId)).SendAsync("AttachmentAdded", new { MessageId = messageId, Attachment = attachment });
         }
         catch (Exception ex)
         {
@@ -41,13 +38,13 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
 
         try
         {
-            var update = new
-            {
-                TeamId = teamId,
-                LastMessagePreview = preview,
-                LastMessageTime = time,
-                LastMessageSenderName = senderName
-            };
+            LastMessageDTO update = new
+            (
+                Id: teamId,
+                LastMessagePreview: preview,
+                LastMessageTime: time,
+                LastMessageSenderName: senderName
+            );
             await hubContext.Clients.Users(memberIds).SendAsync("TeamLastMessageUpdated", update);
         }
         catch (Exception ex)
@@ -62,7 +59,10 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
 
         try
         {
-            var payload = new { UserId = userId, Level = level };
+            PayloadDTO payload = new(
+                Id: userId,
+                Level: level
+            );
             // One emit per team group: reaches the user themself (they're in their own
             // team groups => self-update) AND their connected teammates.
             foreach (Guid teamId in teamIds)
@@ -75,4 +75,18 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
             logger.LogWarning(ex, "Failed to broadcast level change for user {UserId}", userId);
         }
     }
+
+    public record LastMessageDTO
+    (
+        Guid Id,
+        string LastMessagePreview,
+        DateTime LastMessageTime,
+        string? LastMessageSenderName
+    );
+
+    public record PayloadDTO
+    (
+        string Id,
+        int Level
+    );
 }

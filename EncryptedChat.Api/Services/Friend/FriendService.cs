@@ -11,7 +11,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
     public async Task<IReadOnlyList<FriendDTO>> GetFriendsAsync(string userId)
     {
-        var friendships = await _context.Friendships
+        List<Friendship> friendships = await _context.Friendships
             .AsNoTracking()
             .Where(f => f.Status == FriendshipStatus.Accepted &&
                        (f.RequesterId == userId || f.AddresseeId == userId))
@@ -19,17 +19,17 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
             .Include(f => f.Addressee)
             .ToListAsync();
 
-        return friendships.Select(f =>
+        return [.. friendships.Select(f =>
         {
-            var friend = f.RequesterId == userId ? f.Addressee : f.Requester;
-            var rawStatus = string.IsNullOrEmpty(friend!.Status) ? "online" : friend.Status;
+            User? friend = f.RequesterId == userId ? f.Addressee : f.Requester;
+            string rawStatus = string.IsNullOrEmpty(friend!.Status) ? "online" : friend.Status;
 
             // Check if user is actually connected via SignalR
-            var isConnected = _presenceService.IsOnline(friend.Id);
+            bool isConnected = _presenceService.IsOnline(friend.Id);
 
             // If not connected, show as offline regardless of profile status
             // If connected but invisible, show as offline
-            var displayStatus = !isConnected ? "offline" : (rawStatus == "invisible" ? "offline" : rawStatus);
+            string displayStatus = !isConnected ? "offline" : (rawStatus == "invisible" ? "offline" : rawStatus);
 
             return new FriendDTO
             {
@@ -44,7 +44,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
                 StatusMessage = (!isConnected || rawStatus == "invisible") ? null : friend.StatusMessage,
                 LastSeenAt = friend.LastSeenAt
             };
-        }).ToList();
+        })];
     }
 
     public async Task<IReadOnlyList<FriendDTO>> SearchFriendsAsync(string userId, string? q, int limit)
@@ -60,12 +60,12 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
                 (f.Name ?? string.Empty).Contains(term, StringComparison.OrdinalIgnoreCase) ||
                 (f.Handle ?? string.Empty).Contains(term, StringComparison.OrdinalIgnoreCase));
 
-        return matches.Take(Math.Clamp(limit, 1, 100)).ToList();
+        return [.. matches.Take(Math.Clamp(limit, 1, 100))];
     }
 
     public async Task<IReadOnlyList<FriendRequestDTO>> GetPendingRequestsAsync(string userId)
     {
-        var requests = await _context.Friendships
+        List<Friendship> requests = await _context.Friendships
             .AsNoTracking()
             .Where(f => f.Status == FriendshipStatus.Pending &&
                        (f.RequesterId == userId || f.AddresseeId == userId))
@@ -73,10 +73,11 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
             .Include(f => f.Addressee)
             .ToListAsync();
 
-        return requests.Select(f =>
+        return [.. requests.Select(f =>
         {
             bool isIncoming = f.AddresseeId == userId;
-            var otherUser = isIncoming ? f.Requester : f.Addressee;
+            User? otherUser = isIncoming ? f.Requester : f.Addressee;
+
             return new FriendRequestDTO
             {
                 RequestId = f.Id,
@@ -89,7 +90,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
                 SentAt = f.CreatedAt,
                 IsIncoming = isIncoming
             };
-        }).ToList();
+        })];
     }
 
     public async Task<FriendRequestDTO?> SendRequestAsync(string requesterId, string addresseeId)
@@ -97,7 +98,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
         if (requesterId == addresseeId)
             return null;
 
-        var requester = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == requesterId);
+        User? requester = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == requesterId);
         if (requester == null)
             return null;
 
@@ -113,7 +114,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
         if (existingFriendship)
             return null;
 
-        var friendship = new Friendship
+        Friendship friendship = new()
         {
             RequesterId = requesterId,
             AddresseeId = addresseeId,
@@ -139,7 +140,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
     public async Task<(bool Success, string? RequesterId, FriendDTO? AccepterAsFriend)> AcceptRequestAsync(string userId, Guid requestId)
     {
-        var request = await _context.Friendships
+        Friendship? request = await _context.Friendships
             .Include(f => f.Addressee)
             .FirstOrDefaultAsync(f => f.Id == requestId &&
                                       f.AddresseeId == userId &&
@@ -152,10 +153,10 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
         request.AcceptedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        var accepter = request.Addressee!;
-        var displayStatus = accepter.Status == "invisible" ? "offline" : accepter.Status;
+        User accepter = request.Addressee!;
+        string displayStatus = accepter.Status == "invisible" ? "offline" : accepter.Status;
 
-        var friendDto = new FriendDTO
+        FriendDTO friendDto = new()
         {
             UserId = accepter.Id,
             Name = accepter.Name,
@@ -173,7 +174,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
     public async Task<(bool Success, string? OtherUserId)> RejectRequestAsync(string userId, Guid requestId)
     {
-        var request = await _context.Friendships
+        Friendship? request = await _context.Friendships
             .FirstOrDefaultAsync(f => f.Id == requestId &&
                                       (f.AddresseeId == userId || f.RequesterId == userId) &&
                                       f.Status == FriendshipStatus.Pending);
@@ -190,7 +191,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
     public async Task<(bool Success, string? RemovedFriendId, Guid? DeletedDmId)> RemoveFriendAsync(string userId, string friendId)
     {
-        var friendship = await _context.Friendships
+        Friendship? friendship = await _context.Friendships
             .FirstOrDefaultAsync(f =>
                 f.Status == FriendshipStatus.Accepted &&
                 ((f.RequesterId == userId && f.AddresseeId == friendId) ||
@@ -201,7 +202,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
         Guid? deletedDmId = null;
 
-        var dm = await _context.Teams
+        Team? dm = await _context.Teams
             .Include(t => t.Members)
             .Where(t => t.IsDirect && t.Members.Count == 2)
             .Where(t => t.Members.Any(m => m.UserId == userId) && t.Members.Any(m => m.UserId == friendId))
@@ -211,12 +212,13 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
         {
             deletedDmId = dm.Id;
 
-            var messages = await _context.Messages
+            List<Message> messages = await _context.Messages
                 .Where(m => m.Team != null && m.Team.Id == dm.Id)
                 .ToListAsync();
+
             _context.Messages.RemoveRange(messages);
 
-            var members = await _context.Members.Where(m => m.TeamId == dm.Id).ToListAsync();
+            List<Member> members = await _context.Members.Where(m => m.TeamId == dm.Id).ToListAsync();
             _context.Members.RemoveRange(members);
 
             _context.Teams.Remove(dm);
@@ -238,7 +240,7 @@ public class FriendService(EncryptedChatContext context, IPresenceService presen
 
     public async Task<IReadOnlyList<string>> GetPendingRequestUserIdsAsync(string userId)
     {
-        var userIds = await _context.Friendships
+        List<string> userIds = await _context.Friendships
             .AsNoTracking()
             .Where(f => f.Status == FriendshipStatus.Pending &&
                        (f.RequesterId == userId || f.AddresseeId == userId))

@@ -32,7 +32,7 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var friends = await _friendService.GetFriendsAsync(userId);
+        IReadOnlyList<FriendDTO> friends = await _friendService.GetFriendsAsync(userId);
         return Ok(friends);
     }
 
@@ -43,7 +43,7 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var requests = await _friendService.GetPendingRequestsAsync(userId);
+        IReadOnlyList<FriendRequestDTO> requests = await _friendService.GetPendingRequestsAsync(userId);
         return Ok(requests);
     }
 
@@ -57,7 +57,7 @@ public class FriendController(
         if (userId == addresseeId)
             return BadRequest(new { Message = "You cannot send a friend request to yourself." });
 
-        var request = await _friendService.SendRequestAsync(userId, addresseeId);
+        FriendRequestDTO? request = await _friendService.SendRequestAsync(userId, addresseeId);
         if (request == null)
             return BadRequest(new { Message = "Could not send friend request. User may not exist or request already exists." });
 
@@ -74,14 +74,14 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var (success, requesterId, accepterAsFriend) = await _friendService.AcceptRequestAsync(userId, requestId);
-        if (!success)
+        (bool, string?, FriendDTO?) acceptedRequest = await _friendService.AcceptRequestAsync(userId, requestId);
+        if (!acceptedRequest.Item1)
             return NotFound(new { Message = "Request not found or already processed." });
 
-        if (!string.IsNullOrEmpty(requesterId) && accepterAsFriend != null)
+        if (!string.IsNullOrEmpty(acceptedRequest.Item2) && acceptedRequest.Item3 != null)
         {
-            _logger.LogInformation("[FriendController] Broadcasting FriendRequestAccepted to UserId={RequesterId}, RequestId={RequestId}", requesterId, requestId);
-            await _hubContext.Clients.User(requesterId).SendAsync("FriendRequestAccepted", requestId, accepterAsFriend);
+            _logger.LogInformation("[FriendController] Broadcasting FriendRequestAccepted to UserId={RequesterId}, RequestId={RequestId}", acceptedRequest.Item2, requestId);
+            await _hubContext.Clients.User(acceptedRequest.Item2).SendAsync("FriendRequestAccepted", requestId, acceptedRequest.Item3);
         }
 
         return Ok(new { Message = "Friend request accepted." });
@@ -94,14 +94,14 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var (success, otherUserId) = await _friendService.RejectRequestAsync(userId, requestId);
-        if (!success)
+        (bool, string?) rejectedRequest = await _friendService.RejectRequestAsync(userId, requestId);
+        if (!rejectedRequest.Item1)
             return NotFound(new { Message = "Request not found or already processed." });
 
-        if (!string.IsNullOrEmpty(otherUserId))
+        if (!string.IsNullOrEmpty(rejectedRequest.Item2))
         {
-            _logger.LogInformation("[FriendController] Broadcasting FriendRequestCancelled to UserId={OtherUserId}, RequestId={RequestId}", otherUserId, requestId);
-            await _hubContext.Clients.User(otherUserId).SendAsync("FriendRequestCancelled", requestId);
+            _logger.LogInformation("[FriendController] Broadcasting FriendRequestCancelled to UserId={OtherUserId}, RequestId={RequestId}", rejectedRequest.Item2, requestId);
+            await _hubContext.Clients.User(rejectedRequest.Item2).SendAsync("FriendRequestCancelled", requestId);
         }
 
         return Ok(new { Message = "Friend request rejected." });
@@ -114,19 +114,19 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var (success, removedFriendId, deletedDmId) = await _friendService.RemoveFriendAsync(userId, friendId);
-        if (!success)
+        (bool, string?, Guid?) removeRequest = await _friendService.RemoveFriendAsync(userId, friendId);
+        if (!removeRequest.Item1)
             return NotFound(new { Message = "Friendship not found." });
 
-        if (!string.IsNullOrEmpty(removedFriendId))
+        if (!string.IsNullOrEmpty(removeRequest.Item2))
         {
-            await _hubContext.Clients.User(removedFriendId).SendAsync("FriendRemoved", userId);
+            await _hubContext.Clients.User(removeRequest.Item2).SendAsync("FriendRemoved", userId);
 
-            if (deletedDmId.HasValue)
+            if (removeRequest.Item3.HasValue)
             {
-                var bothUsers = new[] { userId, removedFriendId };
+                string[] bothUsers = [userId, removeRequest.Item2];
                 await _hubContext.Clients.Users(bothUsers)
-                    .SendAsync("TeamDeleted", new { TeamId = deletedDmId.Value });
+                    .SendAsync("TeamDeleted", new { TeamId = removeRequest.Item3.Value });
             }
         }
 
@@ -156,10 +156,10 @@ public class FriendController(
         if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
             return Ok(Array.Empty<UserDTOPublic>());
 
-        var allUsers = await _userService.SearchUsersAsync(q, userId, limit);
+        IReadOnlyList<UserDTOPublic> allUsers = await _userService.SearchUsersAsync(q, userId, limit);
 
-        var result = new List<UserDTOPublic>();
-        foreach (var user in allUsers)
+        List<UserDTOPublic> result = [];
+        foreach (UserDTOPublic user in allUsers)
         {
             bool areFriends = await _friendService.AreFriendsAsync(userId, user.Id);
             if (!areFriends)

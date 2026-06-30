@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-// True E2E: this service NEVER decrypts. It validates membership, the
-// KeyGeneration invariant on writes, then persists / returns the
-// encrypted envelope verbatim. All AES-GCM + ECDSA work lives on the
-// client.
 public class MessageService(EncryptedChatContext context, IRealtimeService realtime) : IMessageService
 {
     private readonly EncryptedChatContext _context = context;
@@ -131,11 +127,6 @@ public class MessageService(EncryptedChatContext context, IRealtimeService realt
         if (!isMember)
             return null;
 
-        // E2E invariant: new messages must be encrypted under the team's
-        // CURRENT generation. If the client is stale (still encrypting
-        // under an old generation after a rotation), refuse the write —
-        // accepting it would let an evicted member's old key decrypt
-        // brand-new traffic.
         if (message.KeyGeneration != team.KeyGeneration)
             return null;
 
@@ -212,8 +203,6 @@ public class MessageService(EncryptedChatContext context, IRealtimeService realt
         if (messageToUpdate.Team == null)
             return null;
 
-        // Edits must re-encrypt under the current generation. Same
-        // rationale as CreateAsync.
         if (message.KeyGeneration != messageToUpdate.Team.KeyGeneration)
             return null;
 

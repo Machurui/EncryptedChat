@@ -3,11 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EncryptedChat.Services;
 
-// Periodically reconciles the attachment blob store against the DB: deletes .enc
-// files that no Attachment row references. These orphans are left behind by
-// cascade-deletes of messages/teams (the rows go, the files stay) and by the
-// retention purge in MessageCleanupService (bulk ExecuteDelete). A fresh-file age
-// guard avoids racing an in-flight upload whose row isn't committed yet.
 public class OrphanAttachmentCleanupService(
     IServiceProvider serviceProvider,
     ILogger<OrphanAttachmentCleanupService> logger) : BackgroundService

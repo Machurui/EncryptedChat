@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using EncryptedChat.Services;
 using EncryptedChat.Models;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
 
 namespace EncryptedChat.Controllers;
 
@@ -23,10 +24,10 @@ public class SecurityController(
 
     private string? GetCurrentTokenHash()
     {
-        var token = HttpContext.Request.Cookies["ec.accessToken"];
+        string? token = HttpContext.Request.Cookies["ec.accessToken"];
         if (string.IsNullOrEmpty(token))
         {
-            var authHeader = HttpContext.Request.Headers.Authorization.ToString();
+            string authHeader = HttpContext.Request.Headers.Authorization.ToString();
             if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 token = authHeader["Bearer ".Length..].Trim();
         }
@@ -38,18 +39,18 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO dto)
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
         if (dto.NewPassword != dto.ConfirmPassword)
             return BadRequest(new { Message = "Passwords do not match" });
 
-        var result = await _authService.ChangePasswordAsync(userId, dto);
+        IdentityResult result = await _authService.ChangePasswordAsync(userId, dto);
 
         if (!result.Succeeded)
         {
-            var errors = result.Errors.Select(e => e.Description).ToList();
+            List<string> errors = [.. result.Errors.Select(e => e.Description)];
             return BadRequest(new { Message = "Failed to change password", Errors = errors });
         }
 
@@ -61,11 +62,11 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> GetPasswordInfo()
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
-        var changedAt = await _authService.GetPasswordChangedAtAsync(userId);
+        DateTime? changedAt = await _authService.GetPasswordChangedAtAsync(userId);
 
         return Ok(new { ChangedAt = changedAt });
     }
@@ -75,7 +76,7 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> RegenerateRecoveryPhrase([FromBody] RecoveryPhraseRequestDTO dto)
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
@@ -85,7 +86,7 @@ public class SecurityController(
         if (!await _authService.VerifyPasswordAsync(userId, dto.Password))
             return BadRequest(new { Message = "Invalid password" });
 
-        var result = await _recoveryService.GenerateRecoveryPhraseAsync(userId);
+        RecoveryPhraseDTO? result = await _recoveryService.GenerateRecoveryPhraseAsync(userId);
         if (result == null)
             return BadRequest(new { Message = "Failed to generate recovery phrase" });
 
@@ -97,11 +98,11 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> GetRecoveryInfo()
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
-        var lastViewed = await _recoveryService.GetLastViewedAsync(userId);
+        DateTime? lastViewed = await _recoveryService.GetLastViewedAsync(userId);
 
         return Ok(new { LastViewed = lastViewed });
     }
@@ -111,12 +112,12 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> GetSessions()
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
-        var tokenHash = GetCurrentTokenHash();
-        var sessions = await _sessionService.GetUserSessionsAsync(userId, tokenHash);
+        string? tokenHash = GetCurrentTokenHash();
+        SessionListDTO sessions = await _sessionService.GetUserSessionsAsync(userId, tokenHash);
 
         return Ok(sessions);
     }
@@ -126,11 +127,11 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> RevokeSession(Guid sessionId)
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
-        var success = await _sessionService.RevokeSessionAsync(userId, sessionId);
+        bool success = await _sessionService.RevokeSessionAsync(userId, sessionId);
         if (!success)
             return NotFound(new { Message = "Session not found" });
 
@@ -142,12 +143,12 @@ public class SecurityController(
     [Authorize(Roles = "User")]
     public async Task<IActionResult> RevokeAllOtherSessions()
     {
-        var userId = GetCurrentUserId();
+        string? userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
-        var tokenHash = GetCurrentTokenHash();
-        var count = await _sessionService.RevokeAllOtherSessionsAsync(userId, tokenHash);
+        string? tokenHash = GetCurrentTokenHash();
+        int count = await _sessionService.RevokeAllOtherSessionsAsync(userId, tokenHash);
 
         return Ok(new { RevokedCount = count, Message = $"Revoked {count} session(s)" });
     }

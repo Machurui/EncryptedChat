@@ -6,12 +6,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace EncryptedChat.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController(IAuthService authService, IConfiguration configuration) : ControllerBase
+public partial class AuthController(IAuthService authService, IConfiguration configuration) : ControllerBase
 {
     private readonly IAuthService _auth = authService;
     private readonly IConfiguration _config = configuration;
@@ -19,22 +20,22 @@ public class AuthController(IAuthService authService, IConfiguration configurati
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDTO model)
     {
-        var (result, recoveryWords, accessToken) = await _auth.RegisterAsync(model);
+        (IdentityResult, IReadOnlyList<string>?, string?) registerRequest = await _auth.RegisterAsync(model);
 
-        if (result.Succeeded)
+        if (registerRequest.Item1.Succeeded)
         {
             // Set the http-only access cookie too, so subsequent calls from
             // the same browser are auto-authed (matches the Login flow).
-            if (!string.IsNullOrEmpty(accessToken))
-                SetAccessTokenCookie(accessToken, DateTime.UtcNow.AddMinutes(15));
+            if (!string.IsNullOrEmpty(registerRequest.Item3))
+                SetAccessTokenCookie(registerRequest.Item3, DateTime.UtcNow.AddMinutes(15));
 
             return Ok(new RegisterResultDTO(
                 "User created successfully",
-                recoveryWords ?? Array.Empty<string>(),
-                accessToken ?? string.Empty));
+                registerRequest.Item2 ?? [],
+                registerRequest.Item3 ?? string.Empty));
         }
 
-        List<string> errors = result.Errors.Select(e => e.Description).ToList();
+        List<string> errors = [.. registerRequest.Item1.Errors.Select(e => e.Description)];
         return BadRequest(new { Message = errors });
     }
 
@@ -71,22 +72,22 @@ public class AuthController(IAuthService authService, IConfiguration configurati
 
         if (userAgent.Contains("Chrome") && !userAgent.Contains("Edg"))
         {
-            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Chrome/(\d+)");
+            Match match = MyRegex().Match(userAgent);
             browser = match.Success ? $"Chrome {match.Groups[1].Value}" : "Chrome";
         }
         else if (userAgent.Contains("Firefox"))
         {
-            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Firefox/(\d+)");
+            Match match = MyRegex1().Match(userAgent);
             browser = match.Success ? $"Firefox {match.Groups[1].Value}" : "Firefox";
         }
         else if (userAgent.Contains("Safari") && !userAgent.Contains("Chrome"))
         {
-            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Version/(\d+)");
+            Match match = MyRegex2().Match(userAgent);
             browser = match.Success ? $"Safari {match.Groups[1].Value}" : "Safari";
         }
         else if (userAgent.Contains("Edg"))
         {
-            var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"Edg/(\d+)");
+            Match match = MyRegex3().Match(userAgent);
             browser = match.Success ? $"Edge {match.Groups[1].Value}" : "Edge";
         }
 
@@ -160,25 +161,6 @@ public class AuthController(IAuthService authService, IConfiguration configurati
         });
     }
 
-    [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
-    [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword(ResetPasswordDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
-    [HttpPost("resend-confirmation-email")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public IActionResult ResendConfirmationEmail(ResendConfirmationEmailDTO model)
-    {
-        throw new NotImplementedException();
-    }
-
     [HttpGet("signalr-token")]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public IActionResult GetSignalRToken()
@@ -194,17 +176,17 @@ public class AuthController(IAuthService authService, IConfiguration configurati
     [EnableRateLimiting("AccountRecover")]
     public async Task<IActionResult> Recover([FromBody] RecoverRequestDTO dto)
     {
-        var (success, message, newWords, accessToken) = await _auth.RecoverAsync(dto.Email, dto.Words, dto.NewPassword);
+        (bool, string, IReadOnlyList<string>?, string?) recoverRequest = await _auth.RecoverAsync(dto.Email, dto.Words, dto.NewPassword);
 
-        if (!success)
-            return BadRequest(new { Message = message });
+        if (!recoverRequest.Item1)
+            return BadRequest(new { Message = recoverRequest.Item2 });
 
         // Set the http-only access cookie so subsequent calls from the same
         // browser are auto-authed for the inline key-rewrap step.
-        if (!string.IsNullOrEmpty(accessToken))
-            SetAccessTokenCookie(accessToken, DateTime.UtcNow.AddMinutes(15));
+        if (!string.IsNullOrEmpty(recoverRequest.Item4))
+            SetAccessTokenCookie(recoverRequest.Item4, DateTime.UtcNow.AddMinutes(15));
 
-        return Ok(new RecoverResultDTO(message, newWords ?? Array.Empty<string>(), accessToken ?? string.Empty));
+        return Ok(new RecoverResultDTO(recoverRequest.Item2, recoverRequest.Item3 ?? [], recoverRequest.Item4 ?? string.Empty));
     }
 
     // Secure/SameSite are configurable so the same code works cross-origin in dev
@@ -243,4 +225,13 @@ public class AuthController(IAuthService authService, IConfiguration configurati
         // the cookie survives logout.
         Response.Cookies.Append(name, "", BuildCookieOptions(DateTime.UtcNow.AddDays(-1)));
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"Chrome/(\d+)")]
+    private static partial System.Text.RegularExpressions.Regex MyRegex();
+    [GeneratedRegex(@"Firefox/(\d+)")]
+    private static partial Regex MyRegex1();
+    [GeneratedRegex(@"Version/(\d+)")]
+    private static partial Regex MyRegex2();
+    [GeneratedRegex(@"Edg/(\d+)")]
+    private static partial Regex MyRegex3();
 }

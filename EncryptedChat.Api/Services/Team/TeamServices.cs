@@ -5,41 +5,35 @@ using System.Text.RegularExpressions;
 
 namespace EncryptedChat.Services;
 
-public class TeamService : ITeamService
+public class TeamService(EncryptedChatContext context, IFriendService friendService, IPresenceService presenceService, IBlindIndex blindIndex) : ITeamService
 {
-    private readonly EncryptedChatContext _context;
-    private readonly IFriendService _friendService;
-    private readonly IPresenceService _presenceService;
-    private readonly IBlindIndex _blindIndex;
-
-    public TeamService(EncryptedChatContext context, IFriendService friendService, IPresenceService presenceService, IBlindIndex blindIndex)
-    {
-        _context = context;
-        _friendService = friendService;
-        _presenceService = presenceService;
-        _blindIndex = blindIndex;
-    }
+    private readonly EncryptedChatContext _context = context;
+    private readonly IFriendService _friendService = friendService;
+    private readonly IPresenceService _presenceService = presenceService;
+    private readonly IBlindIndex _blindIndex = blindIndex;
 
     public async Task<IEnumerable<TeamDTOPublic?>?> GetAllAsync()
     {
         // Return a list of teams
-        var teams = await _context.Teams
+        List<Team> teams = await _context.Teams
         .Include(t => t.Members)
             .ThenInclude(m => m.User)
         .AsNoTracking()
         .ToListAsync();
+
         return teams.Select(team => ItemToDTO(team));
     }
 
     public async Task<TeamDTOPublic?> GetByIdAsync(Guid id)
     {
         // Return a team by id
-        var team = await _context.Teams
+        Team? team = await _context.Teams
         .Include(t => t.Members)
             .ThenInclude(m => m.User)
         .AsNoTracking()
         .Where(t => t.Id == id)
         .SingleOrDefaultAsync();
+
         return team is null ? null : ItemToDTO(team);
     }
 
@@ -48,14 +42,16 @@ public class TeamService : ITeamService
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(userId))
             return null;
 
-        var member = await _context.Members
+        Member? member = await _context.Members
             .Include(m => m.Team)
                 .ThenInclude(t => t!.Members)
                     .ThenInclude(mm => mm.User)
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.UrlToken == token && m.UserId == userId);
 
-        if (member?.Team == null) return null;
+        if (member?.Team == null)
+            return null;
+
         return ItemToDTO(member.Team, userId);
     }
 
@@ -108,11 +104,8 @@ public class TeamService : ITeamService
             ModifiedAt = DateTime.UtcNow,
         };
 
-        foreach (var admin in admins)
+        foreach (User admin in admins)
         {
-            // First admin slot = the creator (always part of the admin set
-            // server-side). The creator becomes Owner; other admins listed at
-            // creation time are regular Admins. Owner is unique per team.
             bool isCreator = admin.Id == creatorId;
             team.Members.Add(new Member
             {
@@ -124,7 +117,7 @@ public class TeamService : ITeamService
             });
         }
 
-        foreach (var member in members.Where(member => admins.All(admin => admin.Id != member.Id)))
+        foreach (User member in members.Where(member => admins.All(admin => admin.Id != member.Id)))
         {
             team.Members.Add(new Member
             {
@@ -136,18 +129,9 @@ public class TeamService : ITeamService
             });
         }
 
-        // True E2E key share coverage check: every team member (admins +
-        // members, including the creator) must have a wrapped key share in
-        // the request. Otherwise the new team would ship with a member
-        // unable to decrypt or encrypt anything — exactly the bug we shipped
-        // before this check existed. We do this BEFORE Adding the team so
-        // failure leaves zero side effects.
         HashSet<string> teamMemberIds = team.Members.Select(m => m.UserId).ToHashSet();
         Dictionary<string, string> providedShares = newTeam.MemberKeyShares ?? new();
 
-        // Back-compat: legacy single-member teams that posted only the old
-        // InitialKeyShare for the creator still work — synthesize a one-entry
-        // dict so the validation passes when there's just the creator.
         if (providedShares.Count == 0 && !string.IsNullOrEmpty(newTeam.InitialKeyShare))
             providedShares = new Dictionary<string, string> { [creatorId] = newTeam.InitialKeyShare };
 
@@ -159,7 +143,7 @@ public class TeamService : ITeamService
 
         _context.Teams.Add(team);
 
-        foreach (var (memberId, wrappedKey) in providedShares)
+        foreach ((string memberId, string wrappedKey) in providedShares)
         {
             _context.TeamKeyShares.Add(new TeamKeyShare
             {
@@ -200,18 +184,18 @@ public class TeamService : ITeamService
         if (teamToUpdate == null)
             return null;
 
-        var admins = await _context.Users
+        List<User> admins = await _context.Users
             .Where(u => team.Admins.Contains(u.Id))
             .ToListAsync();
 
-        var members = (team.Members != null && team.Members.Count != 0)
+        List<User> members = (team.Members != null && team.Members.Count != 0)
             ? await _context.Users.Where(u => team.Members.Contains(u.Id)).ToListAsync()
             : [];
 
         _context.Members.RemoveRange(teamToUpdate.Members);
         teamToUpdate.Members.Clear();
 
-        foreach (var admin in admins)
+        foreach (User admin in admins)
         {
             teamToUpdate.Members.Add(new Member
             {
@@ -225,7 +209,7 @@ public class TeamService : ITeamService
             });
         }
 
-        foreach (var member in members.Where(member => admins.All(admin => admin.Id != member.Id)))
+        foreach (User member in members.Where(member => admins.All(admin => admin.Id != member.Id)))
         {
             teamToUpdate.Members.Add(new Member
             {
@@ -293,8 +277,6 @@ public class TeamService : ITeamService
         if (string.IsNullOrWhiteSpace(actorId))
             return null;
 
-        // Owner-only: deleting destroys the team key permanently. Only the
-        // Owner can take this irreversible action.
         if (!await IsOwnerAsync(actorId, id))
             return null;
 
@@ -306,12 +288,6 @@ public class TeamService : ITeamService
         if (teamToDelete == null)
             return null;
 
-        // UserTeamPreferences (DeleteBehavior.ClientCascade) and PinnedMessages
-        // (NoAction) do NOT cascade at the DB level, so on SQL Server deleting the
-        // team would hit a FK REFERENCE constraint. Remove them explicitly first;
-        // EF orders these child deletes before the parent in the single
-        // SaveChanges below. Everything else (Members, Messages, TeamKeyShares,
-        // TeamInvites, Attachments-via-Message) cascades in the database.
         List<UserTeamPreference> prefs = await _context.UserTeamPreferences
             .Where(p => p.TeamId == id)
             .ToListAsync();
@@ -409,16 +385,16 @@ public class TeamService : ITeamService
         if (!await _friendService.AreFriendsAsync(actorId, userId))
             return false;
 
-        var team = await _context.Teams.FindAsync(teamId);
+        Team? team = await _context.Teams.FindAsync(teamId);
         if (team is null)
             return false;
 
-        var user = await _context.Users.FindAsync(userId);
+        User? user = await _context.Users.FindAsync(userId);
         if (user is null)
             return false;
 
         // Check if already a member
-        var existingMember = await _context.Members
+        Member? existingMember = await _context.Members
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
         if (existingMember is not null)
             return false;
@@ -442,40 +418,31 @@ public class TeamService : ITeamService
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
             return false;
 
-        var actorMembership = await _context.Members
+        Member? actorMembership = await _context.Members
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == actorId);
         if (actorMembership == null)
             return false;
 
-        var member = await _context.Members
+        Member? member = await _context.Members
             .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
         if (member is null)
             return false;
 
-        // Permission matrix:
-        // - Owner: can remove anyone except themselves (must transfer ownership first)
-        // - Admin: can remove Members only (not other Admins, not Owner)
-        // - Member: cannot remove anyone
         bool actorIsOwner = actorMembership.Role == Member.OwnerRole;
         bool actorIsAdmin = actorMembership.Role == Member.AdminRole;
 
         if (member.Role == Member.OwnerRole)
-            return false; // Owner can't be removed; transfer first
+            return false;
 
         if (actorIsOwner)
-        {
-            if (userId == actorId) return false; // owner can't self-remove
-            // OK to proceed
-        }
-        else if (actorIsAdmin)
-        {
-            if (member.Role != Member.MemberRole) return false; // admins can't remove admins
-        }
-        else
-        {
-            return false; // plain members can't remove anyone
-        }
+            if (userId == actorId)
+                return false;
+            else if (actorIsAdmin)
+                if (member.Role != Member.MemberRole)
+                    return false;
+                else
+                    return false;
 
         _context.Members.Remove(member);
         await _context.SaveChangesAsync();
@@ -487,20 +454,16 @@ public class TeamService : ITeamService
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
             return false;
 
-        // Owner-only: only the Owner can promote Members to Admin. Admins
-        // cannot self-organise — prevents chaos where one admin promotes
-        // their friends to outvote others.
         if (!await IsOwnerAsync(actorId, teamId))
             return false;
 
-        var member = await _context.Members
-            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
+        Member? member = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
 
         if (member is null)
             return false;
 
         if (member.Role == Member.AdminRole || member.Role == Member.OwnerRole)
-            return false; // Already admin or owner — nothing to do
+            return false;
 
         member.Role = Member.AdminRole;
         member.ModifiedAt = DateTime.UtcNow;
@@ -513,22 +476,19 @@ public class TeamService : ITeamService
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(actorId))
             return false;
 
-        // Owner-only: only the Owner can demote Admins. Owner cannot demote
-        // themselves (must transfer ownership first).
         if (!await IsOwnerAsync(actorId, teamId))
             return false;
 
         if (userId == actorId)
-            return false; // owner can't self-demote
+            return false;
 
-        var member = await _context.Members
-            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
+        Member? member = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == userId);
 
         if (member is null)
             return false;
 
         if (member.Role != Member.AdminRole)
-            return false; // can only demote Admins (not Members, not the Owner)
+            return false;
 
         member.Role = Member.MemberRole;
         member.ModifiedAt = DateTime.UtcNow;
@@ -540,21 +500,18 @@ public class TeamService : ITeamService
     {
         if (string.IsNullOrWhiteSpace(fromUserId) || string.IsNullOrWhiteSpace(toUserId))
             return false;
-        if (fromUserId == toUserId) return false;
 
-        var fromMember = await _context.Members
-            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == fromUserId);
+        if (fromUserId == toUserId)
+            return false;
+
+        Member? fromMember = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == fromUserId);
         if (fromMember == null || fromMember.Role != Member.OwnerRole)
             return false;
 
-        var toMember = await _context.Members
-            .FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == toUserId);
+        Member? toMember = await _context.Members.FirstOrDefaultAsync(m => m.TeamId == teamId && m.UserId == toUserId);
         if (toMember == null)
             return false;
 
-        // Target must already be Admin — we don't auto-promote Members. This
-        // mirrors GitHub/GitLab where ownership only transfers to existing
-        // privileged members. Caller (UI) promotes first if needed.
         if (toMember.Role != Member.AdminRole)
             return false;
 
@@ -646,7 +603,7 @@ public class TeamService : ITeamService
 
     public async Task<TeamDTOPublic?> GetOrCreateDirectMessageAsync(string userId, string friendId, string? myWrappedKey = null, string? friendWrappedKey = null)
     {
-        var (dm, _) = await GetOrCreateDirectMessageWithStatusAsync(userId, friendId, myWrappedKey, friendWrappedKey);
+        (TeamDTOPublic? dm, bool _) = await GetOrCreateDirectMessageWithStatusAsync(userId, friendId, myWrappedKey, friendWrappedKey);
         return dm;
     }
 
@@ -658,13 +615,13 @@ public class TeamService : ITeamService
         if (userId == friendId)
             return (null, false);
 
-        var user = await _context.Users.FindAsync(userId);
-        var friend = await _context.Users.FindAsync(friendId);
+        User? user = await _context.Users.FindAsync(userId);
+        User? friend = await _context.Users.FindAsync(friendId);
         if (user == null || friend == null)
             return (null, false);
 
         // Find existing DM
-        var existingDm = await _context.Teams
+        Team? existingDm = await _context.Teams
             .Include(t => t.Members)
             .ThenInclude(m => m.User)
             .Where(t => t.IsDirect && t.Members.Count == 2)
@@ -674,17 +631,11 @@ public class TeamService : ITeamService
         if (existingDm != null)
             return (ItemToDTO(existingDm), false);
 
-        // True E2E: creating a new DM requires both wrapped key shares so the
-        // server can persist the TeamKeyShare rows atomically with the team.
-        // Without these, neither user can encrypt/decrypt — the cache stays
-        // empty and SendMessageAsync fails. (Regular teams take the creator's
-        // share via TeamDTO.InitialKeyShare; DMs need shares for both sides
-        // because there's no admin/member distinction.)
         if (string.IsNullOrEmpty(myWrappedKey) || string.IsNullOrEmpty(friendWrappedKey))
             return (null, false);
 
         string dmSlug = $"dm-{Guid.NewGuid():N}";
-        var dm = new Team
+        Team dm = new()
         {
             Id = Guid.NewGuid(),
             Name = $"{user.Name} & {friend.Name}",
@@ -711,6 +662,7 @@ public class TeamService : ITeamService
             WrappedKey = myWrappedKey,
             CreatedAt = DateTime.UtcNow
         });
+
         _context.TeamKeyShares.Add(new TeamKeyShare
         {
             Id = Guid.NewGuid(),
@@ -723,7 +675,7 @@ public class TeamService : ITeamService
 
         await _context.SaveChangesAsync();
 
-        var created = await _context.Teams
+        Team? created = await _context.Teams
             .Include(t => t.Members)
             .ThenInclude(m => m.User)
             .FirstOrDefaultAsync(t => t.Id == dm.Id);
@@ -760,7 +712,7 @@ public class TeamService : ITeamService
             Role = member.Role
         };
 
-        var dto = new TeamDTOPublic
+        TeamDTOPublic dto = new()
         {
             Id = team.Id,
             Name = team.Name,
@@ -775,7 +727,7 @@ public class TeamService : ITeamService
 
         if (!string.IsNullOrEmpty(currentUserId))
         {
-            var myMember = team.Members?.FirstOrDefault(m => m.UserId == currentUserId);
+            Member? myMember = team.Members?.FirstOrDefault(m => m.UserId == currentUserId);
             if (myMember != null) dto.UrlToken = myMember.UrlToken;
         }
 
@@ -786,7 +738,7 @@ public class TeamService : ITeamService
     {
         for (int attempt = 0; attempt < 5; attempt++)
         {
-            var token = TokenGenerator.Generate(10);
+            string token = TokenGenerator.Generate(10);
             bool exists = await _context.Members.AnyAsync(m => m.UrlToken == token);
             if (!exists) return token;
         }
@@ -801,10 +753,10 @@ public class TeamService : ITeamService
 
     private async Task<string> CreateUniqueSlugAsync(string? name, Guid? excludeTeamId = null)
     {
-        var baseSlug = CreateSlug(name);
+        string baseSlug = CreateSlug(name);
 
         string baseIndex = _blindIndex.Compute(baseSlug, "slug");
-        var existsQuery = _context.Teams.AsNoTracking().Where(t => t.SlugBlindIndex == baseIndex);
+        IQueryable<Team> existsQuery = _context.Teams.AsNoTracking().Where(t => t.SlugBlindIndex == baseIndex);
         if (excludeTeamId.HasValue)
             existsQuery = existsQuery.Where(t => t.Id != excludeTeamId.Value);
 
@@ -812,14 +764,14 @@ public class TeamService : ITeamService
             return baseSlug;
 
         // Slug exists, append a random suffix
-        var suffix = Guid.NewGuid().ToString("N")[..6];
+        string suffix = Guid.NewGuid().ToString("N")[..6];
         return $"{baseSlug}-{suffix}";
     }
 
     private static string CreateSlug(string? name)
     {
-        var source = string.IsNullOrWhiteSpace(name) ? Guid.NewGuid().ToString("N") : name.Trim().ToLowerInvariant();
-        var slug = Regex.Replace(source, "[^a-z0-9]+", "-").Trim('-');
+        string source = string.IsNullOrWhiteSpace(name) ? Guid.NewGuid().ToString("N") : name.Trim().ToLowerInvariant();
+        string slug = Regex.Replace(source, "[^a-z0-9]+", "-").Trim('-');
         return string.IsNullOrWhiteSpace(slug) ? Guid.NewGuid().ToString("N") : slug;
     }
 }

@@ -3,10 +3,11 @@ using EncryptedChat.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 
 namespace EncryptedChat.Services;
 
-public class UserService(EncryptedChatContext context, UserManager<User> userManager, IPresenceService presenceService, IBlindIndex blindIndex) : IUserService
+public partial class UserService(EncryptedChatContext context, UserManager<User> userManager, IPresenceService presenceService, IBlindIndex blindIndex) : IUserService
 {
     private readonly EncryptedChatContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
@@ -14,7 +15,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
     private readonly IBlindIndex _blindIndex = blindIndex;
 
     private static readonly System.Text.RegularExpressions.Regex HandleRegex =
-        new(@"^[a-zA-Z0-9_]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        MyRegex();
 
     public async Task<UserProfileDTO?> GetOwnProfileAsync(string id)
     {
@@ -108,13 +109,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .Select(m => new { m.Team!.Id, m.Team.Name, m.Team.Slug, m.Team.Glyph, m.Team.Color, m.Team.MessageLifetime, m.Team.IsDirect, m.Role, m.LastReadAt, m.IsMuted })
             .ToListAsync();
 
-        var teamIds = userTeams.Select(t => t.Id).ToList();
+        List<Guid> teamIds = [.. userTeams.Select(t => t.Id)];
 
-        // Only carry timing + sender name to the client for last-message
-        // metadata — the server no longer holds the team key so it cannot
-        // produce a plaintext preview. Clients render their own preview
-        // from messages they've already decrypted, or display nothing.
-        var lastMessages = await _context.Messages
+        List<Message?> lastMessages = await _context.Messages
             .AsNoTracking()
             .Include(m => m.Sender)
             .Include(m => m.Team)
@@ -123,7 +120,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             .Select(g => g.OrderByDescending(m => m.Date).FirstOrDefault())
             .ToListAsync();
 
-        var lastMsgDict = lastMessages
+        Dictionary<Guid, Message> lastMsgDict = lastMessages
             .Where(m => m != null)
             .ToDictionary(m => m!.Team!.Id, m => m!);
 
@@ -143,9 +140,9 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             })
             .ToListAsync();
 
-        var unreadDict = unreadList.ToDictionary(x => x.TeamId, x => x.Count);
+        Dictionary<Guid, int> unreadDict = unreadList.ToDictionary(x => x.TeamId, x => x.Count);
 
-        List<UserTeamDTO> teams = userTeams.Select(t => new UserTeamDTO
+        List<UserTeamDTO> teams = [.. userTeams.Select(t => new UserTeamDTO
         {
             Id = t.Id,
             Name = t.Name,
@@ -157,11 +154,11 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             IsDirect = t.IsDirect,
             UnreadCount = unreadDict.GetValueOrDefault(t.Id, 0),
             IsMuted = t.IsMuted
-        }).ToList();
+        })];
 
-        foreach (var team in teams)
+        foreach (UserTeamDTO team in teams)
         {
-            if (lastMsgDict.TryGetValue(team.Id, out var lastMsg) && lastMsg != null)
+            if (lastMsgDict.TryGetValue(team.Id, out Message? lastMsg) && lastMsg != null)
             {
                 team.LastMessageTime = lastMsg.Date;
                 team.LastMessageSenderName = lastMsg.Sender?.Name;
@@ -169,11 +166,10 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             }
         }
 
-        teams = teams
+        teams = [.. teams
             .OrderByDescending(t => t.LastMessageTime ?? DateTime.MinValue)
             .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+            .Take(pageSize)];
 
         return teams;
     }
@@ -211,11 +207,13 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             })
             .ToListAsync();
 
-        foreach (var u in users)
+        foreach (UserDTOPublic u in users)
         {
             bool isOnline = _presenceService.IsOnline(u.Id);
             u.Status = StatusHelper.EffectiveStatus(u.Status, isOnline);
-            if (!isOnline || u.Status == "offline") u.StatusMessage = null;
+
+            if (!isOnline || u.Status == "offline")
+                u.StatusMessage = null;
         }
 
         return users;
@@ -250,27 +248,20 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
             if (name.Length < 2 || name.Length > 100)
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
-            // Display name is free-form; no uniqueness constraint.
             user.Name = name;
         }
 
         if (handle != null && !string.Equals(handle, user.Handle, StringComparison.Ordinal))
         {
             if (user.Handle != null)
-            {
-                // Already claimed — handle is permanent.
                 return new UserUpdateResult(UserOperationStatus.Forbidden);
-            }
 
-            // First-time claim path (user.Handle is null).
             if (handle.Length < 3 || handle.Length > 32)
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
             if (!HandleRegex.IsMatch(handle))
                 return new UserUpdateResult(UserOperationStatus.ValidationFailed);
 
-            // First-time claim — user.Handle is null, so no self-exclusion needed.
-            // Handle is encrypted at rest, so uniqueness goes through the blind index.
             string claimIndex = _blindIndex.Compute(handle);
             bool handleExists = await _context.Users.AnyAsync(u => u.HandleBlindIndex == claimIndex);
             if (handleExists)
@@ -340,14 +331,10 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         }
 
         if (dto.ReadReceipts.HasValue)
-        {
             user.ReadReceipts = dto.ReadReceipts.Value;
-        }
 
         if (dto.TypingIndicators.HasValue)
-        {
             user.TypingIndicators = dto.TypingIndicators.Value;
-        }
 
         if (!string.IsNullOrWhiteSpace(dto.NotificationPreference))
         {
@@ -468,4 +455,7 @@ public class UserService(EncryptedChatContext context, UserManager<User> userMan
         await _context.SaveChangesAsync();
         return UserOperationStatus.Success;
     }
+
+    [GeneratedRegexAttribute(@"^[a-zA-Z0-9_]+$", RegexOptions.Compiled)]
+    private static partial Regex MyRegex();
 }

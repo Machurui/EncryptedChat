@@ -18,7 +18,7 @@ public class PinnedMessageService(
         bool isMember = await _teamService.IsMemberAsync(userId, teamId);
         if (!isMember) return [];
 
-        var pins = await _context.PinnedMessages
+        List<PinnedMessage> pins = await _context.PinnedMessages
             .Where(p => p.TeamId == teamId)
             .Include(p => p.Message)
                 .ThenInclude(m => m.Sender)
@@ -38,7 +38,7 @@ public class PinnedMessageService(
         bool isMember = await _teamService.IsMemberAsync(userId, teamId);
         if (!isMember) return null;
 
-        var team = await _context.Teams.FindAsync(teamId);
+        Team? team = await _context.Teams.FindAsync(teamId);
         if (team == null) return null;
 
         bool messageExists = await _context.Messages
@@ -49,7 +49,7 @@ public class PinnedMessageService(
             .AnyAsync(p => p.TeamId == teamId && p.MessageId == messageId);
         if (alreadyPinned) return null;
 
-        var pin = new PinnedMessage
+        PinnedMessage pin = new()
         {
             TeamId = teamId,
             MessageId = messageId,
@@ -60,7 +60,7 @@ public class PinnedMessageService(
         _context.PinnedMessages.Add(pin);
         await _context.SaveChangesAsync();
 
-        var created = await _context.PinnedMessages
+        PinnedMessage? created = await _context.PinnedMessages
             .Where(p => p.Id == pin.Id)
             .Include(p => p.Message)
                 .ThenInclude(m => m.Sender)
@@ -78,7 +78,7 @@ public class PinnedMessageService(
         bool isMember = await _teamService.IsMemberAsync(userId, teamId);
         if (!isMember) return false;
 
-        var pin = await _context.PinnedMessages
+        PinnedMessage? pin = await _context.PinnedMessages
             .FirstOrDefaultAsync(p => p.TeamId == teamId && p.MessageId == messageId);
 
         if (pin == null) return false;
@@ -98,7 +98,7 @@ public class PinnedMessageService(
         Message message = pin.Message;
 
         List<AttachmentDTOPublic> attachments = [];
-        foreach (var attachment in message.Attachments ?? [])
+        foreach (Attachment attachment in message.Attachments ?? [])
         {
             attachments.Add(new AttachmentDTOPublic
             {

@@ -13,15 +13,15 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public static string HashToken(string token)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToBase64String(bytes);
     }
 
     public async Task<Session> CreateSessionAsync(string userId, string token, string deviceInfo, string deviceKind, string? ipAddress, Guid? refreshTokenId = null)
     {
-        var tokenHash = HashToken(token);
+        string tokenHash = HashToken(token);
 
-        var session = new Session
+        Session session = new()
         {
             UserId = userId,
             TokenHash = tokenHash,
@@ -41,7 +41,7 @@ public class SessionService(EncryptedChatContext context) : ISessionService
     public async Task<SessionListDTO> GetUserSessionsAsync(string userId, string? currentTokenHash)
     {
         DateTime now = DateTime.UtcNow;
-        var sessions = await _context.Sessions
+        List<SessionDTO> sessions = await _context.Sessions
             .AsNoTracking()
             .Where(s => s.UserId == userId
                 && !s.IsRevoked
@@ -67,7 +67,7 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task<bool> RevokeSessionAsync(string userId, Guid sessionId)
     {
-        var session = await _context.Sessions
+        Session? session = await _context.Sessions
             .Include(s => s.CurrentRefreshToken)
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && !s.IsRevoked);
 
@@ -86,13 +86,13 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task<int> RevokeAllOtherSessionsAsync(string userId, string? currentTokenHash)
     {
-        var sessions = await _context.Sessions
+        List<Session> sessions = await _context.Sessions
             .Include(s => s.CurrentRefreshToken)
             .Where(s => s.UserId == userId && !s.IsRevoked && (currentTokenHash == null || s.TokenHash != currentTokenHash))
             .ToListAsync();
 
         DateTime now = DateTime.UtcNow;
-        foreach (var session in sessions)
+        foreach (Session session in sessions)
         {
             session.IsRevoked = true;
             if (session.CurrentRefreshToken != null && session.CurrentRefreshToken.RevokedAt == null)
@@ -105,13 +105,13 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task<int> RevokeAllSessionsAsync(string userId)
     {
-        var sessions = await _context.Sessions
+        List<Session> sessions = await _context.Sessions
             .Include(s => s.CurrentRefreshToken)
             .Where(s => s.UserId == userId && !s.IsRevoked)
             .ToListAsync();
 
         DateTime now = DateTime.UtcNow;
-        foreach (var session in sessions)
+        foreach (Session session in sessions)
         {
             session.IsRevoked = true;
             if (session.CurrentRefreshToken != null && session.CurrentRefreshToken.RevokedAt == null)
@@ -124,7 +124,7 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task<bool> UpdateLastActiveAsync(string tokenHash)
     {
-        var session = await _context.Sessions
+        Session? session = await _context.Sessions
             .FirstOrDefaultAsync(s => s.TokenHash == tokenHash && !s.IsRevoked);
 
         if (session == null)
@@ -149,7 +149,7 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
     public async Task CleanupExpiredSessionsAsync()
     {
-        var expiredSessions = await _context.Sessions
+        List<Session> expiredSessions = await _context.Sessions
             .Where(s => s.IsRevoked || (s.ExpiresAt != null && s.ExpiresAt < DateTime.UtcNow))
             .ToListAsync();
 
@@ -164,13 +164,13 @@ public class SessionService(EncryptedChatContext context) : ISessionService
 
         if (ipAddress.Contains('.'))
         {
-            var parts = ipAddress.Split('.');
+            string[] parts = ipAddress.Split('.');
             if (parts.Length == 4)
                 return $"{parts[0]}.{parts[1]}.•.•";
         }
         else if (ipAddress.Contains(':'))
         {
-            var parts = ipAddress.Split(':');
+            string[] parts = ipAddress.Split(':');
             if (parts.Length >= 4)
                 return $"{parts[0]}:{parts[1]}:•:•";
         }

@@ -1,15 +1,12 @@
 namespace EncryptedChat.Models;
 
-public class AttachmentDTOPublic
+public class AttachmentUploadDTO
 {
-    public Guid Id { get; set; }
-    public Guid MessageId { get; set; }
+    public byte[] EncryptedContent { get; set; } = [];
     public string EncryptedFileName { get; set; } = string.Empty;
     public string FileNameIv { get; set; } = string.Empty;
     public string MimeType { get; set; } = string.Empty;
-    public long Size { get; set; }
     public string FileIv { get; set; } = string.Empty;
     public string Signature { get; set; } = string.Empty;
     public int KeyGeneration { get; set; }
-    public DateTime CreatedAt { get; set; }
 }
