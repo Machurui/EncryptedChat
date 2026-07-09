@@ -51,6 +51,9 @@ services:
     build:
       context: .
       dockerfile: EncryptedChat.Client/Dockerfile
+    environment:
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_TRACES_SAMPLE_RATE: "${SENTRY_TRACES_SAMPLE_RATE:-0.0}"
     ports:
       - "8080:80"
     depends_on:

@@ -27,7 +27,7 @@ services:
       Cookies__SameSite: "Lax"
       DisableHttpsRedirection: "true"
       RunMigrationsOnStartup: "true"
-      Sentry__Dsn: "${SENTRY_DSN}"
+      Sentry__Dsn: "${SENTRY_DSN:-}"
       Giphy__ServiceApiKey: "${GIPHY_API_KEY}"
       Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:
@@ -49,6 +49,9 @@ services:
 
   web:
     image: ghcr.io/machurui/encryptedchat-web:${IMAGE_TAG}
+    environment:
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_TRACES_SAMPLE_RATE: "${SENTRY_TRACES_SAMPLE_RATE:-0.0}"
     depends_on:
       - api
     restart: unless-stopped
