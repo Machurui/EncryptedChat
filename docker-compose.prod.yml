@@ -32,6 +32,10 @@ services:
       Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:
       - attachments:/app/storage/attachments
+    networks:
+      default:
+        aliases:
+          - encryptedchat-api
     depends_on:
       db:
         condition: service_healthy
