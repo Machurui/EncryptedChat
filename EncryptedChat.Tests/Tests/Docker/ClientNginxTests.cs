@@ -8,9 +8,10 @@ public class ClientNginxTests
     public void NginxProxiesApiAndHubsToEncryptedChatApiService()
     {
         string nginx = File.ReadAllText(FindRepoFile("EncryptedChat.Client", "nginx.conf"));
+        string apiLocation = ExtractLocationBlock(nginx, "location /api/");
 
-        nginx.Should().Contain("proxy_pass http://encryptedchat-api:8080/;");
-        nginx.Should().Contain("proxy_pass http://encryptedchat-api:8080;");
+        apiLocation.Should().Contain("proxy_pass http://encryptedchat-api:8080;");
+        apiLocation.Should().NotContain("proxy_pass http://encryptedchat-api:8080/;");
         nginx.Should().NotContain("proxy_pass http://api:8080;");
     }
 
@@ -34,6 +35,15 @@ public class ClientNginxTests
         }
 
         throw new FileNotFoundException($"Could not locate {Path.Combine(pathParts)} from test context.");
+    }
+
+    private static string ExtractLocationBlock(string nginx, string location)
+    {
+        int start = nginx.IndexOf(location, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+
+        int next = nginx.IndexOf("    location ", start + location.Length, StringComparison.Ordinal);
+        return next < 0 ? nginx[start..] : nginx[start..next];
     }
 
     private static IEnumerable<string> CandidateRoots()
