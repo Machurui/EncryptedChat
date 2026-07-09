@@ -9,6 +9,7 @@ public class ClientNginxTests
     {
         string nginx = File.ReadAllText(FindRepoFile("EncryptedChat.Client", "nginx.conf"));
 
+        nginx.Should().Contain("proxy_pass http://encryptedchat-api:8080/;");
         nginx.Should().Contain("proxy_pass http://encryptedchat-api:8080;");
         nginx.Should().NotContain("proxy_pass http://api:8080;");
     }
