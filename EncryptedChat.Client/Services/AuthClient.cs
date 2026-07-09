@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components.Authorization;
 using EncryptedChat.Client.Auth;
+using Microsoft.AspNetCore.Http;
 
 namespace EncryptedChat.Client.Services;
 
@@ -47,13 +48,12 @@ public class AuthClient
     // ---------- Auth ----------
     public async Task<Result> LoginAsync(string email, string password)
     {
-        var res = await _http.PostAsJsonAsync("api/auth/login", new LoginDTO(email, password));
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.PostAsJsonAsync("api/auth/login", new LoginDTO(email, password));
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
             return Result.Fail(ParseMessage(body) ?? "Login failed.");
 
-        // Cookie is set automatically by the browser
         _authState.NotifyChanged();
         return Result.Ok();
     }
@@ -64,16 +64,14 @@ public class AuthClient
         _authState.NotifyChanged();
     }
 
-    // If your API has refresh implemented, call this when near expiry
     public async Task<Result> RefreshAsync(string refreshToken)
     {
-        var res = await _http.PostAsJsonAsync("api/auth/refresh", new { refreshToken });
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.PostAsJsonAsync("api/auth/refresh", new { refreshToken });
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
             return Result.Fail(ParseMessage(body) ?? "Refresh failed.");
 
-        // Cookie is set automatically by the browser
         _authState.NotifyChanged();
         return Result.Ok();
     }
@@ -84,36 +82,35 @@ public class AuthClient
 
     public async Task<Result<RegisterResult>> RegisterAsync(string email, string password, string handle)
     {
-        var res = await _http.PostAsJsonAsync("api/auth/register", new RegisterDTO(email, password, handle));
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.PostAsJsonAsync("api/auth/register", new RegisterDTO(email, password, handle));
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
             return Result<RegisterResult>.Fail(ParseMessage(body) ?? "Registration failed.");
 
-        // Parse the new { message, recoveryWords } response shape.
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
+            using JsonDocument doc = JsonDocument.Parse(body);
+            JsonElement root = doc.RootElement;
 
-            string message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+            string message = root.TryGetProperty("message", out JsonElement m) && m.ValueKind == JsonValueKind.String
                 ? m.GetString() ?? "Registered"
                 : "Registered";
 
-            var words = new List<string>();
-            if (root.TryGetProperty("recoveryWords", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            List<string> words = [];
+            if (root.TryGetProperty("recoveryWords", out JsonElement arr) && arr.ValueKind == JsonValueKind.Array)
             {
-                foreach (var element in arr.EnumerateArray())
+                foreach (JsonElement element in arr.EnumerateArray())
                 {
                     if (element.ValueKind == JsonValueKind.String)
                     {
-                        var w = element.GetString();
+                        string? w = element.GetString();
                         if (!string.IsNullOrEmpty(w)) words.Add(w);
                     }
                 }
             }
 
-            string accessToken = root.TryGetProperty("accessToken", out var t) && t.ValueKind == JsonValueKind.String
+            string accessToken = root.TryGetProperty("accessToken", out JsonElement t) && t.ValueKind == JsonValueKind.String
                 ? t.GetString() ?? ""
                 : "";
 
@@ -128,15 +125,15 @@ public class AuthClient
     // ---------- Password ----------
     public async Task<Result> ForgotPasswordAsync(string email)
     {
-        var res = await _http.PostAsJsonAsync("api/auth/forgot-password", new ForgotPasswordDTO(email));
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.PostAsJsonAsync("api/auth/forgot-password", new ForgotPasswordDTO(email));
+        string body = await res.Content.ReadAsStringAsync();
         return res.IsSuccessStatusCode ? Result.Ok() : Result.Fail(ParseMessage(body) ?? "Failed to send reset email.");
     }
 
     public async Task<Result> ResetPasswordAsync(string email, string token, string newPassword)
     {
-        var res = await _http.PostAsJsonAsync("api/auth/reset-password", new ResetPasswordDTO(email, token, newPassword));
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.PostAsJsonAsync("api/auth/reset-password", new ResetPasswordDTO(email, token, newPassword));
+        string body = await res.Content.ReadAsStringAsync();
         return res.IsSuccessStatusCode ? Result.Ok() : Result.Fail(ParseMessage(body) ?? "Password reset failed.");
     }
 
@@ -145,11 +142,11 @@ public class AuthClient
     {
         try
         {
-            var res = await _http.GetAsync("api/auth/signalr-token");
+            HttpResponseMessage res = await _http.GetAsync("api/auth/signalr-token");
             if (!res.IsSuccessStatusCode)
                 return null;
 
-            var response = await res.Content.ReadFromJsonAsync<SignalRTokenResponse>();
+            SignalRTokenResponse? response = await res.Content.ReadFromJsonAsync<SignalRTokenResponse>();
             return response?.Token;
         }
         catch
@@ -165,7 +162,7 @@ public class AuthClient
     {
         try
         {
-            var res = await _http.PostAsJsonAsync("api/auth/recover", new
+            HttpResponseMessage res = await _http.PostAsJsonAsync("api/auth/recover", new
             {
                 Email = email,
                 Words = words,
@@ -174,30 +171,30 @@ public class AuthClient
 
             if (res.IsSuccessStatusCode)
             {
-                var body = await res.Content.ReadAsStringAsync();
+                string body = await res.Content.ReadAsStringAsync();
                 try
                 {
-                    using var doc = JsonDocument.Parse(body);
-                    var root = doc.RootElement;
+                    using JsonDocument doc = JsonDocument.Parse(body);
+                    JsonElement root = doc.RootElement;
 
-                    string message = root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+                    string message = root.TryGetProperty("message", out JsonElement m) && m.ValueKind == JsonValueKind.String
                         ? m.GetString() ?? "Recovery successful"
                         : "Recovery successful";
 
-                    var newWords = new List<string>();
-                    if (root.TryGetProperty("newRecoveryWords", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    List<string> newWords = [];
+                    if (root.TryGetProperty("newRecoveryWords", out JsonElement arr) && arr.ValueKind == JsonValueKind.Array)
                     {
-                        foreach (var element in arr.EnumerateArray())
+                        foreach (JsonElement element in arr.EnumerateArray())
                         {
                             if (element.ValueKind == JsonValueKind.String)
                             {
-                                var w = element.GetString();
+                                string? w = element.GetString();
                                 if (!string.IsNullOrEmpty(w)) newWords.Add(w);
                             }
                         }
                     }
 
-                    string accessToken = root.TryGetProperty("accessToken", out var t) && t.ValueKind == JsonValueKind.String
+                    string accessToken = root.TryGetProperty("accessToken", out JsonElement t) && t.ValueKind == JsonValueKind.String
                         ? t.GetString() ?? ""
                         : "";
 
@@ -212,7 +209,7 @@ public class AuthClient
             if (res.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 return Result<RecoverResult>.Fail("Too many recovery attempts. Try again later.");
 
-            var errBody = await res.Content.ReadAsStringAsync();
+            string errBody = await res.Content.ReadAsStringAsync();
             return Result<RecoverResult>.Fail(ParseMessage(errBody) ?? "Invalid email or recovery phrase.");
         }
         catch (HttpRequestException)
@@ -226,8 +223,8 @@ public class AuthClient
     {
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("message", out var msg)) return null;
+            using JsonDocument doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("message", out JsonElement msg)) return null;
 
             return msg.ValueKind switch
             {
@@ -253,7 +250,7 @@ public class AuthClient
 
     public async Task<EncryptionKeysResponse?> GetMyEncryptionKeysAsync()
     {
-        var res = await _http.GetAsync("api/User/me/encryption-keys");
+        HttpResponseMessage res = await _http.GetAsync("api/User/me/encryption-keys");
         if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<EncryptionKeysResponse>();
@@ -263,7 +260,7 @@ public class AuthClient
         string signingPublicKey, string encryptionPublicKey,
         string encryptedKeyBundle, string keyBundleSalt)
     {
-        var res = await _http.PutAsJsonAsync("api/User/me/encryption-keys", new
+        HttpResponseMessage res = await _http.PutAsJsonAsync("api/User/me/encryption-keys", new
         {
             SigningPublicKey = signingPublicKey,
             EncryptionPublicKey = encryptionPublicKey,

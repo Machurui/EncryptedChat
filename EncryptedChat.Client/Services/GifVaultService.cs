@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using EncryptedChat.Client.Services.Crypto;
+using static EncryptedChat.Client.Services.Crypto.CryptoService;
+using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
+using static EncryptedChat.Client.Services.UserClient;
 
 namespace EncryptedChat.Client.Services;
 
@@ -45,23 +49,25 @@ public sealed class GifVaultService(
         _loaded = true;
         _userId = userId;
 
-        var keys = await _keyVault.GetMyKeysAsync(userId);
-        if (keys is null) { _available = false; return; } // E2E not bootstrapped yet
+        StoredKeys? keys = await _keyVault.GetMyKeysAsync(userId);
+        if (keys is null) { _available = false; return; }
 
         try
         {
-            var resp = await _http.GetAsync("api/GifVault");
+            HttpResponseMessage resp = await _http.GetAsync("api/GifVault");
             if (resp.StatusCode == HttpStatusCode.NoContent)
             {
                 await BootstrapAsync(userId);
             }
             else if (resp.IsSuccessStatusCode)
             {
-                var dto = await resp.Content.ReadFromJsonAsync<VaultReadResponse>();
+                VaultReadResponse? dto = await resp.Content.ReadFromJsonAsync<VaultReadResponse>();
                 if (dto is null) { _available = false; return; }
+
                 _vaultKey = await _crypto.UnwrapKeyAsync(Convert.FromBase64String(dto.WrappedKey), keys.EncryptionPrivateKey);
-                var json = await _crypto.DecryptAesGcmAsync(
+                byte[] json = await _crypto.DecryptAesGcmAsync(
                     Convert.FromBase64String(dto.Iv), Convert.FromBase64String(dto.Blob), _vaultKey);
+
                 _state = JsonSerializer.Deserialize<GifVaultState>(json) ?? new();
                 _wrappedKeyB64 = dto.WrappedKey;
                 _revision = dto.Revision;
@@ -81,16 +87,15 @@ public sealed class GifVaultService(
 
     private async Task BootstrapAsync(string userId)
     {
-        var pub = await _userClient.GetPublicKeysAsync(userId);
+        PublicKeysResponse? pub = await _userClient.GetPublicKeysAsync(userId);
         if (pub is null) { _available = false; return; }
 
-        _vaultKey = await _crypto.GenerateTeamSecretAsync(); // 32 random bytes
-        var encPub = Convert.FromBase64String(pub.EncryptionPublicKey);
+        _vaultKey = await _crypto.GenerateTeamSecretAsync();
+        byte[] encPub = Convert.FromBase64String(pub.EncryptionPublicKey);
         _wrappedKeyB64 = Convert.ToBase64String(await _crypto.WrapKeyAsync(_vaultKey, encPub));
 
-        // One-shot migration of LocalStorage recents (newest first → descending Ts).
-        var now = NowMs();
-        var local = await _localRecents.GetAllAsync();
+        long now = NowMs();
+        List<RecentGifsService.RecentGif> local = await _localRecents.GetAllAsync();
         _state = new GifVaultState
         {
             Recents = local.Select((r, i) => new GifItem(r.Url, r.PreviewUrl, r.Width, r.Height, "gifs", now - i)).ToList()
@@ -102,8 +107,10 @@ public sealed class GifVaultService(
 
     public Task ToggleFavoriteAsync(GifItem gif)
     {
-        if (!_available) return Task.CompletedTask;
-        var now = NowMs();
+        if (!_available) 
+            return Task.CompletedTask;
+
+        long now = NowMs();
         if (_state.Favorites.Any(f => f.Url == gif.Url))
         {
             _state.Favorites.RemoveAll(f => f.Url == gif.Url);
@@ -127,11 +134,12 @@ public sealed class GifVaultService(
         if (!_available)
             return _localRecents.AddAsync(new RecentGifsService.RecentGif(gif.Url, gif.PreviewUrl, gif.Width, gif.Height));
 
-        var now = NowMs();
+        long now = NowMs();
         _state.Recents.RemoveAll(r => r.Url == gif.Url);
         _state.Recents.Insert(0, gif with { Ts = now });
         if (_state.Recents.Count > GifVaultMerge.MaxRecents)
             _state.Recents.RemoveRange(GifVaultMerge.MaxRecents, _state.Recents.Count - GifVaultMerge.MaxRecents);
+
         ScheduleSync();
         return Task.CompletedTask;
     }
@@ -139,60 +147,74 @@ public sealed class GifVaultService(
     private void ScheduleSync()
     {
         _debounce?.Dispose();
-        _debounce = new System.Threading.Timer(async _ =>
+        _debounce = new Timer(async _ =>
         {
             try { await SyncAsync(); }
             catch (Exception ex) { Console.WriteLine($"[GifVault] sync error: {ex.Message}"); }
-        }, null, 800, System.Threading.Timeout.Infinite);
+        }, null, 800, Timeout.Infinite);
     }
 
     public async Task SyncAsync()
     {
         if (!_available || _vaultKey is null) return;
-        for (var attempt = 0; attempt < 3; attempt++)
+        for (long attempt = 0; attempt < 3; attempt++)
         {
             if (await PushAsync()) return;
-            if (!await MergeFromServerAsync()) return; // unrecoverable → stop
+            if (!await MergeFromServerAsync()) return;
         }
         Console.WriteLine("[GifVault] sync gave up after 3 conflict retries");
     }
 
     private async Task<bool> PushAsync()
     {
-        if (_vaultKey is null || _wrappedKeyB64 is null) return false;
-        var json = JsonSerializer.SerializeToUtf8Bytes(_state);
-        var enc = await _crypto.EncryptAesGcmAsync(json, _vaultKey);
-        var body = new
-        {
-            WrappedKey = _wrappedKeyB64,
-            Iv = Convert.ToBase64String(enc.Iv),
-            Blob = Convert.ToBase64String(enc.CiphertextWithTag),
-            ExpectedRevision = _revision
-        };
-        var resp = await _http.PutAsJsonAsync("api/GifVault", body);
-        if (resp.StatusCode == HttpStatusCode.Conflict) return false;
-        if (!resp.IsSuccessStatusCode) return false;
-        var r = await resp.Content.ReadFromJsonAsync<RevisionResponse>();
-        if (r is not null) _revision = r.Revision;
+        if (_vaultKey is null || _wrappedKeyB64 is null) 
+            return false;
+
+        byte[] json = JsonSerializer.SerializeToUtf8Bytes(_state);
+        AesGcmCiphertext enc = await _crypto.EncryptAesGcmAsync(json, _vaultKey);
+        Body body = new
+        (
+            WrappedKey: _wrappedKeyB64,
+            Iv: Convert.ToBase64String(enc.Iv),
+            Blob: Convert.ToBase64String(enc.CiphertextWithTag),
+            ExpectedRevision: _revision
+        );
+
+        HttpResponseMessage resp = await _http.PutAsJsonAsync("api/GifVault", body);
+        if (resp.StatusCode == HttpStatusCode.Conflict) 
+            return false;
+
+        if (!resp.IsSuccessStatusCode) 
+            return false;
+
+        RevisionResponse? r = await resp.Content.ReadFromJsonAsync<RevisionResponse>();
+        if (r is not null) 
+            _revision = r.Revision;
+
         return true;
     }
 
     private async Task<bool> MergeFromServerAsync()
     {
-        if (_userId is null) return false;
-        var keys = await _keyVault.GetMyKeysAsync(_userId);
-        if (keys is null) return false;
+        if (_userId is null) 
+            return false;
+        StoredKeys? keys = await _keyVault.GetMyKeysAsync(_userId);
+        if (keys is null) 
+            return false;
 
-        var resp = await _http.GetAsync("api/GifVault");
+        HttpResponseMessage resp = await _http.GetAsync("api/GifVault");
         if (resp.StatusCode == HttpStatusCode.NoContent) { _revision = 0; return true; }
-        if (!resp.IsSuccessStatusCode) return false;
+        if (!resp.IsSuccessStatusCode) 
+            return false;
 
-        var dto = await resp.Content.ReadFromJsonAsync<VaultReadResponse>();
-        if (dto is null) return false;
-        var remoteKey = await _crypto.UnwrapKeyAsync(Convert.FromBase64String(dto.WrappedKey), keys.EncryptionPrivateKey);
-        var remoteJson = await _crypto.DecryptAesGcmAsync(
+        VaultReadResponse? dto = await resp.Content.ReadFromJsonAsync<VaultReadResponse>();
+        if (dto is null) 
+            return false;
+
+        byte[] remoteKey = await _crypto.UnwrapKeyAsync(Convert.FromBase64String(dto.WrappedKey), keys.EncryptionPrivateKey);
+        byte[] remoteJson = await _crypto.DecryptAesGcmAsync(
             Convert.FromBase64String(dto.Iv), Convert.FromBase64String(dto.Blob), remoteKey);
-        var remoteState = JsonSerializer.Deserialize<GifVaultState>(remoteJson) ?? new();
+        GifVaultState remoteState = JsonSerializer.Deserialize<GifVaultState>(remoteJson) ?? new();
 
         _state = GifVaultMerge.Merge(_state, remoteState, NowMs());
         _vaultKey = remoteKey;
@@ -200,4 +222,11 @@ public sealed class GifVaultService(
         _revision = dto.Revision;
         return true;
     }
+
+    public record Body (
+        string WrappedKey, 
+        string Iv, 
+        string Blob, 
+        int ExpectedRevision
+    );
 }

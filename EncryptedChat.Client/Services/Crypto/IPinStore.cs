@@ -6,8 +6,8 @@ public record PinRecord(
     string Sign,
     string Enc,
     string Fingerprint,
-    string Status,        // "pinned" | "verified"
-    string PinnedAt,      // ISO-8601 UTC
+    string Status,
+    string PinnedAt,
     string? VerifiedAt);
 
 public record KeyPinStatus(string UserId, string Fingerprint, string Status, bool Changed);

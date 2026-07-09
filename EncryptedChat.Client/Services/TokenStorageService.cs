@@ -17,10 +17,12 @@ public class TokenStorageService(IJSRuntime js)
 
     public async Task<(string? token, DateTime? exp)> LoadAsync()
     {
-        var token = await _js.InvokeAsync<string>("sessionStorage.getItem", TK);
-        var expS = await _js.InvokeAsync<string>("sessionStorage.getItem", EX);
-        if (string.IsNullOrWhiteSpace(token)) return (null, null);
-        return (token, DateTime.TryParse(expS, null, DateTimeStyles.RoundtripKind, out var dt) ? dt : null);
+        string token = await _js.InvokeAsync<string>("sessionStorage.getItem", TK);
+        string expS = await _js.InvokeAsync<string>("sessionStorage.getItem", EX);
+        if (string.IsNullOrWhiteSpace(token)) 
+            return (null, null);
+            
+        return (token, DateTime.TryParse(expS, null, DateTimeStyles.RoundtripKind, out DateTime dt) ? dt : null);
     }
 
     public Task ClearAsync() =>

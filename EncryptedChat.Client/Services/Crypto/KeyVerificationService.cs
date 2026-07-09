@@ -18,7 +18,7 @@ public class KeyVerificationService(IPinStore store) : IKeyVerificationService
 
     public async Task<KeyPinResult> CheckAndPinAsync(string userId, string signingPubB64, string encryptionPubB64)
     {
-        var pin = await _store.GetAsync(userId);
+        PinRecord? pin = await _store.GetAsync(userId);
         if (pin == null)
         {
             await _store.SetAsync(userId, new PinRecord(
@@ -34,13 +34,13 @@ public class KeyVerificationService(IPinStore store) : IKeyVerificationService
 
     public async Task<KeyPinStatus?> GetStatusAsync(string userId)
     {
-        var pin = await _store.GetAsync(userId);
+        PinRecord? pin = await _store.GetAsync(userId);
         return pin == null ? null : new KeyPinStatus(userId, pin.Fingerprint, pin.Status, false);
     }
 
     public async Task MarkVerifiedAsync(string userId)
     {
-        var pin = await _store.GetAsync(userId);
+        PinRecord? pin = await _store.GetAsync(userId);
         if (pin == null) return;
         await _store.SetAsync(userId, pin with { Status = "verified", VerifiedAt = DateTime.UtcNow.ToString("O") });
     }

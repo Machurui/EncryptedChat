@@ -17,13 +17,13 @@ public class CookieHandler : DelegatingHandler
     {
         request.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
 
-        var response = await base.SendAsync(request, cancellationToken);
+        HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized && !IsRefreshRequest(request))
         {
             if (await TryRefreshTokenAsync(request, cancellationToken))
             {
-                var retryRequest = await CloneRequestAsync(request);
+                HttpRequestMessage retryRequest = await CloneRequestAsync(request);
                 retryRequest.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
                 response = await base.SendAsync(retryRequest, cancellationToken);
             }
@@ -47,16 +47,16 @@ public class CookieHandler : DelegatingHandler
 
             _isRefreshing = true;
 
-            var baseUri = originalRequest.RequestUri?.GetLeftPart(UriPartial.Authority) ?? "";
-            var refreshUri = new Uri($"{baseUri}/api/auth/refresh");
+            string baseUri = originalRequest.RequestUri?.GetLeftPart(UriPartial.Authority) ?? "";
+            Uri refreshUri = new($"{baseUri}/api/auth/refresh");
 
-            var refreshRequest = new HttpRequestMessage(HttpMethod.Post, refreshUri)
+            HttpRequestMessage refreshRequest = new HttpRequestMessage(HttpMethod.Post, refreshUri)
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json")
             };
             refreshRequest.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
 
-            var response = await base.SendAsync(refreshRequest, cancellationToken);
+            HttpResponseMessage response = await base.SendAsync(refreshRequest, cancellationToken);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -72,18 +72,18 @@ public class CookieHandler : DelegatingHandler
 
     private static async Task<HttpRequestMessage> CloneRequestAsync(HttpRequestMessage request)
     {
-        var clone = new HttpRequestMessage(request.Method, request.RequestUri);
+        HttpRequestMessage clone = new(request.Method, request.RequestUri);
 
         if (request.Content != null)
         {
-            var content = await request.Content.ReadAsByteArrayAsync();
+            byte[] content = await request.Content.ReadAsByteArrayAsync();
             clone.Content = new ByteArrayContent(content);
 
             if (request.Content.Headers.ContentType != null)
                 clone.Content.Headers.ContentType = request.Content.Headers.ContentType;
         }
 
-        foreach (var header in request.Headers)
+        foreach (KeyValuePair<string, IEnumerable<string>> header in request.Headers)
         {
             clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }

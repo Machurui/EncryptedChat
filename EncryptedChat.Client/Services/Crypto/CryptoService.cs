@@ -1,12 +1,9 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.JSInterop;
 
 namespace EncryptedChat.Client.Services.Crypto;
 
-// Bridge to wwwroot/js/crypto-interop.js (WebCrypto API). All primitives are
-// async because SubtleCrypto returns Promises and Blazor WASM has no native
-// crypto backend for ECDsa/ECDH/AES-GCM. Binary data crosses JSInterop as
-// base64 strings to avoid Uint8Array marshalling quirks.
 public class CryptoService(IJSRuntime js)
 {
     private readonly IJSRuntime _js = js;
@@ -25,7 +22,7 @@ public class CryptoService(IJSRuntime js)
 
     public async Task<IdentityKeyPair> GenerateIdentityKeyPairAsync()
     {
-        var resp = await _js.InvokeAsync<IdentityKeyPairResponse>(
+        IdentityKeyPairResponse resp = await _js.InvokeAsync<IdentityKeyPairResponse>(
             "encryptedChatCrypto.generateIdentityKeyPair");
         return new IdentityKeyPair(
             SigningPrivateKey: Convert.FromBase64String(resp.SigningPrivateKey),
@@ -56,7 +53,7 @@ public class CryptoService(IJSRuntime js)
 
     public async Task<AesGcmCiphertext> EncryptAesGcmAsync(byte[] plaintext, byte[] key)
     {
-        var r = await _js.InvokeAsync<AesGcmJsResult>(
+        AesGcmJsResult r = await _js.InvokeAsync<AesGcmJsResult>(
             "encryptedChatCrypto.encryptAesGcm",
             Convert.ToBase64String(plaintext),
             Convert.ToBase64String(key));
@@ -135,13 +132,19 @@ public class CryptoService(IJSRuntime js)
 
     // ---------- Identity-bundle wrap / unwrap ----------
 
+    public record BundleEncryption
+    (
+        string Signature,
+        string Encryption
+    );
+
     public async Task<byte[]> WrapIdentityPrivateKeysAsync(byte[] signingPrivPkcs8, byte[] encPrivPkcs8, byte[] wrapKey)
     {
-        var bundle = new
-        {
-            sign = Convert.ToBase64String(signingPrivPkcs8),
-            enc = Convert.ToBase64String(encPrivPkcs8)
-        };
+        BundleEncryption bundle = new(
+            Signature: Convert.ToBase64String(signingPrivPkcs8),
+            Encryption: Convert.ToBase64String(encPrivPkcs8)
+        );
+
         byte[] json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(bundle);
         AesGcmCiphertext wrapped = await EncryptAesGcmAsync(json, wrapKey);
 
@@ -160,8 +163,8 @@ public class CryptoService(IJSRuntime js)
         Buffer.BlockCopy(wrappedBundle, ivLen, ciphertext, 0, ciphertext.Length);
 
         byte[] json = await DecryptAesGcmAsync(iv, ciphertext, wrapKey);
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
         return (
             Convert.FromBase64String(root.GetProperty("sign").GetString()!),
             Convert.FromBase64String(root.GetProperty("enc").GetString()!));

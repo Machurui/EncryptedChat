@@ -1,3 +1,6 @@
+using static EncryptedChat.Client.Services.AuthClient;
+using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
+
 namespace EncryptedChat.Client.Services.Crypto;
 
 public class BootstrapKeyService(
@@ -26,7 +29,7 @@ public class BootstrapKeyService(
         if (string.IsNullOrWhiteSpace(phraseIfPrompted))
             throw new InvalidOperationException("Phrase required for bootstrap");
 
-        var existing = await _auth.GetMyEncryptionKeysAsync();
+        EncryptionKeysResponse? existing = await _auth.GetMyEncryptionKeysAsync();
 
         if (existing != null
             && !string.IsNullOrEmpty(existing.EncryptedKeyBundle)
@@ -38,7 +41,7 @@ public class BootstrapKeyService(
 
             try
             {
-                var (signingPriv, encPriv) = await _crypto.UnwrapIdentityPrivateKeysAsync(bundle, wrapKey);
+                (byte[] signingPriv, byte[] encPriv) = await _crypto.UnwrapIdentityPrivateKeysAsync(bundle, wrapKey);
                 await _vault.StoreMyKeysAsync(userId, signingPriv, encPriv);
                 return BootstrapOutcome.UnwrappedFromServer;
             }
@@ -68,14 +71,14 @@ public class BootstrapKeyService(
 
     public async Task<bool> ReWrapAsync(string userId, string newPhrase)
     {
-        var stored = await _vault.GetMyKeysAsync(userId);
+        StoredKeys? stored = await _vault.GetMyKeysAsync(userId);
         if (stored == null) return false;
 
         byte[] newSalt = await _crypto.GenerateSaltAsync();
         byte[] wrap = await _crypto.DeriveWrapKeyAsync(newPhrase, newSalt);
         byte[] wrappedBundle = await _crypto.WrapIdentityPrivateKeysAsync(stored.SigningPrivateKey, stored.EncryptionPrivateKey, wrap);
 
-        var existing = await _auth.GetMyEncryptionKeysAsync();
+        EncryptionKeysResponse? existing = await _auth.GetMyEncryptionKeysAsync();
         if (existing == null
             || string.IsNullOrEmpty(existing.SigningPublicKey)
             || string.IsNullOrEmpty(existing.EncryptionPublicKey))

@@ -2,14 +2,9 @@ using System.Text.Json;
 
 namespace EncryptedChat.Client.Services;
 
-public class PinnedMessageClient
+public class PinnedMessageClient(HttpClient http)
 {
-    private readonly HttpClient _http;
-
-    public PinnedMessageClient(HttpClient http)
-    {
-        _http = http;
-    }
+    private readonly HttpClient _http = http;
 
     public class PinnedMessageDTO
     {
@@ -42,13 +37,13 @@ public class PinnedMessageClient
 
     public async Task<Result<List<PinnedMessageDTO>>> GetPinnedMessagesAsync(Guid teamId)
     {
-        var res = await _http.GetAsync($"api/team/{teamId}/pins");
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.GetAsync($"api/team/{teamId}/pins");
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
             return Result<List<PinnedMessageDTO>>.Fail($"Failed to load pinned messages ({res.StatusCode}).");
 
-        var pins = JsonSerializer.Deserialize<List<PinnedMessageDTO>>(body,
+        List<PinnedMessageDTO> pins = JsonSerializer.Deserialize<List<PinnedMessageDTO>>(body,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
         return Result<List<PinnedMessageDTO>>.Ok(pins);
@@ -56,13 +51,13 @@ public class PinnedMessageClient
 
     public async Task<Result<PinnedMessageDTO>> PinMessageAsync(Guid teamId, Guid messageId)
     {
-        var res = await _http.PostAsync($"api/team/{teamId}/pins/{messageId}", null);
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.PostAsync($"api/team/{teamId}/pins/{messageId}", null);
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
             return Result<PinnedMessageDTO>.Fail("Failed to pin message.");
 
-        var pin = JsonSerializer.Deserialize<PinnedMessageDTO>(body,
+        PinnedMessageDTO? pin = JsonSerializer.Deserialize<PinnedMessageDTO>(body,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         return pin != null
@@ -72,7 +67,7 @@ public class PinnedMessageClient
 
     public async Task<Result> UnpinMessageAsync(Guid teamId, Guid messageId)
     {
-        var res = await _http.DeleteAsync($"api/team/{teamId}/pins/{messageId}");
+        HttpResponseMessage res = await _http.DeleteAsync($"api/team/{teamId}/pins/{messageId}");
 
         if (!res.IsSuccessStatusCode)
             return Result.Fail("Failed to unpin message.");

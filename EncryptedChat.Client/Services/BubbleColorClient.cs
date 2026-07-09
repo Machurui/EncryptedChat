@@ -10,20 +10,20 @@ public class BubbleColorClient(HttpClient http)
     {
         try
         {
-            var res = await _http.GetAsync("api/user/me/bubble-colors");
+            HttpResponseMessage res = await _http.GetAsync("api/user/me/bubble-colors");
             if (!res.IsSuccessStatusCode)
-                return new Dictionary<Guid, string>();
+                return [];
 
-            var map = await res.Content.ReadFromJsonAsync<Dictionary<Guid, string>>();
-            return map ?? new Dictionary<Guid, string>();
+            Dictionary<Guid, string>? map = await res.Content.ReadFromJsonAsync<Dictionary<Guid, string>>();
+            return map ?? [];
         }
         catch (HttpRequestException)
         {
-            return new Dictionary<Guid, string>();
+            return [];
         }
         catch (System.Text.Json.JsonException)
         {
-            return new Dictionary<Guid, string>();
+            return [];
         }
     }
 
@@ -31,7 +31,7 @@ public class BubbleColorClient(HttpClient http)
     {
         try
         {
-            var res = await _http.PutAsJsonAsync(
+            HttpResponseMessage res = await _http.PutAsJsonAsync(
                 $"api/user/me/teams/{teamId}/bubble-color",
                 new { Color = color });
             return res.IsSuccessStatusCode;

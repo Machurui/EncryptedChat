@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.JSInterop;
 
 namespace EncryptedChat.Client.Services.Crypto;
@@ -15,8 +16,8 @@ public class KeyVaultService(IJSRuntime js)
         string? json = await _js.InvokeAsync<string?>("encryptedChatIdb.idbGet", KeyFor(userId));
         if (string.IsNullOrEmpty(json)) return null;
 
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
         return new StoredKeys(
             Convert.FromBase64String(root.GetProperty("sign").GetString()!),
             Convert.FromBase64String(root.GetProperty("enc").GetString()!));
@@ -24,12 +25,12 @@ public class KeyVaultService(IJSRuntime js)
 
     public async Task StoreMyKeysAsync(string userId, byte[] signingPriv, byte[] encryptionPriv)
     {
-        var payload = new
-        {
-            sign = Convert.ToBase64String(signingPriv),
-            enc = Convert.ToBase64String(encryptionPriv)
-        };
-        string json = System.Text.Json.JsonSerializer.Serialize(payload);
+        BundleEncryption payload = new
+        (
+            Signature: Convert.ToBase64String(signingPriv),
+            Encryption: Convert.ToBase64String(encryptionPriv)
+        );
+        string json = JsonSerializer.Serialize(payload);
         await _js.InvokeVoidAsync("encryptedChatIdb.idbSet", KeyFor(userId), json);
     }
 
@@ -42,4 +43,9 @@ public class KeyVaultService(IJSRuntime js)
     {
         return await GetMyKeysAsync(userId) != null;
     }
+
+    public record BundleEncryption (
+        string Signature,
+        string Encryption
+    );
 }

@@ -2,15 +2,12 @@ using System.Net.Http.Headers;
 
 namespace EncryptedChat.Client.Services;
 
-public class BearerHandler : DelegatingHandler
+public class BearerHandler(TokenStore store, TokenStorageService storage) : DelegatingHandler
 {
-    private readonly TokenStore _store;
-    private readonly TokenStorageService _storage;
+    private readonly TokenStore _store = store;
+    private readonly TokenStorageService _storage = storage;
     private bool _loaded;
     private readonly SemaphoreSlim _gate = new(1, 1);
-
-    public BearerHandler(TokenStore store, TokenStorageService storage)
-    { _store = store; _storage = storage; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
     {
@@ -21,7 +18,7 @@ public class BearerHandler : DelegatingHandler
             {
                 if (!_loaded && string.IsNullOrWhiteSpace(_store.AccessToken))
                 {
-                    var (tk, exp) = await _storage.LoadAsync();
+                    (string? tk, DateTime? exp) = await _storage.LoadAsync();
                     if (!string.IsNullOrWhiteSpace(tk) && exp.HasValue && exp.Value > DateTime.UtcNow)
                         _store.Set(tk, exp.Value);
                     _loaded = true;

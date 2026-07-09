@@ -5,13 +5,10 @@ namespace EncryptedChat.Client.Services.Crypto;
 
 public static class SafetyNumber
 {
-    private const int Iterations = 5200;   // key-stretching, Signal-style
-    private const int Groups = 12;         // 12 groups of 5 digits = 60 digits
+    private const int Iterations = 5200;
+    private const int Groups = 12;
     private const string Version = "EC-SN-1";
 
-    /// Deterministic human-comparable safety number for a user's public key pair.
-    /// Covers BOTH public keys + the userId so swapping either is detected and the
-    /// number is bound to the identity. Culture-invariant.
     public static string Compute(string userId, string signingPubB64, string encryptionPubB64)
     {
         byte[] input = Encoding.UTF8.GetBytes(
@@ -26,7 +23,8 @@ public static class SafetyNumber
             h = SHA512.HashData(buf);
         }
 
-        var sb = new StringBuilder(Groups * 6);
+        StringBuilder sb = new(Groups * 6);
+        
         for (int g = 0; g < Groups; g++)
         {
             long v = 0;
@@ -34,6 +32,7 @@ public static class SafetyNumber
             sb.Append((v % 100000).ToString("D5"));
             if (g < Groups - 1) sb.Append(' ');
         }
+
         return sb.ToString();
     }
 }

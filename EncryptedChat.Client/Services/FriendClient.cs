@@ -30,13 +30,13 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            var res = await _http.GetAsync("api/friend");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync("api/friend");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<List<FriendDTO>>.Fail(ParseMessage(body) ?? "Failed to fetch friends.");
 
-            var friends = JsonSerializer.Deserialize<List<FriendDTO>>(body,
+            List<FriendDTO> friends = JsonSerializer.Deserialize<List<FriendDTO>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
             return Result<List<FriendDTO>>.Ok(friends);
@@ -51,13 +51,13 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            var res = await _http.GetAsync("api/friend/requests");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync("api/friend/requests");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<List<FriendRequestDTO>>.Fail(ParseMessage(body) ?? "Failed to fetch requests.");
 
-            var requests = JsonSerializer.Deserialize<List<FriendRequestDTO>>(body,
+            List<FriendRequestDTO> requests = JsonSerializer.Deserialize<List<FriendRequestDTO>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
             return Result<List<FriendRequestDTO>>.Ok(requests);
@@ -75,13 +75,13 @@ public class FriendClient(HttpClient http)
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
                 return Result<List<UserDTO>>.Ok([]);
 
-            var res = await _http.GetAsync($"api/friend/search-users?q={Uri.EscapeDataString(query)}&limit={limit}");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync($"api/friend/search-users?q={Uri.EscapeDataString(query)}&limit={limit}");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<List<UserDTO>>.Fail(ParseMessage(body) ?? "Search failed.");
 
-            var users = JsonSerializer.Deserialize<List<UserDTO>>(body,
+            List<UserDTO> users = JsonSerializer.Deserialize<List<UserDTO>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
             return Result<List<UserDTO>>.Ok(users);
@@ -96,8 +96,8 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            var res = await _http.PostAsync($"api/friend/{addresseeId}", null);
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsync($"api/friend/{addresseeId}", null);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to send request.");
@@ -114,8 +114,8 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            var res = await _http.PostAsync($"api/friend/requests/{requestId}/accept", null);
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsync($"api/friend/requests/{requestId}/accept", null);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to accept request.");
@@ -132,8 +132,8 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            var res = await _http.PostAsync($"api/friend/requests/{requestId}/reject", null);
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsync($"api/friend/requests/{requestId}/reject", null);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to reject request.");
@@ -150,11 +150,11 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            var res = await _http.DeleteAsync($"api/friend/{friendId}");
+            HttpResponseMessage res = await _http.DeleteAsync($"api/friend/{friendId}");
 
             if (!res.IsSuccessStatusCode)
             {
-                var body = await res.Content.ReadAsStringAsync();
+                string body = await res.Content.ReadAsStringAsync();
                 return Result.Fail(ParseMessage(body) ?? "Failed to remove friend.");
             }
 
@@ -170,8 +170,8 @@ public class FriendClient(HttpClient http)
     {
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("message", out var msg)) return null;
+            using JsonDocument doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("message", out JsonElement msg)) return null;
             return msg.ValueKind == JsonValueKind.String ? msg.GetString() : null;
         }
         catch { return null; }

@@ -3,14 +3,9 @@ using System.Text.Json;
 
 namespace EncryptedChat.Client.Services;
 
-public class UserClient
+public class UserClient(HttpClient http)
 {
-    private readonly HttpClient _http;
-
-    public UserClient(HttpClient http)
-    {
-        _http = http;
-    }
+    private readonly HttpClient _http = http;
 
     // DTO match API
     public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null, string Status = "online", string? StatusMessage = null);
@@ -49,13 +44,13 @@ public class UserClient
     {
         try
         {
-            var res = await _http.GetAsync("api/user/me");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync("api/user/me");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<UserProfileDTO>.Fail(ParseMessage(body) ?? "Failed to load profile.");
 
-            var profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
+            UserProfileDTO? profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (profile == null)
@@ -74,13 +69,13 @@ public class UserClient
     {
         try
         {
-            var res = await _http.PatchAsJsonAsync("api/user/me", dto);
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PatchAsJsonAsync("api/user/me", dto);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<UserProfileDTO>.Fail(ParseMessage(body) ?? "Failed to update profile.");
 
-            var profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
+            UserProfileDTO? profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (profile == null)
@@ -99,23 +94,23 @@ public class UserClient
     {
         try
         {
-            var res = await _http.GetAsync("api/user");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync("api/user");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
             {
                 if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
                     res.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                    var msgAuth = ParseMessage(body) ?? "You are not authorized.";
+                    string msgAuth = ParseMessage(body) ?? "You are not authorized.";
                     return Result<List<UserDTOPublic>>.Fail(msgAuth);
                 }
 
-                var msg = ParseMessage(body) ?? "Failed to fetch users.";
+                string msg = ParseMessage(body) ?? "Failed to fetch users.";
                 return Result<List<UserDTOPublic>>.Fail(msg);
             }
 
-            var users = JsonSerializer.Deserialize<List<UserDTOPublic>>(body,
+            List<UserDTOPublic> users = JsonSerializer.Deserialize<List<UserDTOPublic>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                         ?? [];
 
@@ -138,18 +133,18 @@ public class UserClient
     {
         try
         {
-            using var content = new MultipartFormDataContent();
-            var streamContent = new StreamContent(fileStream);
+            using MultipartFormDataContent content = new();
+            StreamContent streamContent = new(fileStream);
             streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
             content.Add(streamContent, "file", fileName);
 
-            var res = await _http.PostAsync("api/user/me/avatar", content);
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsync("api/user/me/avatar", content);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<AvatarUploadResult>.Fail(ParseMessage(body) ?? "Failed to upload avatar.");
 
-            var result = JsonSerializer.Deserialize<AvatarUploadResult>(body,
+            AvatarUploadResult? result = JsonSerializer.Deserialize<AvatarUploadResult>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (result == null)
@@ -168,13 +163,13 @@ public class UserClient
     {
         try
         {
-            var res = await _http.DeleteAsync("api/user/me/avatar");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.DeleteAsync("api/user/me/avatar");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<UserProfileDTO>.Fail(ParseMessage(body) ?? "Failed to remove avatar.");
 
-            var profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
+            UserProfileDTO? profile = JsonSerializer.Deserialize<UserProfileDTO>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (profile == null)
@@ -202,13 +197,13 @@ public class UserClient
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
                 return Result<List<UserDTOPublic>>.Ok([]);
 
-            var res = await _http.GetAsync($"api/user/search?q={Uri.EscapeDataString(query)}&limit={limit}");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync($"api/user/search?q={Uri.EscapeDataString(query)}&limit={limit}");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<List<UserDTOPublic>>.Fail(ParseMessage(body) ?? "Search failed.");
 
-            var users = JsonSerializer.Deserialize<List<UserDTOPublic>>(body,
+            List<UserDTOPublic> users = JsonSerializer.Deserialize<List<UserDTOPublic>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
             return Result<List<UserDTOPublic>>.Ok(users);
@@ -223,8 +218,8 @@ public class UserClient
     {
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("message", out var msg)) return null;
+            using JsonDocument doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("message", out JsonElement msg)) return null;
 
             return msg.ValueKind switch
             {
@@ -247,7 +242,7 @@ public class UserClient
 
     public async Task<PublicKeysResponse?> GetPublicKeysAsync(string userId)
     {
-        var res = await _http.GetAsync($"api/User/{Uri.EscapeDataString(userId)}/public-keys");
+        HttpResponseMessage res = await _http.GetAsync($"api/User/{Uri.EscapeDataString(userId)}/public-keys");
         if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<PublicKeysResponse>();

@@ -1,32 +1,21 @@
 using System.Net.Http.Json;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using EncryptedChat.Client.Services.Crypto;
+using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
+using static EncryptedChat.Client.Services.UserClient;
 
 namespace EncryptedChat.Client.Services;
 
-public class TeamClient
+public class TeamClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient, IKeyVerificationService keyVerify)
 {
-    private readonly HttpClient _http;
-    private readonly CryptoService _crypto;
-    private readonly KeyVaultService _vault;
-    private readonly TeamKeyCacheService _keyCache;
-    private readonly UserClient _userClient;
-    private readonly IKeyVerificationService _keyVerify;
+    private readonly HttpClient _http = http;
+    private readonly CryptoService _crypto = crypto;
+    private readonly KeyVaultService _vault = vault;
+    private readonly TeamKeyCacheService _keyCache = keyCache;
+    private readonly UserClient _userClient = userClient;
+    private readonly IKeyVerificationService _keyVerify = keyVerify;
 
-    public TeamClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient, IKeyVerificationService keyVerify)
-    {
-        _http = http;
-        _crypto = crypto;
-        _vault = vault;
-        _keyCache = keyCache;
-        _userClient = userClient;
-        _keyVerify = keyVerify;
-    }
-
-    // DTO match API. MemberKeyShares (userId → base64 ECIES-wrapped secret)
-    // must cover every entry in Admins ∪ Members including the creator —
-    // server rejects creation otherwise. InitialKeyShare is kept for back-
-    // compat with single-member creator-only teams.
     public record TeamDTO(ICollection<string> Admins, ICollection<string> Members, string Name, string? Glyph = null, string? Color = null, string? MessageLifetime = null, string? InitialKeyShare = null, Dictionary<string, string>? MemberKeyShares = null);
     public record TeamKeyShareResponse(Guid TeamId, int Generation, string WrappedKey, DateTime CreatedAt);
     public record UserDTOPublic(string Id, string Name, string? Handle, string Email, int Level, string NameColor = "#FFFFFF", string? ProfileImageUrl = null, string Status = "offline");
@@ -74,40 +63,27 @@ public class TeamClient
         };
     }
 
-    // ---------- New Team ----------
-    // E2E: the client generates a random 32-byte Team.Secret, wraps it for the
-    // creator's EncryptionPublicKey (ECIES-P256), and posts the wrapped blob
-    // alongside team metadata. The server inserts a TeamKeyShare row at
-    // generation 1. The plaintext Team.Secret is cached locally so the creator
-    // can immediately encrypt their first message without an extra unwrap.
     public async Task<Result<TeamDTOPublic>> AddTeamAsync(string creatorUserId, ICollection<string> admins, ICollection<string> members, string name, string? glyph = null, string? color = null, string? messageLifetime = null)
     {
-        // Aggregate every member that will be on the team — admins ∪ members
-        // ∪ creator (creator is forced into the admin set server-side too).
-        // The server now requires a wrapped Team.Secret for every one of
-        // them, otherwise it rejects with 400 and no team is created.
-        HashSet<string> allMemberIds = new(admins);
-        foreach (var m in members) allMemberIds.Add(m);
+        HashSet<string> allMemberIds = [.. admins];
+        foreach (string m in members) allMemberIds.Add(m);
         allMemberIds.Add(creatorUserId);
 
-        // Fetch each member's encryption public key in parallel. If any
-        // member has no key bootstrapped, bail before creating the team —
-        // otherwise we'd ship a team with a stuck member.
-        var fetchTasks = allMemberIds.ToDictionary(
+        Dictionary<string, Task<UserClient.PublicKeysResponse?>> fetchTasks = allMemberIds.ToDictionary(
             id => id,
-            id => _userClient.GetPublicKeysAsync(id));
+            _userClient.GetPublicKeysAsync);
         await Task.WhenAll(fetchTasks.Values);
 
-        var pubKeys = fetchTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Result);
-        var missing = pubKeys.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList();
+        Dictionary<string, UserClient.PublicKeysResponse?> pubKeys = fetchTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Result);
+        List<string> missing = [.. pubKeys.Where(kv => kv.Value == null).Select(kv => kv.Key)];
         if (missing.Count > 0)
             return Result<TeamDTOPublic>.Fail(
                 $"Cannot create team: encryption keys not set up for member(s) {string.Join(", ", missing)}.");
 
         byte[] teamSecret = await _crypto.GenerateTeamSecretAsync();
 
-        Dictionary<string, string> memberShares = new();
-        foreach (var (id, keys) in pubKeys)
+        Dictionary<string, string> memberShares = [];
+        foreach ((string id, UserClient.PublicKeysResponse? keys) in pubKeys)
         {
             if (await _keyVerify.CheckAndPinAsync(id, keys!.SigningPublicKey, keys.EncryptionPublicKey)
                     == KeyPinResult.Changed)
@@ -117,24 +93,19 @@ public class TeamClient
             memberShares[id] = Convert.ToBase64String(wrapped);
         }
 
-        // InitialKeyShare kept null — the server now picks up MemberKeyShares
-        // which covers the creator too. Sending both would be redundant.
-        var dto = new TeamDTO(admins, members, name, glyph, color, messageLifetime, null, memberShares);
-        var res = await _http.PostAsJsonAsync("api/team", dto);
-        var body = await res.Content.ReadAsStringAsync();
+        TeamDTO dto = new(admins, members, name, glyph, color, messageLifetime, null, memberShares);
+        HttpResponseMessage res = await _http.PostAsJsonAsync("api/team", dto);
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
             return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "The function failed.");
 
-        var team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+        TeamDTOPublic? team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         if (team == null)
             return Result<TeamDTOPublic>.Fail("Invalid response.");
 
-        // Cache for the creator so they can encrypt immediately. Other
-        // members fetch + unwrap via LoadKeySharesIntoCacheAsync the first
-        // time they open the team.
         _keyCache.Put(team.Id, 1, teamSecret);
 
         return Result<TeamDTOPublic>.Ok(team);
@@ -142,19 +113,21 @@ public class TeamClient
 
     // ---------- E2E key-share lifecycle ----------
 
-    // Loads the caller's TeamKeyShare rows for a team and unwraps each into the
-    // cache. Idempotent — call when opening a team or on bootstrap.
     public async Task LoadKeySharesIntoCacheAsync(Guid teamId, string myUserId)
     {
-        var stored = await _vault.GetMyKeysAsync(myUserId);
-        if (stored == null) return;
+        StoredKeys? stored = await _vault.GetMyKeysAsync(myUserId);
+        if (stored == null) 
+            return;
 
-        var res = await _http.GetAsync($"api/Team/{teamId}/key-shares");
-        if (!res.IsSuccessStatusCode) return;
-        var shares = await res.Content.ReadFromJsonAsync<List<TeamKeyShareResponse>>();
-        if (shares == null) return;
+        HttpResponseMessage res = await _http.GetAsync($"api/Team/{teamId}/key-shares");
+        if (!res.IsSuccessStatusCode) 
+            return;
 
-        foreach (var s in shares)
+        List<TeamKeyShareResponse>? shares = await res.Content.ReadFromJsonAsync<List<TeamKeyShareResponse>>();
+        if (shares == null) 
+            return;
+
+        foreach (TeamKeyShareResponse s in shares)
         {
             byte[] wrappedBlob = Convert.FromBase64String(s.WrappedKey);
             try
@@ -173,34 +146,39 @@ public class TeamClient
     public async Task<bool> AddMemberKeyShareAsync(Guid teamId, int generation, string newMemberId)
     {
         byte[]? teamSecret = _keyCache.Get(teamId, generation);
-        if (teamSecret == null) return false;
+        if (teamSecret == null) 
+            return false;
 
-        var newMemberPubKeys = await _userClient.GetPublicKeysAsync(newMemberId);
-        if (newMemberPubKeys == null) return false;
+        PublicKeysResponse? newMemberPubKeys = await _userClient.GetPublicKeysAsync(newMemberId);
+        if (newMemberPubKeys == null) 
+            return false;
+
         if (await _keyVerify.CheckAndPinAsync(newMemberId, newMemberPubKeys.SigningPublicKey, newMemberPubKeys.EncryptionPublicKey)
                 == KeyPinResult.Changed)
             throw new KeyChangedException(newMemberId);
         byte[] pub = Convert.FromBase64String(newMemberPubKeys.EncryptionPublicKey);
 
         byte[] wrappedBlob = await _crypto.WrapKeyAsync(teamSecret, pub);
-        var res = await _http.PostAsJsonAsync(
+        HttpResponseMessage res = await _http.PostAsJsonAsync(
             $"api/Team/{teamId}/members/{Uri.EscapeDataString(newMemberId)}/key-share",
             new { WrappedKey = Convert.ToBase64String(wrappedBlob) });
+
         return res.IsSuccessStatusCode;
     }
 
-    // Admin-side reconciliation: wrap the team key for any member missing a share
-    // at the current generation. Safe no-op for non-admins (endpoint returns 403)
-    // and idempotent (AddMemberKeyShareAsync skips members already covered).
     public async Task ProvisionMissingKeySharesAsync(Guid teamId, int generation)
     {
         try
         {
-            var res = await _http.GetAsync($"api/Team/{teamId}/members/missing-key-share");
-            if (!res.IsSuccessStatusCode) return; // 403 (not admin) / error → nothing to do
-            var missing = await res.Content.ReadFromJsonAsync<List<string>>();
-            if (missing is null) return;
-            foreach (var userId in missing)
+            HttpResponseMessage res = await _http.GetAsync($"api/Team/{teamId}/members/missing-key-share");
+            if (!res.IsSuccessStatusCode) 
+                return; // 403 (not admin) / error → nothing to do
+
+            List<string>? missing = await res.Content.ReadFromJsonAsync<List<string>>();
+            if (missing is null) 
+                return;
+
+            foreach (string userId in missing)
             {
                 try { await AddMemberKeyShareAsync(teamId, generation, userId); }
                 catch (Exception ex) { Console.WriteLine($"[invite] provision {userId} failed: {ex.Message}"); }
@@ -215,11 +193,13 @@ public class TeamClient
     {
         byte[] newTeamSecret = await _crypto.GenerateTeamSecretAsync();
 
-        var newKeyShares = new List<object>();
-        foreach (var memberId in remainingMemberIds)
+        List<object> newKeyShares = [];
+        foreach (string memberId in remainingMemberIds)
         {
-            var pubKeys = await _userClient.GetPublicKeysAsync(memberId);
-            if (pubKeys == null) return false;
+            PublicKeysResponse? pubKeys = await _userClient.GetPublicKeysAsync(memberId);
+            if (pubKeys == null) 
+                return false;
+
             if (await _keyVerify.CheckAndPinAsync(memberId, pubKeys.SigningPublicKey, pubKeys.EncryptionPublicKey)
                     == KeyPinResult.Changed)
                 throw new KeyChangedException(memberId);
@@ -228,10 +208,11 @@ public class TeamClient
             newKeyShares.Add(new { MemberId = memberId, WrappedKey = Convert.ToBase64String(wrappedBlob) });
         }
 
-        var res = await _http.PostAsJsonAsync(
+        HttpResponseMessage res = await _http.PostAsJsonAsync(
             $"api/Team/{teamId}/members/{Uri.EscapeDataString(removedMemberId)}/remove",
             new { NewKeyShares = newKeyShares });
-        if (!res.IsSuccessStatusCode) return false;
+        if (!res.IsSuccessStatusCode) 
+            return false;
 
         _keyCache.Put(teamId, currentGeneration + 1, newTeamSecret);
         return true;
@@ -242,13 +223,13 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.PatchAsJsonAsync($"api/team/{teamId}", dto);
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PatchAsJsonAsync($"api/team/{teamId}", dto);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "Failed to update team.");
 
-            var team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+            TeamDTOPublic? team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (team == null)
@@ -267,8 +248,8 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.DeleteAsync($"api/team/{teamId}");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.DeleteAsync($"api/team/{teamId}");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to delete team.");
@@ -289,22 +270,22 @@ public class TeamClient
             if (string.IsNullOrWhiteSpace(userId))
                 return Result<List<TeamDTOPublic>>.Fail("User id is required.");
 
-            var res = await _http.GetAsync("api/user/me/teams");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync("api/user/me/teams");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
             {
                 if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized || res.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                    var msgAuth = ParseMessage(body) ?? "You are not authorized.";
+                    string msgAuth = ParseMessage(body) ?? "You are not authorized.";
                     return Result<List<TeamDTOPublic>>.Fail(msgAuth);
                 }
 
-                var msg = ParseMessage(body) ?? "Failed to fetch teams.";
+                string msg = ParseMessage(body) ?? "Failed to fetch teams.";
                 return Result<List<TeamDTOPublic>>.Fail(msg);
             }
 
-            var teams = JsonSerializer.Deserialize<List<TeamDTOPublic>>(body,
+            List<TeamDTOPublic> teams = JsonSerializer.Deserialize<List<TeamDTOPublic>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                         ?? [];
 
@@ -321,7 +302,7 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.PostAsync($"api/team/{teamId}/read", null);
+            HttpResponseMessage res = await _http.PostAsync($"api/team/{teamId}/read", null);
             return res.IsSuccessStatusCode;
         }
         catch
@@ -335,7 +316,7 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.PutAsJsonAsync($"api/team/{teamId}/mute", new { Muted = muted });
+            HttpResponseMessage res = await _http.PutAsJsonAsync($"api/team/{teamId}/mute", new { Muted = muted });
             return res.IsSuccessStatusCode;
         }
         catch
@@ -350,13 +331,14 @@ public class TeamClient
 
     public async Task<Result<TeamDTOPublic>> GetTeamByTokenAsync(string token)
     {
-        var res = await _http.GetAsync($"api/team/by-token/{token}");
+        HttpResponseMessage res = await _http.GetAsync($"api/team/by-token/{token}");
         if (!res.IsSuccessStatusCode)
             return Result<TeamDTOPublic>.Fail($"Team not found ({res.StatusCode}).");
 
-        var body = await res.Content.ReadAsStringAsync();
-        var team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+        string body = await res.Content.ReadAsStringAsync();
+        TeamDTOPublic? team = JsonSerializer.Deserialize<TeamDTOPublic>(body,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
         return team != null
             ? Result<TeamDTOPublic>.Ok(team)
             : Result<TeamDTOPublic>.Fail("Invalid response.");
@@ -366,13 +348,13 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.GetAsync($"api/team/{teamId}/details");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.GetAsync($"api/team/{teamId}/details");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result<TeamDetailDTO>.Fail(ParseMessage(body) ?? "Failed to fetch team details.");
 
-            var team = JsonSerializer.Deserialize<TeamDetailDTO>(body,
+            TeamDetailDTO? team = JsonSerializer.Deserialize<TeamDetailDTO>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (team == null)
@@ -391,8 +373,8 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.PostAsJsonAsync($"api/team/{teamId}/members", new { UserId = userId });
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsJsonAsync($"api/team/{teamId}/members", new { UserId = userId });
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to add member.");
@@ -410,8 +392,8 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.DeleteAsync($"api/team/{teamId}/members/{userId}");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.DeleteAsync($"api/team/{teamId}/members/{userId}");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to remove member.");
@@ -429,8 +411,8 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.PostAsJsonAsync($"api/team/{teamId}/admins", new { UserId = userId });
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsJsonAsync($"api/team/{teamId}/admins", new { UserId = userId });
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to promote member.");
@@ -448,8 +430,8 @@ public class TeamClient
     {
         try
         {
-            var res = await _http.PostAsJsonAsync($"api/team/{teamId}/owner", new { UserId = newOwnerId });
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.PostAsJsonAsync($"api/team/{teamId}/owner", new { UserId = newOwnerId });
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to transfer ownership.");
@@ -463,12 +445,15 @@ public class TeamClient
     }
 
     // ---------- Demote from Admin ----------
+
+    public record Payload (string MyWrappedKey, string FriendWrappedKey);
+
     public async Task<Result> DemoteFromAdminAsync(Guid teamId, string userId)
     {
         try
         {
-            var res = await _http.DeleteAsync($"api/team/{teamId}/admins/{userId}");
-            var body = await res.Content.ReadAsStringAsync();
+            HttpResponseMessage res = await _http.DeleteAsync($"api/team/{teamId}/admins/{userId}");
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
                 return Result.Fail(ParseMessage(body) ?? "Failed to demote member.");
@@ -481,21 +466,14 @@ public class TeamClient
         }
     }
 
-    // ---------- Get or Create DM ----------
-    // True E2E: the server can't generate the Team.Secret for a fresh DM (it
-    // would have to read plaintext). Instead we always send wrapped shares for
-    // both members. If a DM already exists the server ignores them and just
-    // returns the existing row; otherwise it persists the shares atomically
-    // with the team so neither user gets stuck without keys.
     public async Task<Result<TeamDTOPublic>> GetOrCreateDirectMessageAsync(string myUserId, string friendId)
     {
         Console.WriteLine($"[DM] GetOrCreateDirectMessageAsync start. myUserId={myUserId}, friendId={friendId}");
         try
         {
-            var myPubKeys = await _userClient.GetPublicKeysAsync(myUserId);
-            Console.WriteLine($"[DM] myPubKeys: {(myPubKeys == null ? "NULL" : "ok")}");
-            var friendPubKeys = await _userClient.GetPublicKeysAsync(friendId);
-            Console.WriteLine($"[DM] friendPubKeys: {(friendPubKeys == null ? "NULL" : "ok")}");
+            PublicKeysResponse? myPubKeys = await _userClient.GetPublicKeysAsync(myUserId);
+
+            PublicKeysResponse? friendPubKeys = await _userClient.GetPublicKeysAsync(friendId);
             if (myPubKeys == null || friendPubKeys == null)
                 return Result<TeamDTOPublic>.Fail("Cannot fetch public keys for DM bootstrap.");
 
@@ -505,50 +483,35 @@ public class TeamClient
 
             byte[] myPub = Convert.FromBase64String(myPubKeys.EncryptionPublicKey);
             byte[] friendPub = Convert.FromBase64String(friendPubKeys.EncryptionPublicKey);
-            Console.WriteLine($"[DM] pubkey bytes: myPub={myPub.Length} friendPub={friendPub.Length}");
 
             byte[] teamSecret = await _crypto.GenerateTeamSecretAsync();
-            Console.WriteLine($"[DM] teamSecret generated, len={teamSecret.Length}");
             byte[] myWrapped = await _crypto.WrapKeyAsync(teamSecret, myPub);
-            Console.WriteLine($"[DM] wrapped for me, len={myWrapped.Length}");
             byte[] friendWrapped = await _crypto.WrapKeyAsync(teamSecret, friendPub);
-            Console.WriteLine($"[DM] wrapped for friend, len={friendWrapped.Length}");
 
-            var payload = new
-            {
-                MyWrappedKey = Convert.ToBase64String(myWrapped),
-                FriendWrappedKey = Convert.ToBase64String(friendWrapped)
-            };
+            Payload payload = new
+            (
+                MyWrappedKey: Convert.ToBase64String(myWrapped),
+                FriendWrappedKey: Convert.ToBase64String(friendWrapped)
+            );
 
-            Console.WriteLine($"[DM] POSTing api/team/dm/{friendId}");
-            var res = await _http.PostAsJsonAsync($"api/team/dm/{friendId}", payload);
-            var body = await res.Content.ReadAsStringAsync();
-            Console.WriteLine($"[DM] POST response status={(int)res.StatusCode}, bodyLen={body.Length}");
+            HttpResponseMessage res = await _http.PostAsJsonAsync($"api/team/dm/{friendId}", payload);
+            string body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"[DM] POST FAILED. body={body}");
                 return Result<TeamDTOPublic>.Fail(ParseMessage(body) ?? "Failed to create direct message.");
-            }
 
-            var dm = JsonSerializer.Deserialize<TeamDTOPublic>(body,
+            TeamDTOPublic? dm = JsonSerializer.Deserialize<TeamDTOPublic>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (dm == null)
-            {
-                Console.WriteLine("[DM] deserialized DM == null");
                 return Result<TeamDTOPublic>.Fail("Invalid response.");
-            }
 
-            Console.WriteLine($"[DM] DM created/fetched: id={dm.Id} name={dm.Name}");
             _keyCache.Put(dm.Id, 1, teamSecret);
-            Console.WriteLine($"[DM] secret cached at gen 1 for {dm.Id}");
 
             return Result<TeamDTOPublic>.Ok(dm);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DM] EXCEPTION: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
             return Result<TeamDTOPublic>.Fail($"Unexpected error: {ex.Message}");
         }
     }
@@ -557,8 +520,8 @@ public class TeamClient
     {
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("message", out var msg)) return null;
+            using JsonDocument doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("message", out JsonElement msg)) return null;
 
             return msg.ValueKind switch
             {

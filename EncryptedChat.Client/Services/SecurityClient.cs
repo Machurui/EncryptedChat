@@ -25,14 +25,18 @@ public class SecurityClient(HttpClient httpClient)
 
     public record RecoveryPhrase(List<string> Words, DateTime GeneratedAt);
 
+    private record RevokeAllResponse(int RevokedCount, string Message);
+
+    private record ErrorResponse(string Message, List<string>? Errors);
+
     public async Task<Result<SessionListResponse>> GetSessionsAsync()
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/Security/sessions");
+            HttpResponseMessage response = await _httpClient.GetAsync("api/Security/sessions");
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<SessionListResponse>();
+                SessionListResponse? result = await response.Content.ReadFromJsonAsync<SessionListResponse>();
                 return Result<SessionListResponse>.Ok(result!);
             }
             return Result<SessionListResponse>.Fail("Failed to load sessions");
@@ -47,7 +51,7 @@ public class SecurityClient(HttpClient httpClient)
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/Security/sessions/{sessionId}");
+            HttpResponseMessage response = await _httpClient.DeleteAsync($"api/Security/sessions/{sessionId}");
             return response.IsSuccessStatusCode
                 ? Result<bool>.Ok(true)
                 : Result<bool>.Fail("Failed to revoke session");
@@ -62,10 +66,10 @@ public class SecurityClient(HttpClient httpClient)
     {
         try
         {
-            var response = await _httpClient.DeleteAsync("api/Security/sessions");
+            HttpResponseMessage response = await _httpClient.DeleteAsync("api/Security/sessions");
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<RevokeAllResponse>();
+                RevokeAllResponse? result = await response.Content.ReadFromJsonAsync<RevokeAllResponse>();
                 return Result<int>.Ok(result?.RevokedCount ?? 0);
             }
             return Result<int>.Fail("Failed to revoke sessions");
@@ -76,16 +80,14 @@ public class SecurityClient(HttpClient httpClient)
         }
     }
 
-    private record RevokeAllResponse(int RevokedCount, string Message);
-
     public async Task<Result<PasswordInfo>> GetPasswordInfoAsync()
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/Security/password/info");
+            HttpResponseMessage response = await _httpClient.GetAsync("api/Security/password/info");
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<PasswordInfo>();
+                PasswordInfo? result = await response.Content.ReadFromJsonAsync<PasswordInfo>();
                 return Result<PasswordInfo>.Ok(result!);
             }
             return Result<PasswordInfo>.Fail("Failed to load password info");
@@ -100,7 +102,7 @@ public class SecurityClient(HttpClient httpClient)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/Security/password", new
+            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/Security/password", new
             {
                 CurrentPassword = currentPassword,
                 NewPassword = newPassword,
@@ -112,7 +114,7 @@ public class SecurityClient(HttpClient httpClient)
                 return Result<bool>.Ok(true);
             }
 
-            var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            ErrorResponse? error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
             return Result<bool>.Fail(error?.Message ?? "Failed to change password");
         }
         catch (Exception ex)
@@ -121,16 +123,14 @@ public class SecurityClient(HttpClient httpClient)
         }
     }
 
-    private record ErrorResponse(string Message, List<string>? Errors);
-
     public async Task<Result<RecoveryInfo>> GetRecoveryInfoAsync()
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/Security/recovery/info");
+            HttpResponseMessage response = await _httpClient.GetAsync("api/Security/recovery/info");
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<RecoveryInfo>();
+                RecoveryInfo? result = await response.Content.ReadFromJsonAsync<RecoveryInfo>();
                 return Result<RecoveryInfo>.Ok(result!);
             }
             return Result<RecoveryInfo>.Fail("Failed to load recovery info");
@@ -145,10 +145,10 @@ public class SecurityClient(HttpClient httpClient)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/Security/recovery/regenerate", new { Password = password });
+            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/Security/recovery/regenerate", new { Password = password });
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<RecoveryPhrase>();
+                RecoveryPhrase? result = await response.Content.ReadFromJsonAsync<RecoveryPhrase>();
                 return Result<RecoveryPhrase>.Ok(result!);
             }
             return Result<RecoveryPhrase>.Fail("Failed to regenerate recovery phrase");

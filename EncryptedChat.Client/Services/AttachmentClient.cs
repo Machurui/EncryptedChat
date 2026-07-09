@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using EncryptedChat.Client.Services.Crypto;
+using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
 
 namespace EncryptedChat.Client.Services;
 
@@ -16,8 +17,6 @@ public class AttachmentClient(
     private readonly KeyVaultService _vault = vault;
     private readonly TeamKeyCacheService _keyCache = keyCache;
 
-    // Wire shape returned by the server. EncryptedFileName / FileNameIv /
-    // FileIv / Signature are opaque blobs the client decrypts locally.
     public class AttachmentDTOPublic
     {
         public Guid Id { get; set; }
@@ -31,18 +30,12 @@ public class AttachmentClient(
         public int KeyGeneration { get; set; }
         public DateTime CreatedAt { get; set; }
 
-        // Runtime-only plaintext set by DecryptDownloadedAsync. Not serialized.
         [System.Text.Json.Serialization.JsonIgnore]
         public string? DisplayFileName { get; set; }
 
-        // TEMP-Task14: shim for existing Chat.razor markup that still reads
-        // `attachment.FileName`. Task 14 will rewire to DisplayFileName (set
-        // after on-demand decrypt).
         [System.Text.Json.Serialization.JsonIgnore]
         public string FileName => DisplayFileName ?? "[encrypted]";
 
-        // TEMP-Task14: legacy signature-verified badge. Server stops verifying;
-        // the client verifies as part of DecryptDownloadedAsync.
         [System.Text.Json.Serialization.JsonIgnore]
         public bool SignatureVerified => DisplayFileName != null;
     }
@@ -66,9 +59,6 @@ public class AttachmentClient(
         public static Result Fail(string msg) => new() { Success = false, ErrorMessage = msg };
     }
 
-    // E2E upload: client encrypts filename + content with the team key, signs
-    // SHA256(encContent || ivContent || encName || ivName || teamId || senderId || gen),
-    // posts the encrypted blob + envelope metadata via multipart.
     public async Task<Result<AttachmentDTOPublic>> UploadAsync(
         Guid teamId,
         Guid messageId,
@@ -78,7 +68,7 @@ public class AttachmentClient(
         string mimeType,
         byte[] fileContent)
     {
-        var stored = await _vault.GetMyKeysAsync(senderId);
+        StoredKeys? stored = await _vault.GetMyKeysAsync(senderId);
         if (stored == null)
             return Result<AttachmentDTOPublic>.Fail("Encryption keys not available on this device.");
 
@@ -92,20 +82,14 @@ public class AttachmentClient(
         byte[] teamBytes = teamId.ToByteArray();
         byte[] senderBytes = Encoding.UTF8.GetBytes(senderId);
         byte[] genBytes = BitConverter.GetBytes(teamGeneration);
-        byte[] toHash = encFile.CiphertextWithTag
-            .Concat(encFile.Iv)
-            .Concat(encName.CiphertextWithTag)
-            .Concat(encName.Iv)
-            .Concat(teamBytes).Concat(senderBytes).Concat(genBytes)
-            .ToArray();
+        byte[] toHash = [.. encFile.CiphertextWithTag, .. encFile.Iv, .. encName.CiphertextWithTag, .. encName.Iv, .. teamBytes, .. senderBytes, .. genBytes];
         byte[] sigInput = await _crypto.Sha256Async(toHash);
         byte[] sig = await _crypto.SignAsync(sigInput, stored.SigningPrivateKey);
 
         using MultipartFormDataContent form = new();
 
         ByteArrayContent fileContentPart = new(encFile.CiphertextWithTag);
-        // The server stores raw bytes; the declared MIME type is part of the
-        // envelope and carried as a separate form field.
+        
         fileContentPart.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         form.Add(fileContentPart, "file", "blob");
         form.Add(new StringContent(messageId.ToString()), "messageId");
@@ -154,8 +138,7 @@ public class AttachmentClient(
     }
 
     // Decrypts both the filename and the file contents fetched from the server.
-    // Returns (plaintext filename, plaintext file bytes) or null on
-    // signature-verify or decrypt failure.
+    
     public async Task<(string FileName, byte[] Content)?> DecryptDownloadedAsync(
         AttachmentDTOPublic metadata, byte[] encryptedContent, Guid teamId, string senderId)
     {

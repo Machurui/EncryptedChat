@@ -15,13 +15,13 @@ public sealed class RecentGifsService(IJSRuntime js)
     {
         try
         {
-            var raw = await _js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
-            if (string.IsNullOrEmpty(raw)) return new();
-            return JsonSerializer.Deserialize<List<RecentGif>>(raw) ?? new();
+            string? raw = await _js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            if (string.IsNullOrEmpty(raw)) return [];
+            return JsonSerializer.Deserialize<List<RecentGif>>(raw) ?? [];
         }
         catch
         {
-            return new();
+            return [];
         }
     }
 
@@ -29,11 +29,14 @@ public sealed class RecentGifsService(IJSRuntime js)
     {
         try
         {
-            var list = await GetAllAsync();
+            List<RecentGif> list = await GetAllAsync();
             list.RemoveAll(g => g.Url == gif.Url);
             list.Insert(0, gif);
-            if (list.Count > MaxItems) list.RemoveRange(MaxItems, list.Count - MaxItems);
-            var json = JsonSerializer.Serialize(list);
+
+            if (list.Count > MaxItems) 
+                list.RemoveRange(MaxItems, list.Count - MaxItems);
+
+            string json = JsonSerializer.Serialize(list);
             await _js.InvokeVoidAsync("localStorage.setItem", StorageKey, json);
         }
         catch

@@ -8,7 +8,7 @@ public static class NotificationPolicy
         string? preference,   // "all" | "mentions" | "none"
         bool isDm,
         bool isMentioned,
-        string? status,       // "online" | "away" | "busy" | "invisible" | ...
+        string? status,       // "online" | "away" | "busy" | "invisible"
         bool isOwnMessage,
         bool isMuted)
     {

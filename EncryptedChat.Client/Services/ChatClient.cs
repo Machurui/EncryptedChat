@@ -2,24 +2,24 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using EncryptedChat.Client.Services.Crypto;
+using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
+using static EncryptedChat.Client.Services.UserClient;
 
 namespace EncryptedChat.Client.Services;
 
-public class ChatClient
+public class ChatClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient, IKeyVerificationService keyVerify)
 {
-    private readonly HttpClient _http;
-    private readonly CryptoService _crypto;
-    private readonly KeyVaultService _vault;
-    private readonly TeamKeyCacheService _keyCache;
-    private readonly UserClient _userClient;
-    private readonly IKeyVerificationService _keyVerify;
+    private readonly HttpClient _http = http;
+    private readonly CryptoService _crypto = crypto;
+    private readonly KeyVaultService _vault = vault;
+    private readonly TeamKeyCacheService _keyCache = keyCache;
+    private readonly UserClient _userClient = userClient;
+    private readonly IKeyVerificationService _keyVerify = keyVerify;
     private readonly ConcurrentDictionary<string, UserClient.PublicKeysResponse> _senderPubKeyCache = new();
 
     public class MessageDTOPublic
     {
         public Guid Id { get; set; }
-        // E2E: server stores+returns the encrypted envelope. UI reads DisplayText
-        // after calling DecryptMessageAsync.
         public string EncryptedText { get; set; } = string.Empty;
         public string Iv { get; set; } = string.Empty;
         public string Signature { get; set; } = string.Empty;
@@ -30,18 +30,12 @@ public class ChatClient
         public DateTime Date { get; set; }
         public List<AttachmentClient.AttachmentDTOPublic>? Attachments { get; set; }
 
-        // Runtime-only, populated by DecryptMessageAsync. Not serialized.
         [System.Text.Json.Serialization.JsonIgnore]
         public string? DisplayText { get; set; }
 
-        // Runtime-only: set to true by DecryptMessageAsync when the sender's
-        // served keys differ from the TOFU-pinned keys (key transparency warning).
         [System.Text.Json.Serialization.JsonIgnore]
         public bool SenderKeyChanged { get; set; }
 
-        // TEMP-Task14: shim for existing Chat.razor markup that still reads
-        // `msg.Text`. Task 14 rewires the UI to read DisplayText directly and
-        // this property goes away.
         [System.Text.Json.Serialization.JsonIgnore]
         public string? Text => DisplayText;
     }
@@ -53,16 +47,6 @@ public class ChatClient
         public string? Handle { get; set; }
         public string NameColor { get; set; } = "#FFFFFF";
         public string? ProfileImageUrl { get; set; }
-    }
-
-    public ChatClient(HttpClient http, CryptoService crypto, KeyVaultService vault, TeamKeyCacheService keyCache, UserClient userClient, IKeyVerificationService keyVerify)
-    {
-        _http = http;
-        _crypto = crypto;
-        _vault = vault;
-        _keyCache = keyCache;
-        _userClient = userClient;
-        _keyVerify = keyVerify;
     }
 
     public class Result<T>
@@ -81,34 +65,28 @@ public class ChatClient
 
     private record RateLimitedResponse(int RetryAfterMs);
 
-    // TEMP-Task14: legacy plaintext-send shim so Chat.razor compiles. Always
-    // fails — the UI must migrate to SendMessageAsync(teamId, plaintext, gen, senderId)
-    // in Task 14 once Chat.razor knows the team's current generation + caller id.
-    public Task<Result<MessageDTOPublic>> CreateMessageAsync(Guid teamId, string text)
+    public static Task<Result<MessageDTOPublic>> CreateMessageAsync(Guid teamId, string text)
         => Task.FromResult(Result<MessageDTOPublic>.Fail(
             "Legacy plaintext send disabled in True E2E v1. Call SendMessageAsync(teamId, text, gen, senderId) instead."));
 
     public async Task<Result<List<MessageDTOPublic>>> GetMessagesByTeamAsync(
         Guid teamId, int page = 1, int pageSize = 20)
     {
-        var res = await _http.GetAsync($"api/Message/team/{teamId}?page={page}&pageSize={pageSize}");
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.GetAsync($"api/Message/team/{teamId}?page={page}&pageSize={pageSize}");
+        string body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
-        {
             return Result<List<MessageDTOPublic>>.Fail($"Failed to load messages ({res.StatusCode}).");
-        }
 
-        var msgs = JsonSerializer.Deserialize<List<MessageDTOPublic>>(body,
+        List<MessageDTOPublic> msgs = JsonSerializer.Deserialize<List<MessageDTOPublic>>(body,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
 
         return Result<List<MessageDTOPublic>>.Ok(msgs);
     }
 
-    // E2E: encrypts + signs client-side, posts the envelope. Server stores blob.
     public async Task<Result<MessageDTOPublic>> SendMessageAsync(Guid teamId, string plaintext, int teamGeneration, string senderId)
     {
-        var stored = await _vault.GetMyKeysAsync(senderId);
+        StoredKeys? stored = await _vault.GetMyKeysAsync(senderId);
         if (stored == null)
             return Result<MessageDTOPublic>.Fail("Encryption keys not available on this device. Bootstrap via recovery phrase.");
 
@@ -120,31 +98,31 @@ public class ChatClient
             plaintext, teamSecret, teamGeneration,
             stored.SigningPrivateKey, teamId, senderId);
 
-        var payload = new
-        {
-            // Server-side MessageCreateDTO calls this field "Team", not "TeamId".
-            Team = teamId,
-            EncryptedText = envelope.EncryptedText,
-            Iv = envelope.Iv,
-            Signature = envelope.Signature,
-            KeyGeneration = envelope.KeyGeneration
-        };
-        var json = JsonSerializer.Serialize(payload);
+        Payload payload = new
+        (
+            Team: teamId,
+            EncryptedText: envelope.EncryptedText,
+            Iv: envelope.Iv,
+            Signature: envelope.Signature,
+            KeyGeneration: envelope.KeyGeneration
+        );
 
-        var req = new HttpRequestMessage(HttpMethod.Post, "api/Message")
+        string json = JsonSerializer.Serialize(payload);
+
+        HttpRequestMessage req = new(HttpMethod.Post, "api/Message")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
 
-        var res = await _http.SendAsync(req);
-        var body = await res.Content.ReadAsStringAsync();
+        HttpResponseMessage res = await _http.SendAsync(req);
+        string body = await res.Content.ReadAsStringAsync();
 
         if ((int)res.StatusCode == 429)
         {
             int retryAfterMs = 1000;
             try
             {
-                var parsed = JsonSerializer.Deserialize<RateLimitedResponse>(body,
+                RateLimitedResponse? parsed = JsonSerializer.Deserialize<RateLimitedResponse>(body,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (parsed != null) retryAfterMs = parsed.RetryAfterMs;
             }
@@ -155,29 +133,22 @@ public class ChatClient
         if (!res.IsSuccessStatusCode)
             return Result<MessageDTOPublic>.Fail($"Failed to send message ({res.StatusCode}).");
 
-        var msg = JsonSerializer.Deserialize<MessageDTOPublic>(body,
+        MessageDTOPublic? msg = JsonSerializer.Deserialize<MessageDTOPublic>(body,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         if (msg is null)
             return Result<MessageDTOPublic>.Fail("Invalid response from server.");
 
-        // Tag the locally-sent message with its plaintext so the UI doesn't need
-        // a roundtrip-decrypt for messages this device just produced.
         msg.DisplayText = plaintext;
 
         return Result<MessageDTOPublic>.Ok(msg);
     }
 
-    // Decrypts + verifies an inbound message. Fetches the sender's pubkey
-    // (cached) for signature verification. Returns null on verify/decrypt failure
-    // so the UI can mark the message tampered or undecryptable.
     public async Task<string?> DecryptMessageAsync(MessageDTOPublic message, string callerUserId)
     {
         if (!string.IsNullOrEmpty(message.DisplayText))
             return message.DisplayText;
 
-        // Server populates Sender.Id; SenderId scalar is only populated for
-        // locally-sent messages (we set it before optimistic add).
         string? senderId = !string.IsNullOrEmpty(message.SenderId)
             ? message.SenderId
             : message.Sender?.Id;
@@ -186,7 +157,7 @@ public class ChatClient
         byte[]? teamSecret = _keyCache.Get(message.TeamId, message.KeyGeneration);
         if (teamSecret == null) return null;
 
-        if (!_senderPubKeyCache.TryGetValue(senderId, out var senderPubKeys))
+        if (!_senderPubKeyCache.TryGetValue(senderId, out PublicKeysResponse? senderPubKeys))
         {
             senderPubKeys = await _userClient.GetPublicKeysAsync(senderId);
             if (senderPubKeys != null)
@@ -219,4 +190,12 @@ public class ChatClient
             return null;
         }
     }
+
+    public record Payload(
+        Guid Team, 
+        string EncryptedText, 
+        string Iv, 
+        string Signature, 
+        int KeyGeneration 
+    );
 }

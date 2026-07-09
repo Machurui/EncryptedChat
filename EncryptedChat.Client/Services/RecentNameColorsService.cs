@@ -13,26 +13,32 @@ public sealed class RecentNameColorsService(IJSRuntime js)
     {
         try
         {
-            var raw = await _js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
-            if (string.IsNullOrEmpty(raw)) return new();
-            return JsonSerializer.Deserialize<List<string>>(raw) ?? new();
+            string? raw = await _js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            if (string.IsNullOrEmpty(raw)) 
+                return [];
+
+            return JsonSerializer.Deserialize<List<string>>(raw) ?? [];
         }
         catch
         {
-            return new();
+            return [];
         }
     }
 
     public async Task AddAsync(string color)
     {
-        if (string.IsNullOrWhiteSpace(color)) return;
+        if (string.IsNullOrWhiteSpace(color)) 
+            return;
         try
         {
-            var list = await GetAllAsync();
+            List<string> list = await GetAllAsync();
             list.RemoveAll(c => string.Equals(c, color, StringComparison.OrdinalIgnoreCase));
             list.Insert(0, color);
-            if (list.Count > MaxItems) list.RemoveRange(MaxItems, list.Count - MaxItems);
-            var json = JsonSerializer.Serialize(list);
+
+            if (list.Count > MaxItems) 
+                list.RemoveRange(MaxItems, list.Count - MaxItems);
+
+            string json = JsonSerializer.Serialize(list);
             await _js.InvokeVoidAsync("localStorage.setItem", StorageKey, json);
         }
         catch

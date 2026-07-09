@@ -7,14 +7,9 @@ public interface IFlowbiteService
     ValueTask InitializeFlowbiteAsync();
 }
 
-public class FlowbiteService : IFlowbiteService
+public class FlowbiteService(IJSRuntime jsRuntime) : IFlowbiteService
 {
-    private readonly IJSRuntime _jsRuntime;
-
-    public FlowbiteService(IJSRuntime jsRuntime)
-    {
-        _jsRuntime = jsRuntime;
-    }
+    private readonly IJSRuntime _jsRuntime = jsRuntime;
 
     public async ValueTask InitializeFlowbiteAsync()
     {

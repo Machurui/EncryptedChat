@@ -6,7 +6,7 @@ using tailwind_4_blazor_starter;
 using tailwind_4_blazor_starter.Services;
 using Sentry.AspNetCore.Blazor.WebAssembly;
 
-var builder = WebAssemblyHostBuilder.CreateDefault(args);
+WebAssemblyHostBuilder builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<EncryptedChat.Client.App>("#app");
 
 // ---------- Observability (Sentry) ----------
@@ -24,7 +24,7 @@ builder.UseSentry(options =>
     options.TracesSampleRate =
         double.TryParse(builder.Configuration["Sentry:TracesSampleRate"],
             System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out var rate)
+            System.Globalization.CultureInfo.InvariantCulture, out double rate)
             ? rate : 0.0;
 });
 
@@ -40,7 +40,7 @@ string apiBase = string.IsNullOrWhiteSpace(configuredApiBase)
 builder.Services.AddTransient<CookieHandler>();
 builder.Services.AddScoped(sp =>
 {
-    var handler = sp.GetRequiredService<CookieHandler>();
+    CookieHandler handler = sp.GetRequiredService<CookieHandler>();
     return new HttpClient(handler)
     {
         BaseAddress = new Uri(apiBase)
