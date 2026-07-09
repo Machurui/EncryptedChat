@@ -7,7 +7,7 @@ window.gifPicker = (function () {
         const observer = new IntersectionObserver(function (entries) {
             if (entries[0].isIntersecting) {
                 dotnetRef.invokeMethodAsync('OnGifLoadMore').catch(function (err) {
-                    console.warn('OnGifLoadMore invoke failed:', err);
+                    window.encryptedChatConsoleCapture?.capture('warn', ['OnGifLoadMore invoke failed:', err], 'gif-picker');
                 });
             }
         }, { rootMargin: '400px 0px' });

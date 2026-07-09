@@ -83,7 +83,7 @@ window.popupRegistry = {
                 try {
                     await dotNetRef.invokeMethodAsync(methodName);
                 } catch (err) {
-                    console.warn('Popup callback failed:', err);
+                    window.encryptedChatConsoleCapture?.capture('warn', ['Popup callback failed:', err], 'app-interop.popup');
                 }
             }
         }
@@ -120,7 +120,7 @@ window.setupMessagesScrollListener = (elementId, dotNetRef, loadOlderMethod, jum
                 try {
                     await dotNetRef.invokeMethodAsync(loadOlderMethod);
                 } catch (err) {
-                    console.warn('LoadOlderMessages call failed:', err);
+                    window.encryptedChatConsoleCapture?.capture('warn', ['LoadOlderMessages call failed:', err], 'app-interop.scroll');
                 } finally {
                     setTimeout(() => { paginationThrottled = false; }, 300);
                 }
@@ -133,7 +133,7 @@ window.setupMessagesScrollListener = (elementId, dotNetRef, loadOlderMethod, jum
                 try {
                     await dotNetRef.invokeMethodAsync(jumpVisibleMethod, farFromBottom);
                 } catch (err) {
-                    console.warn('SetJumpToBottomVisible call failed:', err);
+                    window.encryptedChatConsoleCapture?.capture('warn', ['SetJumpToBottomVisible call failed:', err], 'app-interop.scroll');
                 }
             }
         });
