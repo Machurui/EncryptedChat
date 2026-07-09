@@ -42,4 +42,6 @@ RUN if [ "$OBFUSCATE" = "true" ]; then \
 FROM nginx:alpine AS runtime
 COPY --from=jsobf /pub/wwwroot /usr/share/nginx/html
 COPY EncryptedChat.Client/nginx.conf /etc/nginx/conf.d/default.conf
+COPY EncryptedChat.Client/docker-entrypoint.d/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
 EXPOSE 80
