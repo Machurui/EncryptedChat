@@ -432,17 +432,24 @@ public class TeamService(EncryptedChatContext context, IFriendService friendServ
         bool actorIsOwner = actorMembership.Role == Member.OwnerRole;
         bool actorIsAdmin = actorMembership.Role == Member.AdminRole;
 
+        if (!actorIsOwner && !actorIsAdmin)
+            return false;
+
+        if (userId == actorId)
+            return false;
+
         if (member.Role == Member.OwnerRole)
             return false;
 
-        if (actorIsOwner)
-            if (userId == actorId)
+        if (actorIsAdmin && member.Role != Member.MemberRole)
+            return false;
+
+        if (member.Role == Member.AdminRole)
+        {
+            int adminCount = await _context.Members.CountAsync(m => m.TeamId == teamId && m.Role == Member.AdminRole);
+            if (adminCount <= 1)
                 return false;
-            else if (actorIsAdmin)
-                if (member.Role != Member.MemberRole)
-                    return false;
-                else
-                    return false;
+        }
 
         _context.Members.Remove(member);
         await _context.SaveChangesAsync();
