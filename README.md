@@ -174,6 +174,69 @@ SENTRY_DSN="" \
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+## Kubernetes / Rancher
+
+The API validates its required configuration before it opens port 8080. For a
+Kubernetes workload, provide secrets through a Kubernetes `Secret`; .NET maps
+the double underscore in an environment variable to a configuration colon.
+
+| Environment variable | Required | Purpose |
+| --- | --- | --- |
+| `ConnectionStrings__Default` | Yes | Complete SQL Server connection string |
+| `Jwt__Key` | Yes | Random JWT signing key, at least 32 UTF-8 bytes |
+| `Encryption__Key` | Yes | Stable base64-encoded 32-byte field-encryption key |
+| `Jwt__Issuer` | No | Defaults to `EncryptedChat` |
+| `Jwt__Audience` | No | Defaults to `EncryptedChat.Client` |
+| `RunMigrationsOnStartup` | Deployment decision | Set to `true` on exactly one API replica |
+| `DisableHttpsRedirection` | Behind an HTTP proxy | Set to `true` when TLS terminates at Cloudflare/Ingress |
+| `Cookies__Secure` | No | Keep `true` for the public HTTPS endpoint |
+| `Cookies__SameSite` | No | Use `Lax` for the same-origin web/API setup |
+| `Giphy__ServiceApiKey` | No | Enables GIF search |
+| `Sentry__Dsn` | No | Enables API telemetry |
+
+Example API workload fragment (the referenced Secret must already exist):
+
+```yaml
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/machurui/encryptedchat-api:<immutable-tag>
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: encryptedchat-api-secrets
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: RunMigrationsOnStartup
+              value: "true"
+            - name: DisableHttpsRedirection
+              value: "true"
+            - name: Cookies__Secure
+              value: "true"
+            - name: Cookies__SameSite
+              value: Lax
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+```
+
+The SQL login in `ConnectionStrings__Default` needs schema-change permissions
+while migrations run. Check the API logs for `Database migrations are up to
+date`, then verify the `__EFMigrationsHistory` table. Before scaling the API
+beyond one replica, disable startup migrations and apply them once as a
+deployment step.
+
 ## Tests
 
 Run the full test suite:

@@ -1,4 +1,5 @@
 using EncryptedChat.Data;
+using EncryptedChat.Configuration;
 using EncryptedChat.Models;
 using EncryptedChat.Services;
 using EncryptedChat.Hubs;
@@ -15,6 +16,10 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Features;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// Fail before opening a port, and report every missing setting at once. The
+// validator only names configuration keys and never includes secret values.
+ApiStartupConfigurationValidator.Validate(builder.Configuration);
 
 // ---------- Observability (Sentry) ----------
 // DSN read from config (empty ⇒ SDK disabled / no-op). Real DSN goes in user-secrets/env.
@@ -303,27 +308,45 @@ builder.Services.AddHealthChecks();
 
 WebApplication app = builder.Build();
 
-// In Docker the DB starts empty; apply EF migrations on boot (idempotent), retrying
-// while SQL Server finishes starting. Gated so dev/`dotnet run`/tests are untouched.
+ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+
+// Apply migrations only when the deployment opts in. In Kubernetes this flag
+// must be enabled on a single replica to avoid concurrent schema changes.
 if (app.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
 {
     using IServiceScope scope = app.Services.CreateScope();
     EncryptedChatContext db = scope.ServiceProvider.GetRequiredService<EncryptedChatContext>();
-    ILogger<Program> logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     for (int attempt = 1; ; attempt++)
     {
         try
         {
+            startupLogger.LogInformation(
+                "Applying database migrations (attempt {Attempt} of 12).",
+                attempt);
             await db.Database.MigrateAsync();
-            logger.LogInformation("Database migrations applied.");
+            startupLogger.LogInformation("Database migrations are up to date.");
             break;
         }
         catch (Exception ex) when (attempt < 12)
         {
-            logger.LogWarning(ex, "Migration attempt {Attempt} failed; retrying in 5s…", attempt);
+            startupLogger.LogWarning(
+                ex,
+                "Database migration attempt {Attempt} of 12 failed; retrying in 5 seconds.",
+                attempt);
             await Task.Delay(TimeSpan.FromSeconds(5));
         }
+        catch (Exception ex)
+        {
+            startupLogger.LogCritical(ex, "Database migrations failed after 12 attempts. The API will stop.");
+            throw;
+        }
     }
+}
+else
+{
+    startupLogger.LogWarning(
+        "Database migrations are disabled. Set RunMigrationsOnStartup=true on exactly one API replica, " +
+        "or apply the EF Core migrations before starting the API.");
 }
 
 // ---------- Pipeline ----------
