@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using EncryptedChat.Client.Observability;
 using EncryptedChat.Client.Services.Crypto;
 using static EncryptedChat.Client.Services.Crypto.CryptoService;
 using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
@@ -150,7 +151,7 @@ public sealed class GifVaultService(
         _debounce = new Timer(async _ =>
         {
             try { await SyncAsync(); }
-            catch (Exception ex) { Console.WriteLine($"[GifVault] sync error: {ex.Message}"); }
+            catch (Exception ex) { ClientTelemetry.CaptureWarning(ex, "gif-vault.sync"); }
         }, null, 800, Timeout.Infinite);
     }
 
@@ -162,7 +163,9 @@ public sealed class GifVaultService(
             if (await PushAsync()) return;
             if (!await MergeFromServerAsync()) return;
         }
-        Console.WriteLine("[GifVault] sync gave up after 3 conflict retries");
+        ClientTelemetry.CaptureWarning(
+            "GIF vault sync stopped after three conflict retries.",
+            "gif-vault.sync-conflict");
     }
 
     private async Task<bool> PushAsync()

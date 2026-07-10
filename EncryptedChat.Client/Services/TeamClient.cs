@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using EncryptedChat.Client.Observability;
 using EncryptedChat.Client.Services.Crypto;
 using static EncryptedChat.Client.Services.Crypto.KeyVaultService;
 using static EncryptedChat.Client.Services.UserClient;
@@ -181,10 +182,10 @@ public class TeamClient(HttpClient http, CryptoService crypto, KeyVaultService v
             foreach (string userId in missing)
             {
                 try { await AddMemberKeyShareAsync(teamId, generation, userId); }
-                catch (Exception ex) { Console.WriteLine($"[invite] provision {userId} failed: {ex.Message}"); }
+                catch (Exception ex) { ClientTelemetry.CaptureWarning(ex, "team.provision-member-key-share"); }
             }
         }
-        catch (Exception ex) { Console.WriteLine($"[invite] provision failed: {ex.Message}"); }
+        catch (Exception ex) { ClientTelemetry.CaptureWarning(ex, "team.provision-missing-key-shares"); }
     }
 
     // Admin-only: generate a fresh Team.Secret, wrap for every remaining member,
@@ -468,7 +469,7 @@ public class TeamClient(HttpClient http, CryptoService crypto, KeyVaultService v
 
     public async Task<Result<TeamDTOPublic>> GetOrCreateDirectMessageAsync(string myUserId, string friendId)
     {
-        Console.WriteLine($"[DM] GetOrCreateDirectMessageAsync start. myUserId={myUserId}, friendId={friendId}");
+        ClientTelemetry.AddBreadcrumb("Direct message bootstrap started.", "team.direct-message");
         try
         {
             PublicKeysResponse? myPubKeys = await _userClient.GetPublicKeysAsync(myUserId);

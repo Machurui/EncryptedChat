@@ -20,13 +20,42 @@ public class ClientConsoleTelemetryTests
     }
 
     [Fact]
-    public void ApplicationJavascriptDoesNotWriteDirectlyToBrowserConsole()
+    public void ApplicationWebAssetsDoNotWriteDirectlyToBrowserConsole()
     {
-        string jsRoot = FindRepoDirectory("EncryptedChat.Client", "wwwroot", "js");
+        string webRoot = FindRepoDirectory("EncryptedChat.Client", "wwwroot");
         Regex consoleCallPattern = new(@"\bconsole\.(?:log|debug|info|warn|error|trace|group|groupEnd|table)\s*\(");
 
-        IEnumerable<string> directConsoleCalls = Directory.EnumerateFiles(jsRoot, "*.js")
+        IEnumerable<string> directConsoleCalls = Directory.EnumerateFiles(
+                webRoot,
+                "*.*",
+                SearchOption.AllDirectories)
+            .Where(path => Path.GetExtension(path) is ".js" or ".ts" or ".html")
             .Where(path => !string.Equals(Path.GetFileName(path), "sentry-console.js", StringComparison.Ordinal))
+            .Where(path => !path.EndsWith(".min.js", StringComparison.Ordinal))
+            .SelectMany(path =>
+            {
+                string relativePath = Path.GetRelativePath(FindRepoDirectory(), path);
+                return File.ReadLines(path)
+                    .Select((line, index) => new { Line = line, Number = index + 1 })
+                    .Where(entry => consoleCallPattern.IsMatch(entry.Line))
+                    .Select(entry => $"{relativePath}:{entry.Number}: {entry.Line.Trim()}");
+            });
+
+        directConsoleCalls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ApplicationCSharpDoesNotWriteDirectlyToBrowserConsole()
+    {
+        string clientRoot = FindRepoDirectory("EncryptedChat.Client");
+        Regex consoleCallPattern = new(@"\b(?:System\.)?Console\.(?:Write|WriteLine|Error|Out)\b");
+
+        IEnumerable<string> directConsoleCalls = Directory.EnumerateFiles(
+                clientRoot,
+                "*.*",
+                SearchOption.AllDirectories)
+            .Where(path => Path.GetExtension(path) is ".cs" or ".razor")
+            .Where(path => !ContainsDirectory(path, "bin") && !ContainsDirectory(path, "obj"))
             .SelectMany(path =>
             {
                 string relativePath = Path.GetRelativePath(FindRepoDirectory(), path);
@@ -66,6 +95,18 @@ public class ClientConsoleTelemetryTests
     }
 
     [Fact]
+    public void ClientTelemetryRoutesExceptionsMessagesAndBreadcrumbsToSentry()
+    {
+        string telemetry = File.ReadAllText(
+            FindRepoFile("EncryptedChat.Client", "Observability", "ClientTelemetry.cs"));
+
+        telemetry.Should().Contain("SentrySdk.CaptureException");
+        telemetry.Should().Contain("SentrySdk.CaptureMessage");
+        telemetry.Should().Contain("SentrySdk.AddBreadcrumb");
+        telemetry.Should().Contain("client.operation");
+    }
+
+    [Fact]
     public void ProdComposePassesSentryDsnToWebService()
     {
         string compose = File.ReadAllText(FindRepoFile("docker-compose.prod.yml"));
@@ -100,6 +141,10 @@ public class ClientConsoleTelemetryTests
             ? compose[start..(start + marker.Length + nextService.Index)]
             : compose[start..];
     }
+
+    private static bool ContainsDirectory(string path, string directoryName) =>
+        path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(part => string.Equals(part, directoryName, StringComparison.Ordinal));
 
     private static string FindRepoDirectory(params string[] pathParts)
     {

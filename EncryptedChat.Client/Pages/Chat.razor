@@ -4157,7 +4157,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Chat] key-bootstrap check failed: {ex.Message}");
+            ClientTelemetry.CaptureWarning(ex, "chat.key-bootstrap-check");
         }
 
         await LoadUserStatus();
@@ -4273,7 +4273,7 @@
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"chatScroll.attach failed: {ex.Message}");
+                ClientTelemetry.CaptureWarning(ex, "chat.scroll-attach");
             }
         }
 
@@ -4287,7 +4287,7 @@
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"gifPicker.observeLoadMore failed: {ex.Message}");
+                ClientTelemetry.CaptureWarning(ex, "chat.gif-observe-load-more");
             }
         }
     }
@@ -4356,7 +4356,6 @@
             currentReadReceipts = result.Value.ReadReceipts;
             currentTypingIndicators = result.Value.TypingIndicators;
             currentNotificationPreference = (result.Value.NotificationPreference ?? "all").ToLowerInvariant().Trim();
-            Console.WriteLine($"[Profile] Loaded NotificationPreference: '{currentNotificationPreference}'");
             editStatusMessage = currentStatusMessage ?? string.Empty;
             ApplyTheme(currentTheme);
             profileState = LoadState.Success;
@@ -4459,7 +4458,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SignalR] RecoverFromOfflineAsync failed: {ex.Message}");
+            ClientTelemetry.CaptureError(ex, "chat.signalr-recover-offline");
         }
     }
 
@@ -4634,7 +4633,6 @@ private async Task SelectStatus(string status)
     private async Task HandleNotificationPreferenceChanged(string value)
     {
         currentNotificationPreference = (value ?? "all").ToLowerInvariant().Trim();
-        Console.WriteLine($"[Profile] NotificationPreference changed to: '{currentNotificationPreference}'");
         await NotifyStateChangedAsync();
     }
 
@@ -5238,8 +5236,6 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<AttachmentAddedEvent>("AttachmentAdded", async evt =>
             {
-                Console.WriteLine($"[SignalR] AttachmentAdded: MessageId={evt.MessageId}");
-
                 // Find in current team messages
                 var message = messages.FirstOrDefault(m => m.Id == evt.MessageId);
                 if (message != null)
@@ -5270,8 +5266,6 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<FriendProfileUpdate>("FriendProfileUpdated", async update =>
             {
-                Console.WriteLine($"[SignalR] FriendProfileUpdated received: id={update.Id}, NameColor={update.NameColor}, Name={update.Name}");
-
                 // Update friend list
                 var friend = friends.FirstOrDefault(f => f.UserId == update.Id);
                 if (friend != null)
@@ -5356,21 +5350,18 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<Guid>("FriendRequestCancelled", async requestId =>
             {
-                Console.WriteLine($"[SignalR] FriendRequestCancelled received: {requestId}");
                 pendingRequests = pendingRequests.Where(r => r.RequestId != requestId).ToList();
                 await InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<string>("FriendRemoved", async removedByUserId =>
             {
-                Console.WriteLine($"[SignalR] FriendRemoved received: {removedByUserId}");
                 friends = friends.Where(f => f.UserId != removedByUserId).ToList();
                 await InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<FriendClient.FriendRequestDTO>("FriendRequestReceived", async request =>
             {
-                Console.WriteLine($"[SignalR] FriendRequestReceived: requestId={request.RequestId}, from={request.Name} ({request.UserId})");
                 if (!pendingRequests.Any(r => r.RequestId == request.RequestId))
                 {
                     pendingRequests.Add(request);
@@ -5380,7 +5371,6 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<Guid, FriendClient.FriendDTO>("FriendRequestAccepted", async (requestId, newFriend) =>
             {
-                Console.WriteLine($"[SignalR] FriendRequestAccepted: requestId={requestId}, friend={newFriend.Name} ({newFriend.UserId})");
                 pendingRequests = pendingRequests.Where(r => r.RequestId != requestId).ToList();
                 if (!friends.Any(f => f.UserId == newFriend.UserId))
                 {
@@ -5399,7 +5389,6 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<FriendProfileUpdate>("FriendRequestProfileUpdated", async update =>
             {
-                Console.WriteLine($"[SignalR] FriendRequestProfileUpdated received: id={update.Id}, NameColor={update.NameColor}");
                 var request = pendingRequests.FirstOrDefault(r => r.UserId == update.Id);
                 if (request != null)
                 {
@@ -5555,7 +5544,6 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<TeamClient.TeamDTOPublic>("DirectMessageCreated", async dm =>
             {
-                Console.WriteLine($"[SignalR] DirectMessageCreated: {dm.Id} - {dm.Name}");
                 // Add the DM to our teams list if not already there
                 if (!teams.Any(t => t.Id == dm.Id))
                 {
@@ -5568,8 +5556,6 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<UserTypingEvent>("UserTyping", async evt =>
             {
-                Console.WriteLine($"[SignalR] UserTyping received: TeamId={evt.TeamId}, UserId={evt.UserId}, UserName={evt.UserName}");
-
                 if (!typingUsers.ContainsKey(evt.TeamId))
                     typingUsers[evt.TeamId] = new();
 
@@ -5578,7 +5564,6 @@ private async Task SelectStatus(string status)
                     typingUsers[evt.TeamId].Remove(existing);
 
                 typingUsers[evt.TeamId].Add(new TypingUser(evt.UserId, evt.UserName, DateTime.UtcNow));
-                Console.WriteLine($"[SignalR] UserTyping: Added to typingUsers, count now = {typingUsers[evt.TeamId].Count}");
                 await InvokeAsync(StateHasChanged);
 
                 _ = Task.Delay(5000).ContinueWith(async _ =>
@@ -5626,25 +5611,21 @@ private async Task SelectStatus(string status)
 
             hubConnection.Reconnected += async (connectionId) =>
             {
-                Console.WriteLine($"[SignalR] Reconnected: {connectionId} — re-syncing state");
                 await RecoverFromOfflineAsync();
             };
 
             await hubConnection.StartAsync();
-            Console.WriteLine($"[SignalR] Connected! ConnectionId={hubConnection.ConnectionId}");
 
             foreach (var team in teams)
             {
-                Console.WriteLine($"[SignalR] Joining team: {team.Id} ({team.Name})");
                 await hubConnection.InvokeAsync("JoinTeam", team.Id);
             }
-            Console.WriteLine($"[SignalR] Joined {teams.Count} teams");
 
             _signalRInitialized = true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SignalR] Failed: {ex.Message}");
+            ClientTelemetry.CaptureError(ex, "chat.signalr-initialize");
             _signalRInitialized = false;
         }
     }
@@ -5703,7 +5684,6 @@ private async Task SelectStatus(string status)
             {
                 isTyping = true;
                 lastTypingTime = now;
-                Console.WriteLine($"[Typing] StartTyping for team {selectedTeamId.Value}");
                 await hubConnection.InvokeAsync("StartTyping", selectedTeamId.Value);
                 // Keep the receiver's indicator alive even when the composer
                 // loses focus — as long as the input still has text, we
@@ -5714,7 +5694,6 @@ private async Task SelectStatus(string status)
         }
         else if (isTyping)
         {
-            Console.WriteLine($"[Typing] StopTyping (input cleared) for team {selectedTeamId.Value}");
             await StopTypingIndicator();
         }
     }
@@ -5954,7 +5933,7 @@ private async Task SelectStatus(string status)
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"chatScroll.follow (SendMessage) failed: {ex.Message}");
+                ClientTelemetry.CaptureWarning(ex, "chat.scroll-follow-after-send");
             }
             // Collapse the textarea back to one row after a clear. The JS
             // input listener only runs on user input; a C# value reset alone
@@ -6089,7 +6068,7 @@ private async Task SelectStatus(string status)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Trending load error: {ex.Message}");
+            ClientTelemetry.CaptureWarning(ex, "chat.gif-trending-load");
             if (offset == 0) gifResults.Clear();
         }
         finally
@@ -6130,7 +6109,7 @@ private async Task SelectStatus(string status)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"GIF search error: {ex.Message}");
+            ClientTelemetry.CaptureWarning(ex, "chat.gif-search");
             if (offset == 0) gifResults.Clear();
         }
         finally
@@ -6169,7 +6148,7 @@ private async Task SelectStatus(string status)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Category load error: {ex.Message}");
+            ClientTelemetry.CaptureWarning(ex, "chat.gif-category-load");
             if (offset == 0) gifResults.Clear();
         }
         finally
@@ -6217,7 +6196,7 @@ private async Task SelectStatus(string status)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Categories load error: {ex.Message}");
+            ClientTelemetry.CaptureWarning(ex, "chat.gif-categories-load");
         }
     }
 
@@ -6347,7 +6326,7 @@ private async Task SelectStatus(string status)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Random GIF error: {ex.Message}");
+            ClientTelemetry.CaptureWarning(ex, "chat.gif-random-load");
         }
         finally
         {
@@ -7076,14 +7055,11 @@ private async Task SelectStatus(string status)
 
     private async Task StartDirectMessage(string friendId)
     {
-        Console.WriteLine($"[StartDirectMessage] friendId={friendId}, _userId={_userId ?? "NULL"}");
         if (string.IsNullOrEmpty(_userId))
         {
-            Console.WriteLine("[StartDirectMessage] aborted: _userId is empty");
             return;
         }
         var result = await TeamClient.GetOrCreateDirectMessageAsync(_userId, friendId);
-        Console.WriteLine($"[StartDirectMessage] result.Success={result.Success}, error={result.ErrorMessage ?? "<none>"}, value={(result.Value == null ? "NULL" : result.Value.Id.ToString())}");
         if (!result.Success && result.ErrorMessage?.StartsWith("KEY_CHANGED:") == true)
         {
             var changedId = result.ErrorMessage["KEY_CHANGED:".Length..];
@@ -7110,7 +7086,7 @@ private async Task SelectStatus(string status)
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[StartDirectMessage] JoinTeam failed: {ex.Message}");
+                ClientTelemetry.CaptureWarning(ex, "chat.direct-message-join-team");
             }
 
             await SelectTeam(result.Value.Id);
