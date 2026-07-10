@@ -4825,12 +4825,23 @@ private async Task SelectStatus(string status)
             selectedTeamId = teamId;
             selectedTeam = teams.FirstOrDefault(t => t.Id == teamId);
             _keyLoadComplete = false; // suppress the awaiting-key banner until key-shares load
+            membersState = LoadState.Loading;
+            membersError = null;
+            messagesState = LoadState.Loading;
+            messagesError = null;
             newMessageText = "";
             mobileShowConversation = true;
             showPinnedDropdown = false;
             pinnedMessages = new();
 
-            if (selectedTeam == null) return;
+            if (selectedTeam == null)
+            {
+                membersState = LoadState.Error;
+                membersError = "This team is no longer available.";
+                messagesState = LoadState.Error;
+                messagesError = "This conversation is no longer available.";
+                return;
+            }
 
             // E2E: load this team's TeamKeyShare rows + unwrap them into the
             // in-memory cache so SendMessageAsync / DecryptMessageAsync work
@@ -4901,6 +4912,25 @@ private async Task SelectStatus(string status)
             if (selectedTeam != null && !string.IsNullOrEmpty(selectedTeam.UrlToken))
             {
                 Navigation.NavigateTo($"/chat/c/{selectedTeam.UrlToken}", replace: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureError(ex, "chat.select-team");
+
+            if (selectedTeamId == teamId)
+            {
+                if (membersState == LoadState.Loading)
+                {
+                    membersState = LoadState.Error;
+                    membersError = "Unable to load team information.";
+                }
+
+                if (messagesState == LoadState.Loading)
+                {
+                    messagesState = LoadState.Error;
+                    messagesError = "Unable to load this conversation.";
+                }
             }
         }
         finally
@@ -5404,14 +5434,16 @@ private async Task SelectStatus(string status)
                 }
             });
 
-            hubConnection.On<TeamClient.TeamDTOPublic>("TeamCreated", async team =>
+            hubConnection.On<TeamClient.TeamDTOPublic>("TeamCreated", team =>
             {
                 if (!teams.Any(t => t.Id == team.Id))
                 {
                     teams.Add(team);
-                    await hubConnection.InvokeAsync("JoinTeam", team.Id);
-                    await InvokeAsync(StateHasChanged);
                 }
+
+                teamsState = LoadState.Success;
+                _ = JoinTeamGroupAsync(team.Id, "chat.team-created-join");
+                return InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<TeamClient.TeamDTOPublic>("TeamUpdated", async team =>
@@ -5461,10 +5493,13 @@ private async Task SelectStatus(string status)
 
             hubConnection.On<TeamMemberEvent>("TeamMemberAdded", async evt =>
             {
-                if (evt.UserId == _userId && evt.Team != null && !teams.Any(t => t.Id == evt.TeamId))
+                if (evt.UserId == _userId && evt.Team != null)
                 {
-                    teams.Add(evt.Team);
-                    await hubConnection.InvokeAsync("JoinTeam", evt.TeamId);
+                    if (!teams.Any(t => t.Id == evt.TeamId))
+                        teams.Add(evt.Team);
+
+                    teamsState = LoadState.Success;
+                    _ = JoinTeamGroupAsync(evt.TeamId, "chat.team-member-added-join");
                 }
                 else if (evt.TeamId == selectedTeamId && evt.Team != null)
                 {
@@ -5542,16 +5577,17 @@ private async Task SelectStatus(string status)
                 await InvokeAsync(StateHasChanged);
             });
 
-            hubConnection.On<TeamClient.TeamDTOPublic>("DirectMessageCreated", async dm =>
+            hubConnection.On<TeamClient.TeamDTOPublic>("DirectMessageCreated", dm =>
             {
                 // Add the DM to our teams list if not already there
                 if (!teams.Any(t => t.Id == dm.Id))
                 {
                     teams.Insert(0, dm);
-                    // Join the SignalR group for this DM
-                    await hubConnection.InvokeAsync("JoinTeam", dm.Id);
                 }
-                await InvokeAsync(StateHasChanged);
+
+                teamsState = LoadState.Success;
+                _ = JoinTeamGroupAsync(dm.Id, "chat.direct-message-created-join");
+                return InvokeAsync(StateHasChanged);
             });
 
             hubConnection.On<UserTypingEvent>("UserTyping", async evt =>
@@ -5627,6 +5663,26 @@ private async Task SelectStatus(string status)
         {
             ClientTelemetry.CaptureError(ex, "chat.signalr-initialize");
             _signalRInitialized = false;
+        }
+    }
+
+    private async Task JoinTeamGroupAsync(Guid teamId, string operation)
+    {
+        try
+        {
+            if (hubConnection?.State != HubConnectionState.Connected)
+                return;
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            await hubConnection.InvokeAsync("JoinTeam", teamId, timeout.Token);
+        }
+        catch (OperationCanceledException ex)
+        {
+            ClientTelemetry.CaptureWarning(ex, operation);
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureWarning(ex, operation);
         }
     }
 
@@ -6875,39 +6931,73 @@ private async Task SelectStatus(string status)
         }
     }
 
-    private async Task HandleCreateTeam((string Name, string Glyph, string Color, List<string> Members, string MessageLifetime) teamData)
+    private async Task<NewTeamModal.CreateResult> HandleCreateTeam(NewTeamModal.CreateRequest teamData)
     {
-        var result = await TeamClient.AddTeamAsync(
-            _userId!,
-            new[] { _userId! },
-            teamData.Members.ToArray(),
-            teamData.Name,
-            teamData.Glyph,
-            teamData.Color,
-            teamData.MessageLifetime);
+        if (string.IsNullOrWhiteSpace(_userId))
+            return NewTeamModal.CreateResult.Fail("Your session is no longer available. Please sign in again.");
 
-        if (result.Success && result.Value != null)
+        try
         {
-            // Refetch the teams list — the server returns a TeamDTOPublic that
-            // lacks the caller's per-membership Role + LastMessage fields that
-            // /api/user/me/teams populates, so the just-created team would
-            // render incomplete if we just append result.Value. LoadTeams() is
-            // idempotent w.r.t. the SignalR "TeamCreated" broadcast that also
-            // fires asynchronously.
+            var result = await TeamClient.AddTeamAsync(
+                _userId,
+                new[] { _userId },
+                teamData.Members.ToArray(),
+                teamData.Name,
+                teamData.Glyph,
+                teamData.Color,
+                teamData.MessageLifetime);
+
+            if (!result.Success || result.Value == null)
+                return NewTeamModal.CreateResult.Fail(
+                    "Unable to create the team. Check the selected members and try again.");
+
+            // The modal only waits for the POST. Membership metadata, key shares,
+            // and the conversation are loaded independently after it closes.
+            _ = CompleteTeamCreationAsync(result.Value.Id);
+            return NewTeamModal.CreateResult.Ok();
+        }
+        catch (KeyChangedException ex)
+        {
+            ClientTelemetry.CaptureWarning(ex, "chat.create-team-key-change");
+            return NewTeamModal.CreateResult.Fail(
+                "A member's encryption key changed. Verify their safety number before creating the team.");
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureError(ex, "chat.create-team");
+            return NewTeamModal.CreateResult.Fail("Unable to create the team. Please try again.");
+        }
+    }
+
+    private async Task CompleteTeamCreationAsync(Guid teamId)
+    {
+        try
+        {
+            // The create response intentionally has no caller-specific role or
+            // URL token, so refresh before selecting the new conversation.
             await LoadTeams();
 
-            // Join the SignalR group for the new team so we receive future
-            // ReceiveMessage broadcasts for this team in real time. The
-            // TeamCreated broadcast handler also calls JoinTeam, but it skips
-            // when the team already exists locally (LoadTeams added it above),
-            // so we must explicitly join here.
-            if (hubConnection?.State == HubConnectionState.Connected)
+            if (teamsState == LoadState.Error)
+                return;
+
+            if (!teams.Any(t => t.Id == teamId))
             {
-                try { await hubConnection.InvokeAsync("JoinTeam", result.Value.Id); }
-                catch { /* silent — reconnect will retry */ }
+                teamsState = LoadState.Error;
+                teamsError = "The team was created but could not be loaded.";
+                return;
             }
 
-            await SelectTeam(result.Value.Id);
+            await SelectTeam(teamId);
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureError(ex, "chat.complete-team-creation");
+            teamsState = LoadState.Error;
+            teamsError = "The team was created but could not be loaded.";
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
         }
     }
 

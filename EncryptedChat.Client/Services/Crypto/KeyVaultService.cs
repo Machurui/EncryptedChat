@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.JSInterop;
 
 namespace EncryptedChat.Client.Services.Crypto;
@@ -16,11 +17,32 @@ public class KeyVaultService(IJSRuntime js)
         string? json = await _js.InvokeAsync<string?>("encryptedChatIdb.idbGet", KeyFor(userId));
         if (string.IsNullOrEmpty(json)) return null;
 
-        using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement root = doc.RootElement;
-        return new StoredKeys(
-            Convert.FromBase64String(root.GetProperty("sign").GetString()!),
-            Convert.FromBase64String(root.GetProperty("enc").GetString()!));
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(json);
+            JsonElement root = doc.RootElement;
+            string? signingKey = ReadString(root, "sign", "Signature");
+            string? encryptionKey = ReadString(root, "enc", "Encryption");
+
+            if (string.IsNullOrWhiteSpace(signingKey) || string.IsNullOrWhiteSpace(encryptionKey))
+                return null;
+
+            return new StoredKeys(
+                Convert.FromBase64String(signingKey),
+                Convert.FromBase64String(encryptionKey));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     public async Task StoreMyKeysAsync(string userId, byte[] signingPriv, byte[] encryptionPriv)
@@ -44,8 +66,18 @@ public class KeyVaultService(IJSRuntime js)
         return await GetMyKeysAsync(userId) != null;
     }
 
-    public record BundleEncryption (
-        string Signature,
-        string Encryption
+    public record BundleEncryption(
+        [property: JsonPropertyName("sign")] string Signature,
+        [property: JsonPropertyName("enc")] string Encryption
     );
+
+    private static string? ReadString(JsonElement root, string currentName, string legacyName)
+    {
+        if (root.TryGetProperty(currentName, out JsonElement current))
+            return current.GetString();
+
+        return root.TryGetProperty(legacyName, out JsonElement legacy)
+            ? legacy.GetString()
+            : null;
+    }
 }

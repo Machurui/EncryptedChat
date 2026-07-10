@@ -183,6 +183,11 @@
                             </div>
                         </div>
                     }
+
+                    @if (!string.IsNullOrWhiteSpace(createError))
+                    {
+                        <div class="new-team-error" role="alert">@createError</div>
+                    }
                 </div>
     </ChildContent>
     <Footer>
@@ -533,15 +538,31 @@
         line-height: 1.5;
     }
 
+    .new-team-error {
+        padding: 10px 12px;
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 8px;
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--text-primary);
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
 </style>
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
-    [Parameter] public EventCallback<(string Name, string Glyph, string Color, List<string> Members, string MessageLifetime)> OnCreate { get; set; }
+    [Parameter] public Func<CreateRequest, Task<CreateResult>>? OnCreate { get; set; }
     [Parameter] public List<FriendInfo> Friends { get; set; } = new();
 
     public record FriendInfo(string UserId, string Name, string? Handle, string? ProfileImageUrl, string Status);
+    public sealed record CreateRequest(string Name, string Glyph, string Color, List<string> Members, string MessageLifetime);
+    public sealed record CreateResult(bool Success, string? ErrorMessage = null)
+    {
+        public static CreateResult Ok() => new(true);
+        public static CreateResult Fail(string message) => new(false, message);
+    }
 
     private int step = 1;
     private string teamName = "";
@@ -551,6 +572,7 @@
     private List<string> invitedMembers = new();
     private string messageLifetime = "off";
     private bool isCreating;
+    private string? createError;
 
     private IEnumerable<FriendInfo> FilteredFriends => Friends
         .Where(f => !invitedMembers.Contains(f.UserId))
@@ -636,18 +658,37 @@
         inviteSearch = "";
         invitedMembers.Clear();
         messageLifetime = "off";
+        createError = null;
         await OnClose.InvokeAsync();
     }
 
     private async Task CreateTeam()
     {
-        if (string.IsNullOrWhiteSpace(teamName)) return;
+        if (string.IsNullOrWhiteSpace(teamName) || isCreating || OnCreate == null) return;
 
         isCreating = true;
+        createError = null;
         try
         {
-            await OnCreate.InvokeAsync((teamName.Trim(), selectedGlyph, selectedColor, invitedMembers.ToList(), messageLifetime));
+            CreateResult result = await OnCreate(new CreateRequest(
+                teamName.Trim(),
+                selectedGlyph,
+                selectedColor,
+                invitedMembers.ToList(),
+                messageLifetime));
+
+            if (!result.Success)
+            {
+                createError = result.ErrorMessage ?? "Unable to create the team. Please try again.";
+                return;
+            }
+
             await Close();
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureError(ex, "new-team.create");
+            createError = "Unable to create the team. Please try again.";
         }
         finally
         {
