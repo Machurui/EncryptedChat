@@ -1,25 +1,28 @@
 @namespace EncryptedChat.Client.Pages.Components
 @using EncryptedChat.Client.Services
+@using QRCoder
+@implements IAsyncDisposable
 
 @inject FriendClient FriendClient
+@inject IJSRuntime JS
 
-<Modal IsOpen="IsOpen" OnClose="Close" Title="Add a friend" Size="sm">
+<Modal IsOpen="IsOpen" OnClose="Close" Title="Add a friend" Size="sm" BodyClass="add-friend-modal-body">
     <!-- Tabs -->
     <div class="add-friend-tabs">
-        <button class="add-friend-tab @(activeTab == "handle" ? "active" : "")" @onclick='() => activeTab = "handle"'>
+        <button class="add-friend-tab @(activeTab == "handle" ? "active" : "")" @onclick='() => SelectTab("handle")'>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/>
             </svg>
             By handle
         </button>
-        <button class="add-friend-tab @(activeTab == "qr" ? "active" : "")" @onclick='() => activeTab = "qr"'>
+        <button class="add-friend-tab @(activeTab == "qr" ? "active" : "")" @onclick='() => SelectTab("qr")'>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
                 <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
             </svg>
             Scan QR
         </button>
-        <button class="add-friend-tab @(activeTab == "link" ? "active" : "")" @onclick='() => activeTab = "link"'>
+        <button class="add-friend-tab @(activeTab == "link" ? "active" : "")" @onclick='() => SelectTab("link")'>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
                 <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
@@ -45,22 +48,12 @@
                 <div class="search-results">
                     @foreach (var user in searchResults)
                     {
-                        <button class="search-result-item" @onclick="() => SendRequestToUser(user.Id)">
+                        <button class="search-result-item" disabled="@isSending" @onclick="() => SendRequestToUser(user.Id)">
                             <span class="search-result-name">@user.Name</span>
                             <span class="search-result-action">+ Send request</span>
                         </button>
                     }
                 </div>
-            }
-
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="error-message">@errorMessage</div>
-            }
-
-            @if (!string.IsNullOrEmpty(successMessage))
-            {
-                <div class="success-message">@successMessage</div>
             }
 
             <div class="add-friend-hint">
@@ -69,15 +62,99 @@
         }
         else if (activeTab == "qr")
         {
-            <div class="qr-container">
-                <div class="qr-code">
-                    <div class="qr-pattern"></div>
-                </div>
-                <div class="qr-text">
-                    Have your friend scan this from their device.
-                    <span class="qr-expiry">Code expires in 5:00</span>
-                </div>
+            <div class="qr-mode-switch" role="tablist" aria-label="QR mode">
+                <button class="qr-mode-option @(qrMode == "scan" ? "active" : "")"
+                        role="tab" aria-selected="@(qrMode == "scan")"
+                        @onclick='() => SelectQrMode("scan")'>
+                    Scan code
+                </button>
+                <button class="qr-mode-option @(qrMode == "mine" ? "active" : "")"
+                        role="tab" aria-selected="@(qrMode == "mine")"
+                        @onclick='() => SelectQrMode("mine")'>
+                    My code
+                </button>
             </div>
+
+            @if (qrMode == "scan")
+            {
+                @if (scannedUser != null)
+                {
+                    <div class="qr-user-result">
+                        <div class="qr-user-avatar">@GetInitial(scannedUser.Name)</div>
+                        <div class="qr-user-info">
+                            <span class="qr-user-name">@scannedUser.Name</span>
+                            <span class="qr-user-handle">@@@scannedUser.Handle</span>
+                        </div>
+                        <GlassButton Primary="true" Size="sm" Disabled="@isSending"
+                                     OnClick="() => SendRequestToUser(scannedUser.Id)">
+                            @(isSending ? "Sending..." : "Send request")
+                        </GlassButton>
+                    </div>
+                    <GlassButton Size="sm" OnClick="RestartQrScanner">Scan another code</GlassButton>
+                }
+                else
+                {
+                    <div class="qr-scanner-frame @(qrFacingMode == "user" ? "mirrored" : "")">
+                        <video @ref="qrVideo" class="qr-video" autoplay muted playsinline></video>
+                        <div class="qr-reticle" aria-hidden="true"></div>
+                        @if (isQrStarting || isQrProcessing)
+                        {
+                            <div class="qr-scanner-status">
+                                <span class="qr-spinner"></span>
+                                <span>@(isQrProcessing ? "Checking code..." : "Starting camera...")</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="qr-actions">
+                        @if (!isQrScannerActive && !isQrStarting && !isQrProcessing)
+                        {
+                            <GlassButton Primary="true" Size="sm" OnClick="RestartQrScanner">Start camera</GlassButton>
+                        }
+                        else if (isQrScannerActive)
+                        {
+                            <IconButton Title="Switch camera" Size="32" OnClick="SwitchQrCamera">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 7h-4l-2-3H10L8 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+                                    <path d="M9 13a3 3 0 015-2"/><path d="M15 11v3h-3"/>
+                                </svg>
+                            </IconButton>
+                        }
+
+                        <label class="qr-file-button" title="Choose a QR image">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                            </svg>
+                            Choose image
+                            <input @ref="qrFileInput" type="file" accept="image/*" capture="environment"
+                                   disabled="@(isQrStarting || isQrProcessing)" @onchange="DecodeQrImage" />
+                        </label>
+                    </div>
+
+                    @if (isQrScannerActive && string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="qr-live-status"><span></span> Looking for an EncryptedChat code</div>
+                    }
+                }
+            }
+            else
+            {
+                <div class="qr-container">
+                    @if (GetOwnQrSvg() is { } qrSvg)
+                    {
+                        <div class="qr-code">@((MarkupString)qrSvg)</div>
+                        <div class="qr-text">
+                            <strong>@@@CurrentUserHandle</strong>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="error-message">Your profile needs a handle before a QR code can be generated.</div>
+                    }
+                </div>
+            }
         }
         else if (activeTab == "link")
         {
@@ -88,6 +165,16 @@
             <div class="add-friend-hint">
                 Anyone with this link can send you a friend request. Expires in 24 hours.
             </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="error-message" role="alert">@errorMessage</div>
+        }
+
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="success-message" role="status">@successMessage</div>
         }
     </div>
 </Modal>
@@ -125,10 +212,17 @@
     }
 
     .add-friend-content {
+        flex: 1;
+        min-height: 0;
         padding: 16px 0 0;
         display: flex;
         flex-direction: column;
         gap: 12px;
+    }
+
+    .add-friend-modal-body {
+        display: flex;
+        flex-direction: column;
     }
 
     .add-friend-hint {
@@ -156,43 +250,239 @@
     }
 
     .qr-container {
+        width: 100%;
+        flex: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 14px;
+        justify-content: center;
+        align-self: stretch;
+        gap: 12px;
+        padding-top: 2px;
+    }
+
+    .qr-mode-switch {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(0,0,0,0.18);
+    }
+
+    .qr-mode-option {
+        min-height: 32px;
+        padding: 6px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .qr-mode-option.active {
+        background: var(--bg-active);
+        color: var(--text-primary);
+    }
+
+    .qr-scanner-frame {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #050708;
+    }
+
+    .qr-video {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+    }
+
+    .qr-scanner-frame.mirrored .qr-video {
+        transform: scaleX(-1);
+    }
+
+    .qr-reticle {
+        position: absolute;
+        width: min(52%, 180px);
+        aspect-ratio: 1;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border: 2px solid rgba(255,255,255,0.82);
+        border-radius: 8px;
+        box-shadow: 0 0 0 999px rgba(0,0,0,0.24);
+        pointer-events: none;
+    }
+
+    .qr-scanner-status {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        background: rgba(0,0,0,0.58);
+        color: white;
+        font-size: 12px;
+    }
+
+    .qr-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255,255,255,0.25);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: qr-spin 0.8s linear infinite;
+    }
+
+    @@keyframes qr-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .qr-actions {
+        min-height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .qr-file-button {
+        min-height: 32px;
+        padding: 6px 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .qr-file-button:has(input:disabled) {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .qr-file-button input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+
+    .qr-live-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        color: var(--text-muted);
+        font-size: 11px;
+    }
+
+    .qr-live-status span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--status-online);
+        box-shadow: 0 0 8px rgba(16,185,129,0.55);
+    }
+
+    .qr-user-result {
+        min-height: 58px;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(0,0,0,0.18);
+    }
+
+    .qr-user-avatar {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .qr-user-info {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .qr-user-name,
+    .qr-user-handle {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .qr-user-name {
+        color: var(--text-primary);
+        font-size: 12.5px;
+        font-weight: 600;
+    }
+
+    .qr-user-handle {
+        color: var(--text-muted);
+        font-size: 10.5px;
     }
 
     .qr-code {
         width: 200px;
         height: 200px;
-        border-radius: 18px;
+        flex: 0 0 200px;
+        box-sizing: border-box;
+        margin-inline: auto;
+        border-radius: 8px;
         background: rgba(255,255,255,0.94);
         display: grid;
         place-items: center;
         box-shadow: inset 1px 1px 1px rgba(255,255,255,0.6), 0 12px 36px rgba(0,0,0,0.30);
-        padding: 14px;
+        padding: 10px;
     }
 
-    .qr-pattern {
+    .qr-code svg {
         width: 100%;
         height: 100%;
-        background-image: repeating-linear-gradient(45deg, #000 0 6px, transparent 6px 12px),
-                          repeating-linear-gradient(-45deg, #000 0 5px, transparent 5px 11px);
-        border-radius: 4px;
+        max-width: 100%;
+        max-height: 100%;
+        display: block;
+        margin: auto;
     }
 
     .qr-text {
+        width: 100%;
         font-size: 12.5px;
         color: rgba(var(--text-rgb), 0.80);
         text-align: center;
         line-height: 1.5;
-    }
-
-    .qr-expiry {
-        display: block;
-        font-size: 10.5px;
-        color: var(--text-muted);
-        margin-top: 4px;
     }
 
     .invite-link-box {
@@ -242,6 +532,11 @@
         background: var(--border-subtle);
     }
 
+    .search-result-item:disabled {
+        opacity: 0.55;
+        cursor: wait;
+    }
+
     .search-result-item:last-child {
         border-bottom: none;
     }
@@ -262,26 +557,257 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnRequestSent { get; set; }
+    [Parameter] public string? CurrentUserHandle { get; set; }
 
     private string activeTab = "handle";
+    private string qrMode = "scan";
+    private string qrFacingMode = "environment";
     private string handleInput = "";
     private string? errorMessage;
     private string? successMessage;
     private bool isSending;
     private bool linkCopied;
+    private bool isQrStarting;
+    private bool isQrScannerActive;
+    private bool isQrProcessing;
+    private bool startQrAfterRender;
     private string inviteCode = "9F1A-2B7D-A12C";
+    private string? cachedQrHandle;
+    private string? cachedQrSvg;
+    private int qrSessionId;
+    private ElementReference qrVideo;
+    private ElementReference qrFileInput;
+    private DotNetObjectReference<AddFriendModal>? qrDotNetReference;
+    private FriendClient.UserDTO? scannedUser;
     private List<FriendClient.UserDTO> searchResults = new();
     private System.Timers.Timer? searchDebounceTimer;
 
     private async Task Close()
     {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+        searchDebounceTimer = null;
+        await StopQrScanner();
         activeTab = "handle";
+        qrMode = "scan";
+        qrFacingMode = "environment";
         handleInput = "";
         errorMessage = null;
         successMessage = null;
         linkCopied = false;
+        scannedUser = null;
         searchResults.Clear();
         await OnClose.InvokeAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!startQrAfterRender || !IsOpen || activeTab != "qr" || qrMode != "scan")
+            return;
+
+        startQrAfterRender = false;
+        await StartQrScanner();
+    }
+
+    private async Task SelectTab(string tab)
+    {
+        if (tab == activeTab)
+            return;
+
+        if (activeTab == "qr")
+            await StopQrScanner();
+
+        activeTab = tab;
+        errorMessage = null;
+        successMessage = null;
+        scannedUser = null;
+
+        if (tab == "qr")
+        {
+            qrMode = "scan";
+            startQrAfterRender = true;
+        }
+    }
+
+    private async Task SelectQrMode(string mode)
+    {
+        if (mode == qrMode)
+            return;
+
+        await StopQrScanner();
+        qrMode = mode;
+        errorMessage = null;
+        successMessage = null;
+        scannedUser = null;
+
+        if (mode == "scan")
+            startQrAfterRender = true;
+    }
+
+    private async Task StartQrScanner()
+    {
+        if (!IsOpen || activeTab != "qr" || qrMode != "scan" || isQrStarting)
+            return;
+
+        int sessionId = ++qrSessionId;
+        isQrStarting = true;
+        isQrScannerActive = false;
+        errorMessage = null;
+        successMessage = null;
+        scannedUser = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            qrDotNetReference ??= DotNetObjectReference.Create(this);
+            QrStartResult result = await JS.InvokeAsync<QrStartResult>(
+                "encryptedChatQrScanner.start",
+                qrVideo,
+                qrDotNetReference,
+                qrFacingMode,
+                sessionId);
+
+            if (sessionId != qrSessionId)
+                return;
+
+            isQrScannerActive = result.Success;
+            if (!result.Success)
+                errorMessage = QrErrorMessage(result.ErrorCode);
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureWarning(ex, "add-friend.qr-camera-start");
+            if (sessionId == qrSessionId)
+                errorMessage = "The camera could not be started. You can choose a QR image instead.";
+        }
+        finally
+        {
+            if (sessionId == qrSessionId)
+            {
+                isQrStarting = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task StopQrScanner()
+    {
+        qrSessionId++;
+        startQrAfterRender = false;
+        isQrStarting = false;
+        isQrScannerActive = false;
+
+        try
+        {
+            await JS.InvokeVoidAsync("encryptedChatQrScanner.stop");
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureWarning(ex, "add-friend.qr-camera-stop");
+        }
+    }
+
+    private async Task RestartQrScanner()
+    {
+        await StopQrScanner();
+        errorMessage = null;
+        successMessage = null;
+        scannedUser = null;
+        startQrAfterRender = true;
+    }
+
+    private async Task SwitchQrCamera()
+    {
+        await StopQrScanner();
+        qrFacingMode = qrFacingMode == "environment" ? "user" : "environment";
+        errorMessage = null;
+        startQrAfterRender = true;
+    }
+
+    [JSInvokable]
+    public async Task OnQrCodeDetected(string payload, int sessionId)
+    {
+        if (sessionId != qrSessionId || !IsOpen || activeTab != "qr" || qrMode != "scan" || isQrProcessing)
+            return;
+
+        isQrScannerActive = false;
+        await ResolveQrPayload(payload);
+    }
+
+    private async Task DecodeQrImage(ChangeEventArgs _)
+    {
+        await StopQrScanner();
+        isQrProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+        scannedUser = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            QrDecodeResult result = await JS.InvokeAsync<QrDecodeResult>(
+                "encryptedChatQrScanner.decodeImage",
+                qrFileInput);
+
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Text))
+            {
+                errorMessage = QrErrorMessage(result.ErrorCode);
+                return;
+            }
+
+            await ResolveQrPayloadCore(result.Text);
+        }
+        catch (Exception ex)
+        {
+            ClientTelemetry.CaptureWarning(ex, "add-friend.qr-image-decode");
+            errorMessage = "The selected image could not be read.";
+        }
+        finally
+        {
+            isQrProcessing = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ResolveQrPayload(string payload)
+    {
+        isQrProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+        scannedUser = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await ResolveQrPayloadCore(payload);
+        }
+        finally
+        {
+            isQrProcessing = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ResolveQrPayloadCore(string payload)
+    {
+        if (!FriendQrPayloadCodec.TryDecode(payload, out string handle))
+        {
+            errorMessage = "This is not a valid EncryptedChat friend code.";
+            return;
+        }
+
+        var result = await FriendClient.SearchUsersToAddAsync(handle, limit: 5);
+        if (!result.Success || result.Value == null)
+        {
+            errorMessage = "The profile in this code could not be checked.";
+            return;
+        }
+
+        scannedUser = result.Value.FirstOrDefault(user =>
+            string.Equals(user.Handle, handle, StringComparison.OrdinalIgnoreCase));
+
+        if (scannedUser == null)
+            errorMessage = "No available profile matches this friend code.";
     }
 
     private void HandleSearch(ChangeEventArgs e)
@@ -331,6 +857,7 @@
             {
                 successMessage = "Friend request sent!";
                 handleInput = "";
+                scannedUser = null;
                 searchResults.Clear();
                 await OnRequestSent.InvokeAsync();
             }
@@ -352,4 +879,65 @@
         await Task.Delay(2000);
         linkCopied = false;
     }
+
+    private string? GetOwnQrSvg()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUserHandle))
+            return null;
+
+        if (string.Equals(cachedQrHandle, CurrentUserHandle, StringComparison.Ordinal)
+            && cachedQrSvg != null)
+        {
+            return cachedQrSvg;
+        }
+
+        try
+        {
+            string payload = FriendQrPayloadCodec.Encode(CurrentUserHandle);
+            using QRCodeGenerator generator = new();
+            using QRCodeData data = generator.CreateQrCode(payload, QRCodeGenerator.ECCLevel.M);
+            SvgQRCode svg = new(data);
+            cachedQrHandle = CurrentUserHandle;
+            cachedQrSvg = svg.GetGraphic(
+                4,
+                "#000000",
+                "#FFFFFF",
+                true,
+                SvgQRCode.SizingMode.ViewBoxAttribute,
+                null);
+            return cachedQrSvg;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static string GetInitial(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+
+    private static string QrErrorMessage(string? errorCode) => errorCode switch
+    {
+        "permission-denied" => "Camera access was denied. Allow it in your browser or choose a QR image.",
+        "camera-not-found" => "No camera was found. You can choose a QR image instead.",
+        "camera-busy" => "The camera is already in use by another application.",
+        "camera-constraints" => "This camera mode is unavailable. Try switching cameras.",
+        "camera-unsupported" => "This browser cannot access a camera. Choose a QR image instead.",
+        "insecure-context" => "Camera access requires HTTPS or localhost.",
+        "qr-not-found" => "No QR code was found in this image.",
+        "image-invalid" => "Choose a valid image file.",
+        "image-missing" => "No image was selected.",
+        _ => "The QR scanner is unavailable. You can choose a QR image instead."
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+        await StopQrScanner();
+        qrDotNetReference?.Dispose();
+    }
+
+    private sealed record QrStartResult(bool Success, string? ErrorCode);
+    private sealed record QrDecodeResult(bool Success, string? Text, string? ErrorCode);
 }

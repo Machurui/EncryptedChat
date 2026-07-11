@@ -59,8 +59,8 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
 
         try
         {
-            PayloadDTO payload = new(
-                Id: userId,
+            LevelChangedDTO payload = new(
+                UserId: userId,
                 Level: level
             );
             // One emit per team group: reaches the user themself (they're in their own
@@ -84,9 +84,9 @@ public class RealtimeService(IHubContext<ChatHub> hubContext, ILogger<RealtimeSe
         string? LastMessageSenderName
     );
 
-    public record PayloadDTO
+    public record LevelChangedDTO
     (
-        string Id,
+        string UserId,
         int Level
     );
 }

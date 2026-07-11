@@ -1289,6 +1289,7 @@
 @* ── Add Friend Modal ── *@
 <AddFriendModal
     IsOpen="@showAddFriendModal"
+    CurrentUserHandle="@currentUserHandle"
     OnClose="() => showAddFriendModal = false"
     OnRequestSent="LoadFriends" />
 
