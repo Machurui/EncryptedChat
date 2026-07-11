@@ -19,10 +19,10 @@
     pointer-events: none;
 }
 
-/* Light theme: keep the SAME photo as dark, but swap the dark vignette for a
-   light veil so the wallpaper reads bright (the white-frost glass refracts it). */
+/* Keep the photo crisp in light mode. A subtle neutral vignette preserves
+   contrast around the panels without washing the wallpaper in white. */
 :root[data-theme="light"] .app-background-static::after {
-    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.45) 100%);
+    background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.20) 100%);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -130,4 +130,3 @@
     40% { transform: translate(-50%, -50%) translate(12vw, -15vh); }
     80% { transform: translate(-50%, -50%) translate(-8vw, 8vh); }
 }
-
