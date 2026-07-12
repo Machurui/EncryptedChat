@@ -112,17 +112,23 @@ jobs:
 
       - name: Configure Kubernetes access
         shell: bash
+        env:
+          KUBE_CONFIG_CONTENT: ${{ secrets.KUBE_CONFIG }}
         run: |
           set -euo pipefail
 
+          if [ -z "${KUBE_CONFIG_CONTENT:-}" ]; then
+            echo "::error::Le secret KUBE_CONFIG est vide ou inaccessible."
+            exit 1
+          fi
+
           mkdir -p "$HOME/.kube"
-
-          echo "${{ secrets.KUBE_CONFIG_B64 }}" \
-            | base64 --decode \
-            > "$HOME/.kube/config"
-
+          printf '%s\n' "$KUBE_CONFIG_CONTENT" > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
+          export KUBECONFIG="$HOME/.kube/config"
+
+          kubectl config current-context
           kubectl cluster-info
 
       - name: Restart API deployment
@@ -132,6 +138,18 @@ jobs:
           DEPLOYMENT: ${{ vars.API_DEPLOYMENT }}
         run: |
           set -euo pipefail
+
+          export KUBECONFIG="$HOME/.kube/config"
+
+          if [ -z "${NAMESPACE:-}" ]; then
+            echo "::error::La variable K8S_NAMESPACE est vide."
+            exit 1
+          fi
+
+          if [ -z "${DEPLOYMENT:-}" ]; then
+            echo "::error::La variable API_DEPLOYMENT est vide."
+            exit 1
+          fi
 
           kubectl -n "$NAMESPACE" rollout restart \
             "deployment/$DEPLOYMENT"
@@ -147,6 +165,18 @@ jobs:
           DEPLOYMENT: ${{ vars.WEB_DEPLOYMENT }}
         run: |
           set -euo pipefail
+
+          export KUBECONFIG="$HOME/.kube/config"
+
+          if [ -z "${NAMESPACE:-}" ]; then
+            echo "::error::La variable K8S_NAMESPACE est vide."
+            exit 1
+          fi
+
+          if [ -z "${DEPLOYMENT:-}" ]; then
+            echo "::error::La variable WEB_DEPLOYMENT est vide."
+            exit 1
+          fi
 
           kubectl -n "$NAMESPACE" rollout restart \
             "deployment/$DEPLOYMENT"
