@@ -113,23 +113,32 @@ jobs:
       - name: Configure Kubernetes access
         shell: bash
         env:
-          KUBE_CONFIG_CONTENT: ${{ secrets.KUBE_CONFIG }}
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
         run: |
           set -euo pipefail
 
-          if [ -z "${KUBE_CONFIG_CONTENT:-}" ]; then
-            echo "::error::Le secret KUBE_CONFIG est vide ou inaccessible."
+          if [ -z "${KUBE_CONFIG_B64:-}" ]; then
+            echo "::error::Le secret KUBE_CONFIG_B64 est vide."
             exit 1
           fi
 
-          mkdir -p "$HOME/.kube"
-          printf '%s\n' "$KUBE_CONFIG_CONTENT" > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+          KUBE_CONFIG_FILE="$RUNNER_TEMP/kubeconfig.yaml"
 
-          export KUBECONFIG="$HOME/.kube/config"
+          printf '%s' "$KUBE_CONFIG_B64" \
+            | base64 --decode \
+            > "$KUBE_CONFIG_FILE"
 
-          kubectl config current-context
-          kubectl cluster-info
+          chmod 600 "$KUBE_CONFIG_FILE"
+
+          echo "KUBECONFIG=$KUBE_CONFIG_FILE" >> "$GITHUB_ENV"
+
+          kubectl --kubeconfig "$KUBE_CONFIG_FILE" config current-context
+
+          kubectl --kubeconfig "$KUBE_CONFIG_FILE" config view \
+            --minify \
+            -o jsonpath='{.clusters[0].cluster.server}{"\n"}'
+
+          kubectl --kubeconfig "$KUBE_CONFIG_FILE" cluster-info
 
       - name: Restart API deployment
         shell: bash
@@ -139,15 +148,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          export KUBECONFIG="$HOME/.kube/config"
-
           if [ -z "${NAMESPACE:-}" ]; then
-            echo "::error::La variable K8S_NAMESPACE est vide."
+            echo "::error::K8S_NAMESPACE est vide."
             exit 1
           fi
 
           if [ -z "${DEPLOYMENT:-}" ]; then
-            echo "::error::La variable API_DEPLOYMENT est vide."
+            echo "::error::API_DEPLOYMENT est vide."
             exit 1
           fi
 
@@ -166,15 +173,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          export KUBECONFIG="$HOME/.kube/config"
-
           if [ -z "${NAMESPACE:-}" ]; then
-            echo "::error::La variable K8S_NAMESPACE est vide."
+            echo "::error::K8S_NAMESPACE est vide."
             exit 1
           fi
 
           if [ -z "${DEPLOYMENT:-}" ]; then
-            echo "::error::La variable WEB_DEPLOYMENT est vide."
+            echo "::error::WEB_DEPLOYMENT est vide."
             exit 1
           fi
 
