@@ -29,7 +29,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ---------- API image ----------
       - name: Generate API image metadata
         id: meta-api
         uses: docker/metadata-action@v5
@@ -53,7 +52,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Extract the API de-obfuscation symbol map.
       - name: Extract API obfuscation map
         uses: docker/build-push-action@v6
         with:
@@ -74,7 +72,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # ---------- Web image ----------
       - name: Generate web image metadata
         id: meta-web
         uses: docker/metadata-action@v5
@@ -99,18 +96,10 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy images to Kubernetes
+    name: Restart Kubernetes deployments
     needs: publish
-
-    # Le déploiement n'est exécuté que pour un tag v*.
     if: startsWith(github.ref, 'refs/tags/v')
-
-    # Runner GitHub Actions installé sur Debian.
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-
+    runs-on: ubuntu-latest
     environment: production
 
     concurrency:
@@ -118,21 +107,8 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Determine image version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="${GITHUB_REF_NAME#v}"
-
-          if [ -z "$VERSION" ]; then
-            echo "Impossible de déterminer la version."
-            exit 1
-          fi
-
-          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Version à déployer : $VERSION"
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
 
       - name: Configure Kubernetes access
         shell: bash
@@ -149,39 +125,31 @@ jobs:
 
           kubectl cluster-info
 
-      - name: Deploy API image
+      - name: Restart API deployment
         shell: bash
         env:
           NAMESPACE: ${{ vars.K8S_NAMESPACE }}
           DEPLOYMENT: ${{ vars.API_DEPLOYMENT }}
-          CONTAINER: ${{ vars.API_CONTAINER }}
-          IMAGE: ghcr.io/${{ github.repository_owner }}/encryptedchat-api
-          VERSION: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
 
-          kubectl -n "$NAMESPACE" set image \
-            "deployment/$DEPLOYMENT" \
-            "$CONTAINER=$IMAGE:$VERSION"
+          kubectl -n "$NAMESPACE" rollout restart \
+            "deployment/$DEPLOYMENT"
 
           kubectl -n "$NAMESPACE" rollout status \
             "deployment/$DEPLOYMENT" \
             --timeout=5m
 
-      - name: Deploy web image
+      - name: Restart client deployment
         shell: bash
         env:
           NAMESPACE: ${{ vars.K8S_NAMESPACE }}
           DEPLOYMENT: ${{ vars.WEB_DEPLOYMENT }}
-          CONTAINER: ${{ vars.WEB_CONTAINER }}
-          IMAGE: ghcr.io/${{ github.repository_owner }}/encryptedchat-web
-          VERSION: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
 
-          kubectl -n "$NAMESPACE" set image \
-            "deployment/$DEPLOYMENT" \
-            "$CONTAINER=$IMAGE:$VERSION"
+          kubectl -n "$NAMESPACE" rollout restart \
+            "deployment/$DEPLOYMENT"
 
           kubectl -n "$NAMESPACE" rollout status \
             "deployment/$DEPLOYMENT" \
