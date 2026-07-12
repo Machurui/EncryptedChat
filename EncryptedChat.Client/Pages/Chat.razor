@@ -2387,6 +2387,7 @@
         letter-spacing: -0.005em;
         word-break: break-word;
         overflow-wrap: break-word;
+        white-space: pre-wrap;
     }
 
     .message-bubble.own {
@@ -5885,11 +5886,21 @@ private async Task SelectStatus(string status)
         filteredMentions.Clear();
     }
 
+    private static string TrimTrailingBlankLines(string text)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"(?:[ \t]*(?:\r\n|\r|\n))+[ \t]*\z",
+            string.Empty);
+    }
+
     private async Task SendMessage()
     {
-        if (string.IsNullOrWhiteSpace(newMessageText) && selectedFile == null) return;
+        var messageText = TrimTrailingBlankLines(newMessageText);
+        if (string.IsNullOrWhiteSpace(messageText) && selectedFile == null) return;
         if (!selectedTeamId.HasValue) return;
 
+        newMessageText = messageText;
         isSending = true;
         try
         {
@@ -5902,7 +5913,6 @@ private async Task SelectStatus(string status)
             // If we have an attachment, send the message first then the file
             if (selectedFile != null)
             {
-                var messageText = newMessageText?.Trim() ?? "";
                 var result = await ChatClient.SendMessageAsync(selectedTeamId.Value, messageText, teamGen, _userId!);
 
                 if (result.RateLimited)
@@ -5941,8 +5951,8 @@ private async Task SelectStatus(string status)
             }
             else
             {
-                _lastAttemptedSendText = newMessageText;
-                var result = await ChatClient.SendMessageAsync(selectedTeamId.Value, newMessageText, teamGen, _userId!);
+                _lastAttemptedSendText = messageText;
+                var result = await ChatClient.SendMessageAsync(selectedTeamId.Value, messageText, teamGen, _userId!);
 
                 if (result.RateLimited)
                 {

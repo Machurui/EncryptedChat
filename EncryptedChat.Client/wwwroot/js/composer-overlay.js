@@ -1,6 +1,9 @@
 // Despite the historical filename, there is no overlay anymore. This file
 // now just runs autogrow on the composer textarea and exposes caret helpers
 // for inserting emojis / GIFs / mentions at the current cursor position.
+const stripLeadingBlankLines = (value) =>
+    value.replace(/^(?:[^\S\r\n]*(?:\r\n|\r|\n))+/, '');
+
 window.composerOverlay = {
     sync(inputId, _overlayId) {
         const input = document.getElementById(inputId);
@@ -13,7 +16,39 @@ window.composerOverlay = {
             input.style.height = input.scrollHeight + 'px';
         };
 
-        input.addEventListener('input', autogrow);
+        const handleKeyDown = (event) => {
+            if (event.key !== 'Enter') return;
+
+            // Blazor still receives the event and handles send / mention
+            // selection. Only suppress the textarea's native line break.
+            if (!event.shiftKey) {
+                event.preventDefault();
+                return;
+            }
+
+            const caret = input.selectionStart ?? 0;
+            const textBeforeCaret = input.value.slice(0, caret);
+            if (!textBeforeCaret.trim()) event.preventDefault();
+        };
+
+        const handleInput = () => {
+            const originalValue = input.value;
+            const normalizedValue = stripLeadingBlankLines(originalValue);
+
+            if (normalizedValue !== originalValue) {
+                const removedLength = originalValue.length - normalizedValue.length;
+                const start = Math.max(0, (input.selectionStart ?? originalValue.length) - removedLength);
+                const end = Math.max(0, (input.selectionEnd ?? originalValue.length) - removedLength);
+
+                input.value = normalizedValue;
+                input.setSelectionRange(start, end);
+            }
+
+            autogrow();
+        };
+
+        input.addEventListener('keydown', handleKeyDown);
+        input.addEventListener('input', handleInput);
         // Initial sizing in case the textarea mounted with content (e.g.
         // restored draft).
         autogrow();
