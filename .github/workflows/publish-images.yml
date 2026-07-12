@@ -106,6 +106,9 @@ jobs:
       - deploy
     environment: production
 
+    env:
+      KUBECONFIG: /home/github-runner/.kube/config
+
     concurrency:
       group: encryptedchat-production
       cancel-in-progress: false
